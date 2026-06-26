@@ -9,6 +9,7 @@ Uso:
 """
 import subprocess
 import sys
+import threading
 from enum import Enum
 from pathlib import Path
 
@@ -21,11 +22,13 @@ from settings import settings  # noqa: E402
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
-ROOT_DIR    = Path(__file__).parent.parent   # raíz del repositorio
-BACKEND_DIR = Path(__file__).parent
-SRC_DIR     = BACKEND_DIR / "src"
-MKDOCS_CFG  = BACKEND_DIR / "mkdocs.yml"
-DIST_DIR    = ROOT_DIR / "dist"
+ROOT_DIR      = Path(__file__).parent.parent   # raíz del repositorio
+BACKEND_DIR   = Path(__file__).parent
+SRC_DIR       = BACKEND_DIR / "src"
+MKDOCS_CFG    = BACKEND_DIR / "mkdocs.yml"
+DIST_DIR      = ROOT_DIR / "dist"
+FRONTEND_DIR  = ROOT_DIR / "frontend"
+FRONTEND_MKDOCS = FRONTEND_DIR / "mkdocs.yml"
 
 console = Console()
 app     = typer.Typer(help="CamTrap Verify — herramienta de gestión del backend.")
@@ -97,6 +100,62 @@ def serve(
             "--log-level", "debug", "--app-dir", "src",
             cwd=BACKEND_DIR,
         )
+
+
+# ── dev (backend + frontend juntos) ──────────────────────────────────────────
+
+@app.command()
+def dev(
+    backend_port:  int = typer.Option(None,  "--backend-port",  "-b", help="Puerto del backend (por defecto: CAMTRAP_PORT o 8765)."),
+    frontend_port: int = typer.Option(5173,  "--frontend-port", "-f", help="Puerto del frontend Vite."),
+) -> None:
+    """Arranca backend y frontend simultáneamente en modo desarrollo."""
+    _require("npm", "Instala Node.js desde https://nodejs.org/ (v18+)")
+    effective_port = backend_port or settings.port
+
+    console.print(Panel(
+        f"  [bold]Backend:[/bold]  http://localhost:{effective_port}\n"
+        f"  [bold]Frontend:[/bold] http://localhost:{frontend_port}\n"
+        f"  [bold]API docs:[/bold] http://localhost:{effective_port}/docs\n\n"
+        f"  Ctrl+C para detener ambos procesos.",
+        title="CamTrap Verify — dev",
+    ))
+
+    backend_proc = subprocess.Popen(
+        ["uvicorn", "main:app", "--reload", "--port", str(effective_port),
+         "--log-level", settings.log_level.lower(), "--app-dir", "src"],
+        cwd=BACKEND_DIR,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    frontend_proc = subprocess.Popen(
+        ["npm", "run", "dev", "--", "--port", str(frontend_port)],
+        cwd=FRONTEND_DIR,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+
+    def _stream(proc: subprocess.Popen, label: str, color: str) -> None:
+        for raw in iter(proc.stdout.readline, b""):
+            line = raw.decode(errors="replace").rstrip()
+            if line:
+                console.print(f"[{color}][{label}][/{color}] {line}")
+
+    threads = [
+        threading.Thread(target=_stream, args=(backend_proc,  "backend",  "cyan"),  daemon=True),
+        threading.Thread(target=_stream, args=(frontend_proc, "frontend", "green"), daemon=True),
+    ]
+    for t in threads:
+        t.start()
+
+    try:
+        backend_proc.wait()
+        frontend_proc.wait()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Deteniendo...[/yellow]")
+        for proc in (backend_proc, frontend_proc):
+            proc.terminate()
+        for proc in (backend_proc, frontend_proc):
+            proc.wait()
+        console.print("[yellow]✔  Parado.[/yellow]")
 
 
 # ── test ──────────────────────────────────────────────────────────────────────
@@ -275,6 +334,77 @@ def package_build(
         _build_windows_package(v)
     else:
         _build_linux_package(fmt.value, v)
+
+
+# ── frontend ──────────────────────────────────────────────────────────────────
+
+frontend_app = typer.Typer(help="Gestiona el frontend React (npm).")
+app.add_typer(frontend_app, name="frontend")
+
+frontend_docs_app = typer.Typer(help="Genera o sirve la documentación del frontend.")
+frontend_app.add_typer(frontend_docs_app, name="docs")
+
+
+def _npm(*args: str) -> None:
+    _require("npm", "Instala Node.js desde https://nodejs.org/ (v18+)")
+    _run("npm", *args, cwd=FRONTEND_DIR)
+
+
+@frontend_app.command("dev")
+def frontend_dev(
+    port: int = typer.Option(5173, "--port", "-p", help="Puerto del servidor de desarrollo."),
+) -> None:
+    """Arranca el servidor de desarrollo Vite (hot-reload)."""
+    console.print(Panel(
+        f"[bold]Frontend:[/bold] http://localhost:{port}",
+        title="CamTrap Verify — frontend dev",
+    ))
+    _npm("run", "dev", "--", "--port", str(port))
+
+
+@frontend_app.command("build")
+def frontend_build() -> None:
+    """Compila el frontend para producción → frontend/dist/."""
+    console.print("[green]Compilando frontend...[/green]")
+    _npm("run", "build")
+    console.print(f"[green]✔  Build en {FRONTEND_DIR / 'dist'}[/green]")
+
+
+@frontend_app.command("preview")
+def frontend_preview(
+    port: int = typer.Option(4173, "--port", "-p", help="Puerto del servidor de preview."),
+) -> None:
+    """Sirve el build de producción localmente."""
+    console.print(Panel(
+        f"[bold]Preview:[/bold] http://localhost:{port}",
+        title="CamTrap Verify — frontend preview",
+    ))
+    _npm("run", "preview", "--", "--port", str(port))
+
+
+@frontend_app.command("lint")
+def frontend_lint() -> None:
+    """Ejecuta oxlint sobre el código fuente."""
+    console.print("[green]Linting...[/green]")
+    _npm("run", "lint")
+
+
+@frontend_docs_app.command("serve")
+def frontend_docs_serve(
+    port: int = typer.Option(8100, "--port", "-p", help="Puerto del servidor de documentación."),
+) -> None:
+    """Sirve la documentación del frontend con recarga automática."""
+    console.print(f"[green]Documentación frontend en http://127.0.0.1:{port}[/green]\n")
+    _run("mkdocs", "serve", "--config-file", str(FRONTEND_MKDOCS),
+         "--dev-addr", f"127.0.0.1:{port}", cwd=FRONTEND_DIR)
+
+
+@frontend_docs_app.command("build")
+def frontend_docs_build() -> None:
+    """Genera el sitio estático en frontend/site/."""
+    console.print("[green]Generando documentación del frontend...[/green]")
+    _run("mkdocs", "build", "--config-file", str(FRONTEND_MKDOCS), cwd=FRONTEND_DIR)
+    console.print(f"[green]✔  Sitio generado en {FRONTEND_DIR / 'site'}[/green]")
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
