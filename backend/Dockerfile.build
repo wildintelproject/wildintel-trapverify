@@ -1,0 +1,86 @@
+FROM ubuntu:22.04
+
+ARG APP_VERSION=0.0.0~dev
+ARG PKG_FORMAT=all
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── System tools ──────────────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl ca-certificates \
+        ruby ruby-dev \
+        rpm build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── fpm ───────────────────────────────────────────────────────────────────────
+RUN gem install fpm --no-document
+
+# ── uv ────────────────────────────────────────────────────────────────────────
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# ── Backend sources ───────────────────────────────────────────────────────────
+WORKDIR /build
+COPY . .
+
+# ── Build PyInstaller binary ──────────────────────────────────────────────────
+RUN uv sync --frozen \
+    && uv run pyinstaller src/app_entry.py \
+        --onedir \
+        --name camtrap-verify-backend \
+        --add-data "src/camtrap_workflow.py:." \
+        --add-data "src/settings.py:." \
+        --hidden-import uvicorn.logging \
+        --hidden-import uvicorn.loops \
+        --hidden-import uvicorn.loops.auto \
+        --hidden-import uvicorn.loops.asyncio \
+        --hidden-import uvicorn.protocols \
+        --hidden-import uvicorn.protocols.http \
+        --hidden-import uvicorn.protocols.http.auto \
+        --hidden-import uvicorn.protocols.http.h11_impl \
+        --hidden-import uvicorn.protocols.websockets \
+        --hidden-import uvicorn.protocols.websockets.auto \
+        --hidden-import uvicorn.lifespan \
+        --hidden-import uvicorn.lifespan.on \
+        --hidden-import anyio._backends._asyncio \
+        --hidden-import pandas \
+        --hidden-import httpx \
+        --hidden-import platformdirs \
+        --hidden-import pydantic_settings \
+        --collect-submodules fastapi \
+        --collect-submodules starlette
+
+# ── Launcher + .desktop ───────────────────────────────────────────────────────
+RUN mkdir -p packaging/usr/local/bin packaging/usr/share/applications \
+    && printf '#!/bin/sh\ncd "${HOME}"\nexec /opt/camtrap-verify-backend/camtrap-verify-backend "$@"\n' \
+        > packaging/usr/local/bin/camtrap-verify-backend \
+    && chmod +x packaging/usr/local/bin/camtrap-verify-backend \
+    && printf '[Desktop Entry]\nType=Application\nName=CamTrap Verify Backend\nComment=Camera trap verification API\nExec=/opt/camtrap-verify-backend/camtrap-verify-backend\nIcon=network-server\nTerminal=true\nCategories=Science;\n' \
+        > packaging/usr/share/applications/camtrap-verify-backend.desktop
+
+# ── RPM + DEB ─────────────────────────────────────────────────────────────────
+RUN mkdir -p /out \
+    && V="$(echo "${APP_VERSION}" | tr '-' '~')" \
+    && if [ "${PKG_FORMAT}" = "rpm" ] || [ "${PKG_FORMAT}" = "all" ]; then \
+         fpm -s dir -t rpm \
+             -n camtrap-verify-backend -v "${V}" \
+             --description "CamTrap Verify — FastAPI backend" \
+             --license GPLv3 --architecture x86_64 \
+             --package /out/ \
+             "dist/camtrap-verify-backend/=/opt/camtrap-verify-backend/" \
+             "packaging/usr/local/bin/camtrap-verify-backend=/usr/local/bin/camtrap-verify-backend" \
+             "packaging/usr/share/applications/camtrap-verify-backend.desktop=/usr/share/applications/camtrap-verify-backend.desktop"; \
+       fi \
+    && if [ "${PKG_FORMAT}" = "deb" ] || [ "${PKG_FORMAT}" = "all" ]; then \
+         fpm -s dir -t deb \
+             -n camtrap-verify-backend -v "${V}" \
+             --description "CamTrap Verify — FastAPI backend" \
+             --license GPLv3 --architecture amd64 \
+             --package /out/ \
+             "dist/camtrap-verify-backend/=/opt/camtrap-verify-backend/" \
+             "packaging/usr/local/bin/camtrap-verify-backend=/usr/local/bin/camtrap-verify-backend" \
+             "packaging/usr/share/applications/camtrap-verify-backend.desktop=/usr/share/applications/camtrap-verify-backend.desktop"; \
+       fi
+
+# ── Imagen final (solo los paquetes) ─────────────────────────────────────────
+FROM scratch
+COPY --from=0 /out/ /

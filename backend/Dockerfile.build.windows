@@ -1,0 +1,70 @@
+FROM ubuntu:22.04
+
+ARG APP_VERSION=0.0.0-dev
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── Wine + herramientas ───────────────────────────────────────────────────────
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl ca-certificates \
+        wine64 wine32 \
+        wget xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python 3.13 para Windows (embebible) ─────────────────────────────────────
+RUN mkdir -p /wine-python \
+    && wget -q "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe" \
+        -O /tmp/python-installer.exe \
+    && Xvfb :0 -screen 0 1024x768x16 & \
+       DISPLAY=:0 wine64 /tmp/python-installer.exe /quiet InstallAllUsers=1 PrependPath=1 \
+    && rm /tmp/python-installer.exe
+
+ENV WINEPATH="C:\\Python313;C:\\Python313\\Scripts"
+
+# ── pip + PyInstaller en Wine ─────────────────────────────────────────────────
+RUN Xvfb :0 -screen 0 1024x768x16 & \
+    DISPLAY=:0 wine64 python -m pip install --upgrade pip pyinstaller \
+    && DISPLAY=:0 wine64 python -m pip install \
+        fastapi uvicorn[standard] pandas httpx platformdirs \
+        python-multipart pydantic-settings
+
+# ── Backend sources ───────────────────────────────────────────────────────────
+WORKDIR /build
+COPY . .
+
+# ── Build .exe ────────────────────────────────────────────────────────────────
+RUN Xvfb :0 -screen 0 1024x768x16 & \
+    DISPLAY=:0 wine64 python -m PyInstaller src/app_entry.py \
+        --onefile \
+        --name camtrap-verify-backend \
+        --add-data "src/camtrap_workflow.py;." \
+        --add-data "src/settings.py;." \
+        --hidden-import uvicorn.logging \
+        --hidden-import uvicorn.loops \
+        --hidden-import uvicorn.loops.auto \
+        --hidden-import uvicorn.loops.asyncio \
+        --hidden-import uvicorn.protocols \
+        --hidden-import uvicorn.protocols.http \
+        --hidden-import uvicorn.protocols.http.auto \
+        --hidden-import uvicorn.protocols.http.h11_impl \
+        --hidden-import uvicorn.protocols.websockets \
+        --hidden-import uvicorn.protocols.websockets.auto \
+        --hidden-import uvicorn.lifespan \
+        --hidden-import uvicorn.lifespan.on \
+        --hidden-import anyio._backends._asyncio \
+        --hidden-import pandas \
+        --hidden-import httpx \
+        --hidden-import platformdirs \
+        --hidden-import pydantic_settings \
+        --collect-submodules fastapi \
+        --collect-submodules starlette
+
+# ── Copiar .exe a /out ────────────────────────────────────────────────────────
+RUN mkdir -p /out \
+    && V="${APP_VERSION}" \
+    && cp "dist/camtrap-verify-backend.exe" \
+          "/out/camtrap-verify-backend-${V}-windows-x64.exe"
+
+FROM scratch
+COPY --from=0 /out/ /
