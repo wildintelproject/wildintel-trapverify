@@ -1,4 +1,4 @@
-# <img src="docs/img/wildIntel_logo.webp" alt="WildINTEL Logo" height="60"> CamTrap Verify
+# <img src="img/wildIntel_logo.webp" alt="WildINTEL Logo" height="60"> CamTrap Verify
 
 ![Python](https://img.shields.io/badge/python-3.13-blue.svg)
 ![License](https://img.shields.io/badge/license-GPLv3-blue.svg)
@@ -16,6 +16,8 @@
 In each round, the tool presents the **highest-confidence sequence** not yet reviewed for every combination of site × sampling period × species. Confirming a sequence closes that cell; rejecting it queues the next-best sequence for the following round. This ensures that expert effort is always directed where it matters most — without having to look at every single image.
 
 Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP package with confirmed observations tagged as human classifications, together with detection histories and camera-operation matrices ready to feed directly into species occupancy models.
+
+<img src="img/welcome_screen.png" alt="WildINTEL CamTrap Verify" height="260">
 
 ## ✨ Features
 
@@ -55,13 +57,24 @@ cd frontend && npm install && cd ..
 
 The browser will open at `http://localhost:5173`. See the [quick start guide](docs/quickstart.md) for a full walkthrough using the included example dataset.
 
-## 🏛️ Funding
+## 🤝 Contributing
 
-This work is part of the [WildINTEL project](https://wildintel.eu/), funded by the
-[Biodiversa+](https://www.biodiversa.eu/) Joint Research Call 2022–2023
-*"Improved transnational monitoring of biodiversity and ecosystem change for science and society (BiodivMon)"*.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📝 License
 
-Dataset: [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
-Code: [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
+This project is licensed under the GNU General Public License v3.0 or later - see the [LICENSE](LICENSE) file for details.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+
+## 🏛️ Funding
+
+This work is part of the [WildINTEL project](https://wildintel.eu/), funded by the [Biodiversa+](https://www.biodiversa.eu/) Joint Research Call 2022-2023 "Improved
+transnational monitoring of biodiversity and ecosystem change for science and society (BiodivMon)". Biodiversa+ is the
+European co-funded biodiversity partnership supporting excellent research on biodiversity with an impact for policy and
+society. Biodiversa+ is part of the European Biodiversity Strategy for 2030 that aims to put Europe's biodiversity on a
+path to recovery by 2030 and is co-funded by the European Commission.
+
+WildINTEL has been co-funded by the [European Commission](https://commission.europa.eu/) (GA No. 101052342) and the following funding organisations: [Agencia Estatal de Investigación](https://www.aei.gob.es/) (Spain, PCI2023-145963-2, PCI2024-153489), [National Science Centre](https://www.ncn.gov.pl/?language=en) (Poland, UMO-2023/05/Y/NZ8/00104), the [Research Council of Norway](https://www.forskningsradet.no/en/) (Norway, NFR350962) and the [German Research Foundation](https://www.dfg.de/en/) (Germany).
