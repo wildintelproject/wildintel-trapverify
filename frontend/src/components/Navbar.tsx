@@ -73,7 +73,7 @@ export default function Navbar({ ready: _ready, version }: Props) {
           {/* Help */}
           <a
             className={`${btnOutline} no-underline`}
-            href="/docs/"
+            href="https://wildintelproject.github.io/wildintel-trapverify/"
             target="_blank"
             rel="noopener noreferrer"
           >
