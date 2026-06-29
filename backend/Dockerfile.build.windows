@@ -37,7 +37,7 @@ COPY . .
 RUN Xvfb :0 -screen 0 1024x768x16 & \
     DISPLAY=:0 wine64 python -m PyInstaller src/app_entry.py \
         --onefile \
-        --name camtrap-verify-backend \
+        --name camtrap-verify \
         --add-data "src/camtrap_workflow.py;." \
         --add-data "src/settings.py;." \
         --hidden-import uvicorn.logging \
@@ -63,8 +63,8 @@ RUN Xvfb :0 -screen 0 1024x768x16 & \
 # ── Copiar .exe a /out ────────────────────────────────────────────────────────
 RUN mkdir -p /out \
     && V="${APP_VERSION}" \
-    && cp "dist/camtrap-verify-backend.exe" \
-          "/out/camtrap-verify-backend-${V}-windows-x64.exe"
+    && cp "dist/camtrap-verify.exe" \
+          "/out/camtrap-verify-${V}-windows-x64.exe"
 
 FROM scratch
 COPY --from=0 /out/ /

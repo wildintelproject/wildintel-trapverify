@@ -362,7 +362,7 @@ def _build_windows_native(version: str) -> None:
     _run(
         sys.executable, "-m", "PyInstaller", "src/app_entry.py",
         "--onefile",
-        "--name", "camtrap-verify-backend",
+        "--name", "camtrap-verify",
         "--add-data", "src/camtrap_workflow.py;.",
         "--add-data", "src/settings.py;.",
         "--hidden-import", "uvicorn.logging",
@@ -377,8 +377,8 @@ def _build_windows_native(version: str) -> None:
         "--collect-submodules", "starlette",
         cwd=BACKEND_DIR,
     )
-    src_exe = BACKEND_DIR / "dist" / "camtrap-verify-backend.exe"
-    dst = DIST_DIR / f"camtrap-verify-backend-{version}-windows-x64.exe"
+    src_exe = BACKEND_DIR / "dist" / "camtrap-verify.exe"
+    dst = DIST_DIR / f"camtrap-verify-{version}-windows-x64.exe"
     dst.write_bytes(src_exe.read_bytes())
     size = dst.stat().st_size // (1024 * 1024)
     console.print(f"[green]✔  {dst}  ({size} MB)[/green]")

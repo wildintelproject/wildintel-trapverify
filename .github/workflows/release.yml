@@ -94,7 +94,7 @@ jobs:
         run: |
           uv run pyinstaller src/app_entry.py \
             --onefile \
-            --name camtrap-verify-backend \
+            --name camtrap-verify \
             --add-data "src/camtrap_workflow.py;." \
             --add-data "src/settings.py;." \
             --add-data "../frontend/dist:static" \
@@ -117,11 +117,11 @@ jobs:
         run: |
           mkdir -p dist
           # Versioned copy for the release
-          cp backend/dist/camtrap-verify-backend.exe \
-             dist/camtrap-verify-backend-${{ steps.ver.outputs.version }}-windows-x64.exe
+          cp backend/dist/camtrap-verify.exe \
+             dist/camtrap-verify-${{ steps.ver.outputs.version }}-windows-x64.exe
           # Unversioned copy referenced by the Inno Setup script
-          cp backend/dist/camtrap-verify-backend.exe \
-             dist/camtrap-verify-backend.exe
+          cp backend/dist/camtrap-verify.exe \
+             dist/camtrap-verify.exe
 
       # ── Inno Setup installer ──────────────────────────────────────────────────
       - name: Build installer
@@ -133,7 +133,7 @@ jobs:
 
       - name: Remove staging exe
         shell: bash
-        run: rm dist/camtrap-verify-backend.exe
+        run: rm dist/camtrap-verify.exe
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4

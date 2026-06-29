@@ -8,7 +8,7 @@
 #define MyAppName      "CamTrap Verify"
 #define MyAppPublisher "WildINTEL"
 #define MyAppURL       "https://wildintel.eu/"
-#define MyAppExeName   "camtrap-verify-backend.exe"
+#define MyAppExeName   "camtrap-verify.exe"
 
 [Setup]
 AppId={{E7C1A3F2-9B4D-4E8A-B2C5-1F3A5D7E9B0C}
@@ -23,7 +23,7 @@ DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\dist
-OutputBaseFilename=camtrap-verify-setup-{#MyAppVersion}-windows-x64
+OutputBaseFilename=camtrap-verify-installer-{#MyAppVersion}-windows-x64
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -42,7 +42,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Single self-contained exe (PyInstaller --onefile, frontend embedded)
-Source: "..\dist\camtrap-verify-backend.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\camtrap-verify.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
