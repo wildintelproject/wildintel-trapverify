@@ -2,6 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.13-blue.svg)
 ![License](https://img.shields.io/badge/license-GPLv3-blue.svg)
+[![CI](https://github.com/wildintelproject/wildintel-trapverify/actions/workflows/ci.yml/badge.svg)](https://github.com/wildintelproject/wildintel-trapverify/actions/workflows/ci.yml)
 [![WildINTEL](https://img.shields.io/badge/WildINTEL-v1.0-blue)](https://wildintel.eu/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.138-009688)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61DAFB)](https://react.dev/)
