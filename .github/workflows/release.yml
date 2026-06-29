@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - development
   workflow_dispatch:
     inputs:
       version:
@@ -145,7 +147,7 @@ jobs:
     name: Create GitHub Release
     needs: [build-linux, build-windows]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/development'
     permissions:
       contents: write
     steps:
@@ -157,8 +159,28 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Create release
+      - name: Create stable release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*
           generate_release_notes: true
+
+      - name: Force-move dev tag
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/development'
+        run: |
+          git tag -f dev
+          git push origin dev --force
+
+      - name: Create dev pre-release
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/development'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev
+          name: Dev build (${{ inputs.version || github.sha }})
+          prerelease: true
+          make_latest: false
+          files: release-assets/*
+          body: |
+            Development build — not for production use.
+            Built from commit ${{ github.sha }} on branch `${{ github.ref_name }}`.
