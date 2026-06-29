@@ -57,10 +57,11 @@ class TestSuite(str, Enum):
     all         = "all"
 
 class PackageFormat(str, Enum):
-    deb     = "deb"
-    rpm     = "rpm"
-    windows = "windows"
-    all     = "all"
+    deb      = "deb"
+    rpm      = "rpm"
+    appimage = "appimage"
+    windows  = "windows"
+    all      = "all"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -375,6 +376,52 @@ def _build_linux_package(fmt: str, version: str) -> None:
     console.print(f"\nPara instalar:  {install_cmd} {pkgs[0]}")
 
 
+def _build_appimage(version: str) -> None:
+    if sys.platform == "win32":
+        console.print("[red]✘  AppImage solo se puede construir en Linux.[/red]")
+        raise typer.Exit(1)
+    _require("docker", "Instala Docker desde https://docs.docker.com/get-docker/")
+    _require("appimagetool", "Descarga appimagetool desde https://appimage.github.io/appimagetool/")
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
+    console.print(f"[green]Construyendo AppImage v{version}...[/green]")
+
+    # Build binary via Docker
+    _run(
+        "docker", "build",
+        "--build-arg", f"APP_VERSION={version}",
+        "--build-arg", "PKG_FORMAT=none",
+        "-f", str(BACKEND_DIR / "Dockerfile.build"),
+        "--output", f"type=local,dest={DIST_DIR}",
+        str(ROOT_DIR),
+    )
+
+    binary_dir = DIST_DIR / "binary"
+    if not binary_dir.exists():
+        console.print("[red]✘  No se encontró el binario en dist/binary/[/red]")
+        raise typer.Exit(1)
+
+    import shutil, tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        app_dir = Path(tmp) / "AppDir"
+        app_dir.mkdir()
+        shutil.copytree(binary_dir, app_dir / "camtrap-verify")
+        (app_dir / "AppRun").write_text(
+            '#!/bin/sh\nexec "$(dirname "$0")/camtrap-verify/camtrap-verify" "$@"\n'
+        )
+        (app_dir / "AppRun").chmod(0o755)
+        (app_dir / "camtrap-verify.desktop").write_text(
+            "[Desktop Entry]\nType=Application\nName=CamTrap Verify\n"
+            "Exec=camtrap-verify\nIcon=camtrap-verify\nTerminal=false\nCategories=Science;\n"
+        )
+        icon_src = ROOT_DIR / "docs" / "img" / "WildINTEL_onlyCircle_25.png"
+        if icon_src.exists():
+            shutil.copy(icon_src, app_dir / "camtrap-verify.png")
+        out = DIST_DIR / f"camtrap-verify-{version}-linux-x86_64.AppImage"
+        _run("appimagetool", str(app_dir), str(out), env={**os.environ, "ARCH": "x86_64"})
+        size = out.stat().st_size // (1024 * 1024)
+        console.print(f"[green]✔  {out}  ({size} MB)[/green]")
+
+
 def _build_windows_package(version: str) -> None:
     if sys.platform == "win32":
         _build_windows_native(version)
@@ -444,9 +491,12 @@ def package_build(
                         title="CamTrap Verify — package"))
     if fmt == PackageFormat.windows:
         _build_windows_package(v)
+    elif fmt == PackageFormat.appimage:
+        _build_appimage(v)
     elif fmt == PackageFormat.all:
         for f in ["deb", "rpm"]:
             _build_linux_package(f, v)
+        _build_appimage(v)
         _build_windows_package(v)
     else:
         _build_linux_package(fmt.value, v)
