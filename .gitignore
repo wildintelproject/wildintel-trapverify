@@ -9,3 +9,4 @@ backend/src/_version.py
 /.claude/
 /backend/site/
 /examples/
+/.idea/

@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl ca-certificates \
         ruby ruby-dev \
         rpm build-essential \
+        nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
 # ── fpm ───────────────────────────────────────────────────────────────────────
@@ -17,6 +18,13 @@ RUN gem install fpm --no-document
 # ── uv ────────────────────────────────────────────────────────────────────────
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
+
+# ── Frontend build ────────────────────────────────────────────────────────────
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
 
 # ── Backend sources ───────────────────────────────────────────────────────────
 # Build context is the repo root so uv can find pyproject.toml + uv.lock
@@ -32,6 +40,7 @@ RUN uv sync --frozen --group dev --no-install-project \
         --copy-metadata camtrap-verify \
         --add-data "src/camtrap_workflow.py:." \
         --add-data "src/settings.py:." \
+        --add-data "/frontend/dist:static" \
         --hidden-import uvicorn.logging \
         --hidden-import uvicorn.loops \
         --hidden-import uvicorn.loops.auto \

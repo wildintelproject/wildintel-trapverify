@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 def _find_csv(directory: Path, stem: str) -> Path | None:
     """Return the first existing variant: stem.csv, stem.csv.gz, or inside a single subdir."""
+    if not directory.exists() or not directory.is_dir():
+        return None
     for base in (directory, *[d for d in directory.iterdir() if d.is_dir()]):
         for suffix in ("csv", "csv.gz"):
             candidate = base / f"{stem}.{suffix}"

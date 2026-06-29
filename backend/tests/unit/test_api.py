@@ -2,6 +2,7 @@
 import json
 from datetime import date
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -11,8 +12,8 @@ from fastapi.testclient import TestClient
 @pytest.fixture(autouse=True)
 def reset_state(monkeypatch):
     """Clear the global _state dict before every test."""
-    import main
-    monkeypatch.setattr(main, "_state", {})
+    import services.session_service as session_service
+    monkeypatch.setattr(session_service, "_state", {})
 
 
 @pytest.fixture
@@ -392,3 +393,91 @@ def test_get_results_by_species_row(client, setup_session):
     sp = data["by_species"][0]
     assert sp["species"] == "Vulpes vulpes"
     assert "confirmed" in sp and "rejected" in sp and "unverified" in sp
+
+
+# ─── /api/version ─────────────────────────────────────────────────────────────
+
+def test_version_dev_skips_github(client):
+    with patch("api.routers.health._current_version", return_value="dev"):
+        resp = client.get("/api/version")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["current"] == "dev"
+    assert data["update_available"] is False
+    assert data["latest"] is None
+
+def test_version_update_available(client):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "tag_name": "v9.9.9",
+        "html_url": "https://github.com/example/releases/tag/v9.9.9",
+    }
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(return_value=mock_response)
+
+    with patch("api.routers.health._current_version", return_value="0.1.0"), \
+         patch("api.routers.health.httpx.AsyncClient", return_value=mock_client):
+        resp = client.get("/api/version")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["current"] == "0.1.0"
+    assert data["latest"] == "9.9.9"
+    assert data["update_available"] is True
+
+def test_version_no_update(client):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "tag_name": "v0.1.0",
+        "html_url": "https://github.com/example/releases/tag/v0.1.0",
+    }
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(return_value=mock_response)
+
+    with patch("api.routers.health._current_version", return_value="0.1.0"), \
+         patch("api.routers.health.httpx.AsyncClient", return_value=mock_client):
+        resp = client.get("/api/version")
+
+    assert resp.status_code == 200
+    assert resp.json()["update_available"] is False
+
+def test_version_github_unreachable(client):
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(side_effect=Exception("network error"))
+
+    with patch("api.routers.health._current_version", return_value="0.1.0"), \
+         patch("api.routers.health.httpx.AsyncClient", return_value=mock_client):
+        resp = client.get("/api/version")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["update_available"] is False
+    assert data["latest"] is None
+
+
+# ─── /api/session/load ────────────────────────────────────────────────────────
+
+def test_load_session_valid(client, setup_session):
+    session_dir = setup_session["session_dir"]
+    resp = client.post("/api/session/load", json={"session_dir": session_dir})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["session_dir"] == session_dir
+    assert data["config"] is not None
+
+def test_load_session_nonexistent_dir(client):
+    resp = client.post("/api/session/load", json={"session_dir": "/nonexistent/path"})
+    assert resp.status_code == 400
+
+def test_load_session_invalid_dir(client, tmp_path):
+    resp = client.post("/api/session/load", json={"session_dir": str(tmp_path)})
+    assert resp.status_code == 400

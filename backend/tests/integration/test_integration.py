@@ -30,11 +30,11 @@ class _ServerThread(threading.Thread):
 
     def run(self) -> None:
         import main  # noqa: PLC0415
-        import main as _main  # reset state between test sessions
-        _main._state.clear()
+        import services.session_service as _session
+        _session._state.clear()
 
         cfg = uvicorn.Config(
-            _main.app,
+            main.app,
             host=self.host,
             port=self.port,
             log_level="error",
