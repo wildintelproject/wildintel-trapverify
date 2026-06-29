@@ -81,6 +81,32 @@ export const api = {
       by_species: { species: string; confirmed: number; rejected: number; unverified: number }[]
     }>('/api/results'),
 
+  loadSession: (session_dir: string) =>
+    post<{ ok: boolean; session_dir: string; config: unknown }>('/api/session/load', { session_dir }),
+
+  trapperLogin: (url: string, username: string, password: string) =>
+    post<{ ok: boolean; base_url: string; research_projects_count: number }>(
+      '/api/trapper/login', { url, username, password },
+    ),
+
+  trapperResearchProjects: () =>
+    req<{ results: { pk: number; name: string; acronym: string }[] }>(
+      '/api/trapper/research-projects',
+    ),
+
+  trapperClassificationProjects: (researchProjectPk: number) =>
+    req<{ results: { pk: number; name: string; is_active: boolean }[] }>(
+      `/api/trapper/classification-projects/${researchProjectPk}`,
+    ),
+
+  trapperGenerate: (classificationProjectPk: number) =>
+    post<{ task_id: string }>('/api/trapper/generate', { classification_project_pk: classificationProjectPk, output_dir: '' }),
+
+  trapperGenerateStatus: (taskId: string) =>
+    req<{ status: 'running' | 'done' | 'error'; path: string | null; error: string | null }>(
+      `/api/trapper/generate/${taskId}`,
+    ),
+
   openFolder: () =>
     req<{ ok: boolean; path: string }>('/api/open-folder', { method: 'POST' }),
 }

@@ -1,21 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 
-interface DirEntry {
-  name: string
-  path: string
+interface DirEntry { name: string; path: string }
+interface BrowseResult { current: string; parent: string | null; dirs: DirEntry[] }
+interface Props { onSelect: (path: string) => void; onClose: () => void; initialPath?: string }
+
+function Spinner({ sm }: { sm?: boolean }) {
+  const sz = sm ? 'w-4 h-4 border' : 'w-5 h-5 border-2'
+  return <div className={`${sz} border-zinc-500 border-t-zinc-200 rounded-full animate-spin inline-block`} />
 }
 
-interface BrowseResult {
-  current: string
-  parent: string | null
-  dirs: DirEntry[]
-}
-
-interface Props {
-  onSelect: (path: string) => void
-  onClose: () => void
-  initialPath?: string
-}
+const btnOutline = 'px-3 py-1 text-sm border border-zinc-600 text-zinc-300 rounded hover:bg-zinc-700 transition-colors disabled:opacity-50'
+const btnPrimary = 'px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50'
 
 export default function DirectoryPicker({ onSelect, onClose, initialPath }: Props) {
   const [data, setData] = useState<BrowseResult | null>(null)
@@ -41,27 +36,20 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath }: Prop
       setData(result)
       setManualPath(result.current)
     } catch (e) {
-      // Si la ruta inicial falla, reintentar desde home
-      if (path !== undefined) {
-        await browse(undefined)
-        return
-      }
+      if (path !== undefined) { await browse(undefined); return }
       setError(e instanceof Error ? e.message : 'Error al leer el directorio')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    browse(initialPath)
-  }, [])
+  useEffect(() => { browse(initialPath) }, [])
 
   function handleManualGo(e: React.FormEvent) {
     e.preventDefault()
     browse(manualPath)
   }
 
-  // Breadcrumbs from current path
   const parts = data
     ? data.current.split('/').filter(Boolean).map((part, i, arr) => ({
         label: part || '/',
@@ -71,32 +59,38 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath }: Prop
 
   return (
     <div
-      className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-      style={{ background: 'rgba(0,0,0,.6)', zIndex: 1060 }}
+      className="fixed inset-0 flex items-center justify-center z-[1060]"
+      style={{ background: 'rgba(0,0,0,.6)' }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="bg-dark border border-secondary rounded-3 d-flex flex-column"
+        className="bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col"
         style={{ width: 560, maxHeight: '80vh' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom border-secondary">
-          <span className="fw-semibold">Seleccionar directorio</span>
-          <button className="btn-close btn-close-white" onClick={onClose} />
+        <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700">
+          <span className="font-semibold text-zinc-100">Seleccionar directorio</span>
+          <button
+            className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-100 text-xl rounded transition-colors"
+            onClick={onClose}
+            aria-label="Cerrar"
+          >
+            ×
+          </button>
         </div>
 
         {/* Manual path input */}
-        <form onSubmit={handleManualGo} className="px-3 pt-2 pb-1 d-flex gap-2">
+        <form onSubmit={handleManualGo} className="px-3 pt-2 pb-1 flex gap-2">
           <input
             ref={inputRef}
-            className="form-control form-control-sm font-monospace bg-dark text-light border-secondary"
+            className="flex-1 px-2 py-1 text-sm rounded border border-zinc-600 bg-zinc-800 text-zinc-100 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
             value={manualPath}
             onChange={(e) => setManualPath(e.target.value)}
             placeholder="/ruta/del/directorio"
             spellCheck={false}
           />
-          <button type="submit" className="btn btn-sm btn-outline-secondary" disabled={loading}>
+          <button type="submit" className={btnOutline} disabled={loading}>
             Ir
           </button>
         </form>
@@ -104,31 +98,27 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath }: Prop
         {/* Breadcrumbs */}
         {data && (
           <nav className="px-3 pb-1" aria-label="breadcrumb">
-            <ol className="breadcrumb mb-0" style={{ fontSize: 12 }}>
-              <li className="breadcrumb-item">
+            <ol className="flex flex-wrap items-center gap-1 text-xs text-zinc-400 list-none m-0 p-0">
+              <li>
                 <button
-                  className="btn btn-link btn-sm p-0 text-info"
-                  style={{ fontSize: 12 }}
+                  className="text-sky-400 hover:text-sky-300 transition-colors bg-transparent border-0 cursor-pointer p-0"
                   onClick={() => browse('/')}
                 >
                   /
                 </button>
               </li>
               {parts.map((part, i) => (
-                <li
-                  key={part.path}
-                  className={`breadcrumb-item ${i === parts.length - 1 ? 'active text-light' : ''}`}
-                >
+                <li key={part.path} className="flex items-center gap-1">
+                  <span className="text-zinc-600">/</span>
                   {i < parts.length - 1 ? (
                     <button
-                      className="btn btn-link btn-sm p-0 text-info"
-                      style={{ fontSize: 12 }}
+                      className="text-sky-400 hover:text-sky-300 transition-colors bg-transparent border-0 cursor-pointer p-0"
                       onClick={() => browse(part.path)}
                     >
                       {part.label}
                     </button>
                   ) : (
-                    part.label
+                    <span className="text-zinc-200">{part.label}</span>
                   )}
                 </li>
               ))}
@@ -137,48 +127,45 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath }: Prop
         )}
 
         {/* Directory listing */}
-        <div className="overflow-auto flex-grow-1 px-2 pb-2" style={{ minHeight: 0 }}>
+        <div className="overflow-auto flex-1 px-2 pb-2" style={{ minHeight: 0 }}>
           {loading && (
-            <div className="text-center py-4 text-muted">
-              <div className="spinner-border spinner-border-sm me-2" />
-              Cargando…
+            <div className="text-center py-4 text-zinc-500 flex items-center justify-center gap-2">
+              <Spinner sm />
+              <span>Cargando…</span>
             </div>
           )}
 
           {error && (
-            <div className="alert alert-danger alert-sm py-2 mx-1 mt-2">{error}</div>
+            <div className="mx-1 mt-2 px-3 py-2 text-sm rounded bg-red-950 border border-red-800 text-red-300">
+              {error}
+            </div>
           )}
 
           {!loading && !error && data && (
-            <ul className="list-group list-group-flush">
-              {/* Parent directory */}
+            <ul className="list-none m-0 p-0">
               {data.parent && (
                 <li
-                  className="list-group-item list-group-item-action bg-dark border-secondary text-secondary d-flex align-items-center gap-2 py-1 px-2"
-                  style={{ cursor: 'pointer', fontSize: 14 }}
+                  className="flex items-center gap-2 py-1 px-2 text-sm text-zinc-400 hover:bg-zinc-800 rounded cursor-pointer font-mono border-b border-zinc-800"
                   onClick={() => browse(data.parent!)}
                 >
-                  <span style={{ fontSize: 16 }}>↩</span>
-                  <span className="font-monospace">..</span>
+                  <span className="text-base">↩</span>
+                  <span>..</span>
                 </li>
               )}
 
               {data.dirs.length === 0 && (
-                <li className="list-group-item bg-dark border-0 text-muted py-1 px-2" style={{ fontSize: 13 }}>
-                  Sin subdirectorios
-                </li>
+                <li className="py-1 px-2 text-sm text-zinc-500">Sin subdirectorios</li>
               )}
 
               {data.dirs.map((dir) => (
                 <li
                   key={dir.path}
-                  className="list-group-item list-group-item-action bg-dark border-secondary text-light d-flex align-items-center gap-2 py-1 px-2"
-                  style={{ cursor: 'pointer', fontSize: 14 }}
+                  className="flex items-center gap-2 py-1 px-2 text-sm text-zinc-200 hover:bg-zinc-800 rounded cursor-pointer font-mono"
                   onDoubleClick={() => browse(dir.path)}
                   onClick={() => setManualPath(dir.path)}
                 >
-                  <span className="text-warning" style={{ fontSize: 15 }}>📁</span>
-                  <span className="font-monospace text-truncate">{dir.name}</span>
+                  <span className="text-amber-400">📁</span>
+                  <span className="truncate">{dir.name}</span>
                 </li>
               ))}
             </ul>
@@ -186,16 +173,14 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath }: Prop
         </div>
 
         {/* Footer */}
-        <div className="px-3 py-2 border-top border-secondary d-flex align-items-center justify-content-between gap-2">
-          <span className="font-monospace text-muted text-truncate small" style={{ maxWidth: 340 }}>
+        <div className="px-3 py-2 border-t border-zinc-700 flex items-center justify-between gap-2">
+          <span className="font-mono text-zinc-500 truncate text-xs" style={{ maxWidth: 340 }}>
             {manualPath || '—'}
           </span>
-          <div className="d-flex gap-2 flex-shrink-0">
-            <button className="btn btn-sm btn-outline-secondary" onClick={onClose}>
-              Cancelar
-            </button>
+          <div className="flex gap-2 flex-shrink-0">
+            <button className={btnOutline} onClick={onClose}>Cancelar</button>
             <button
-              className="btn btn-sm btn-primary"
+              className={btnPrimary}
               onClick={() => { onSelect(manualPath); onClose() }}
               disabled={!manualPath}
             >

@@ -35,7 +35,6 @@ Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP pac
 - Node.js 18+ / npm 9+
 - Docker + Compose (production only)
 
-
 ## 📚 Documentation
 
 Full documentation available at:
@@ -45,14 +44,13 @@ Full documentation available at:
 
 ```bash
 git clone <repo-url>
-cd test-fastapi-truetype
+cd wildintel-trapverify
 
 # Install dependencies
-cd backend && uv sync && cd ..
-cd frontend && npm install && cd ..
+./setup.sh
 
 # Start in development mode
-./start.sh dev
+uv run cli  dev
 ```
 
 The browser will open at `http://localhost:5173`. See the [quick start guide](docs/quickstart.md) for a full walkthrough using the included example dataset.

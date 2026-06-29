@@ -19,9 +19,29 @@ const DEFAULT: WorkflowConfig = {
   min_score: 0.5,
 }
 
+const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
+const labelClass = 'block text-sm font-semibold mb-1.5 text-zinc-700 dark:text-zinc-300'
+const hintClass  = 'text-xs text-zinc-500 dark:text-zinc-400 mt-1'
+const btnOutline = 'px-4 py-2 text-sm border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50'
+const btnPrimary = 'px-6 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors'
+const btnSuccess = 'px-6 py-2 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2'
+const btnOutlineSm = 'px-3 py-1 text-xs border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors'
+const browseBtn = 'px-3 py-2 text-sm border border-l-0 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-r hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50 flex-shrink-0 flex items-center'
+
+function SmallSpinner() {
+  return <div className="w-4 h-4 border border-zinc-500 border-t-zinc-200 rounded-full animate-spin" />
+}
+
 export default function SetupPage({ onSetup, ready }: Props) {
   const navigate = useNavigate()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+
+  function formatDate(iso: string): string {
+    const [y, m, d] = iso.split('-').map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString(i18n.language, {
+      day: 'numeric', month: 'long', year: 'numeric',
+    })
+  }
 
   const STEP_LABELS: string[] = t('setup.steps', { returnObjects: true }) as string[]
 
@@ -30,10 +50,24 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [availableSpecies, setAvailableSpecies] = useState<string[]>([])
   const [selectedSpecies, setSelectedSpecies] = useState<Set<string>>(new Set())
   const [dataRange, setDataRange] = useState<{ min: string; max: string } | null>(null)
+  const [sourceType, setSourceType] = useState<'local' | 'trapper' | null>(null)
+  const [trapperForm, setTrapperForm] = useState({ url: '', user: '', password: '', researchProject: '', classificationProject: '' })
+  const [trapperConn, setTrapperConn] = useState<{ status: 'idle' | 'testing' | 'ok' | 'error'; message: string }>({ status: 'idle', message: '' })
+  const [trapperResearchProjects, setTrapperResearchProjects] = useState<{ pk: number; name: string; acronym: string }[]>([])
+  const [trapperClassificationProjects, setTrapperClassificationProjects] = useState<{ pk: number; name: string; is_active: boolean }[]>([])
+  const [loadingClassProjects, setLoadingClassProjects] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [genError, setGenError] = useState<string | null>(null)
   const [picker, setPicker] = useState<'camtrap_dir' | 'output_dir' | null>(null)
   const [inspecting, setInspecting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(false)
+  const [loadingSession, setLoadingSession] = useState(false)
+  const [sessionError, setSessionError] = useState<string | null>(null)
+  const [sessionSummary, setSessionSummary] = useState<{
+    speciesCount: number; resolved: number; total: number; pct: number
+  } | null>(null)
 
   useEffect(() => {
     api.getState().then((s) => {
@@ -46,6 +80,16 @@ export default function SetupPage({ onSetup, ready }: Props) {
       }
     }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!ready) return
+    api.getSpecies().then((sp) => {
+      const total    = sp.reduce((s, x) => s + x.n_total_combos, 0)
+      const resolved = sp.reduce((s, x) => s + x.n_resolved, 0)
+      const pct      = total > 0 ? Math.round(resolved / total * 100) : 0
+      setSessionSummary({ speciesCount: sp.length, resolved, total, pct })
+    }).catch(() => {})
+  }, [ready])
 
   function set<K extends keyof WorkflowConfig>(key: K, value: WorkflowConfig[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -65,7 +109,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
           set('study_end', info.study_end)
           setDataRange({ min: info.study_start, max: info.study_end })
         }
-      } catch { /* el usuario puede continuar manualmente */ }
+      } catch { /* usuario puede continuar manualmente */ }
       finally { setInspecting(false) }
     } else {
       set('output_dir', path)
@@ -106,7 +150,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
           currentDataRange = { min: info.study_start, max: info.study_end }
           setDataRange(currentDataRange)
         }
-      } catch { /* el usuario puede continuar manualmente */ }
+      } catch { /* usuario puede continuar manualmente */ }
       finally { setInspecting(false) }
     }
     const err = validate(currentDataRange)
@@ -117,7 +161,11 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
   function goBack() {
     setStepError(null)
-    setStep((s) => s - 1)
+    if (step === 0 && sourceType !== null) {
+      setSourceType(null)
+    } else {
+      setStep((s) => s - 1)
+    }
   }
 
   async function handleSubmit() {
@@ -134,6 +182,106 @@ export default function SetupPage({ onSetup, ready }: Props) {
     }
   }
 
+  async function handleLoadSession(path: string) {
+    setSessionPickerOpen(false)
+    setLoadingSession(true)
+    setSessionError(null)
+    try {
+      await api.loadSession(path)
+      onSetup()
+      navigate('/species')
+    } catch (e) {
+      setSessionError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoadingSession(false)
+    }
+  }
+
+  async function handleResearchProjectChange(pk: string) {
+    setTrapperForm(f => ({ ...f, researchProject: pk, classificationProject: '' }))
+    setTrapperClassificationProjects([])
+    if (!pk) return
+    setLoadingClassProjects(true)
+    try {
+      const { results } = await api.trapperClassificationProjects(Number(pk))
+      setTrapperClassificationProjects(results)
+    } catch {
+      setTrapperClassificationProjects([])
+    } finally {
+      setLoadingClassProjects(false)
+    }
+  }
+
+  async function handleGenerate() {
+    const cpk = Number(trapperForm.classificationProject)
+    setGenerating(true)
+    setGenError(null)
+    try {
+      const { task_id } = await api.trapperGenerate(cpk)
+
+      // Poll until the background task finishes
+      while (true) {
+        await new Promise<void>(r => setTimeout(r, 2000))
+        const taskStatus = await api.trapperGenerateStatus(task_id)
+        if (taskStatus.status === 'done' && taskStatus.path) {
+          const extractedPath = taskStatus.path
+          set('camtrap_dir', extractedPath)
+
+          // Inspect the extracted CamtrapDP to pre-fill species and dates
+          setInspecting(true)
+          try {
+            const info = await api.inspectDir(extractedPath)
+            if (info.species.length) {
+              setAvailableSpecies(info.species)
+              setSelectedSpecies(new Set(info.species))
+            }
+            if (info.study_start && info.study_end) {
+              set('study_start', info.study_start)
+              set('study_end', info.study_end)
+              setDataRange({ min: info.study_start, max: info.study_end })
+            }
+          } catch {
+            // user can fill species and dates manually
+          } finally {
+            setInspecting(false)
+          }
+
+          setStepError(null)
+          setStep(1)
+          break
+        }
+        if (taskStatus.status === 'error') {
+          throw new Error(taskStatus.error ?? t('setup.err_unknown'))
+        }
+      }
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function handleTestConn() {
+    const { url, user, password } = trapperForm
+    setTrapperConn({ status: 'testing', message: '' })
+    setTrapperResearchProjects([])
+    setTrapperForm(f => ({ ...f, researchProject: '', classificationProject: '' }))
+    try {
+      const res = await api.trapperLogin(url, user, password)
+      const { results } = await api.trapperResearchProjects()
+      setTrapperResearchProjects(results)
+      setTrapperConn({
+        status: 'ok',
+        message: t('setup.trapper_conn_ok_detail', { count: res.research_projects_count }),
+      })
+    } catch (e) {
+      setTrapperConn({
+        status: 'error',
+        message: e instanceof Error ? e.message : t('setup.trapper_conn_error_generic'),
+      })
+    }
+  }
+
   function toggleSpecies(sp: string) {
     setSelectedSpecies((prev) => {
       const next = new Set(prev)
@@ -142,162 +290,436 @@ export default function SetupPage({ onSetup, ready }: Props) {
     })
   }
 
-  // ── Pantalla de bienvenida ─────────────────────────────────────────────────
+  // ── Welcome screen ────────────────────────────────────────────────────────
   if (step === -1) return (
-    <div className="d-flex flex-column align-items-center justify-content-center"
-      style={{ minHeight: 'calc(100vh - 56px)' }}>
-      <div className="text-center" style={{ maxWidth: 580 }}>
-        <div className="mb-3" style={{ fontSize: '4rem' }}>🦌</div>
-        <h1 className="fw-bold mb-3">{t('welcome.title')}</h1>
-        <p className="text-body-secondary mb-4 fs-5">{t('welcome.subtitle')}</p>
-        <ul className="list-unstyled text-start text-body-secondary mb-4 mx-auto" style={{ maxWidth: 420 }}>
-          <li className="mb-2">📁 <strong className="text-body">{t('welcome.feat_dir')}</strong> — {t('welcome.feat_dir_desc')}</li>
-          <li className="mb-2">🐾 <strong className="text-body">{t('welcome.feat_species')}</strong> — {t('welcome.feat_species_desc')}</li>
-          <li className="mb-2">📅 <strong className="text-body">{t('welcome.feat_period')}</strong> — {t('welcome.feat_period_desc')}</li>
-          <li className="mb-2">⚙️ <strong className="text-body">{t('welcome.feat_params')}</strong> — {t('welcome.feat_params_desc')}</li>
+    <>
+    <div className="flex flex-col items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+      <div className="text-center px-4" style={{ maxWidth: 580 }}>
+        <div className="mb-3 text-7xl">🦌</div>
+        <h1 className="text-4xl font-bold mb-3">{t('welcome.title')}</h1>
+        <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-lg">{t('welcome.subtitle')}</p>
+        <ul className="list-none text-left text-zinc-500 dark:text-zinc-400 mb-6 mx-auto p-0 space-y-2" style={{ maxWidth: 420 }}>
+          <li>📁 <strong className="text-zinc-900 dark:text-zinc-100">{t('welcome.feat_dir')}</strong> — {t('welcome.feat_dir_desc')}</li>
+          <li>🐾 <strong className="text-zinc-900 dark:text-zinc-100">{t('welcome.feat_species')}</strong> — {t('welcome.feat_species_desc')}</li>
+          <li>📅 <strong className="text-zinc-900 dark:text-zinc-100">{t('welcome.feat_period')}</strong> — {t('welcome.feat_period_desc')}</li>
+          <li>⚙️ <strong className="text-zinc-900 dark:text-zinc-100">{t('welcome.feat_params')}</strong> — {t('welcome.feat_params_desc')}</li>
         </ul>
-        <div className="d-flex flex-column align-items-center gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           {ready && (
-            <button className="btn btn-success btn-lg px-5" onClick={() => navigate('/species')}>
+            <button
+              className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-base flex items-center gap-2"
+              onClick={() => navigate('/species')}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
               {t('welcome.continue_session')}
             </button>
           )}
-          <button className="btn btn-primary btn-lg px-5" onClick={() => setStep(0)}>
+          <button
+            className="px-6 py-2.5 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-base flex items-center gap-2 disabled:opacity-50"
+            onClick={() => setSessionPickerOpen(true)}
+            disabled={loadingSession}
+          >
+            {loadingSession ? (
+              <><SmallSpinner />{t('welcome.open_session_loading')}</>
+            ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {t('welcome.open_session')}
+              </>
+            )}
+          </button>
+          <button
+            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-base flex items-center gap-2"
+            onClick={() => setStep(0)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
             {ready ? t('welcome.new_session') : t('welcome.start')}
           </button>
+          {sessionError && (
+            <p className="text-red-500 dark:text-red-400 text-sm mt-1 w-full text-center">{sessionError}</p>
+          )}
+          {ready && sessionSummary && (
+            <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1 w-full text-center">
+              {t('welcome.session_summary', {
+                speciesCount: sessionSummary.speciesCount,
+                resolved: sessionSummary.resolved,
+                total: sessionSummary.total,
+                pct: sessionSummary.pct,
+              })}
+            </p>
+          )}
         </div>
       </div>
     </div>
+
+    {sessionPickerOpen && (
+      <DirectoryPicker
+        initialPath={form.output_dir || undefined}
+        onSelect={handleLoadSession}
+        onClose={() => { setSessionPickerOpen(false); setSessionError(null) }}
+      />
+    )}
+    </>
   )
 
-  // ── Wizard ─────────────────────────────────────────────────────────────────
+  // ── Wizard ────────────────────────────────────────────────────────────────
   return (
-    <div className="container py-4" style={{ maxWidth: 700 }}>
+    <div className="mx-auto px-4 py-4" style={{ maxWidth: 700 }}>
 
-      {/* Indicador de pasos */}
-      <div className="d-flex align-items-center mb-5">
+      {/* Step indicator */}
+      <div className="flex items-start mb-10">
         {STEP_LABELS.map((label, i) => (
-          <div key={i} className="d-flex align-items-center flex-grow-1">
-            <div className="d-flex flex-column align-items-center" style={{ minWidth: 56 }}>
+          <div key={i} className="flex items-start flex-1">
+            <div className="flex flex-col items-center" style={{ minWidth: 56 }}>
               <div
-                className={`rounded-circle d-flex align-items-center justify-content-center fw-bold mb-1
-                  ${i < step ? 'bg-success text-white' : i === step ? 'bg-primary text-white' : 'bg-secondary text-dark'}`}
-                style={{ width: 36, height: 36, fontSize: 14 }}
+                className={`w-9 h-9 rounded-full flex items-center justify-center font-bold mb-1 text-sm ${
+                  i < step
+                    ? 'bg-emerald-600 text-white'
+                    : i === step
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-zinc-700 text-zinc-400'
+                }`}
               >
                 {i < step ? '✓' : i + 1}
               </div>
-              <small className={`text-nowrap ${i === step ? 'text-body' : 'text-body-secondary'}`}
-                style={{ fontSize: 11 }}>{label}</small>
+              <small className={`text-xs whitespace-nowrap ${
+                i === step ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 dark:text-zinc-400'
+              }`}>
+                {label}
+              </small>
             </div>
             {i < STEP_LABELS.length - 1 && (
-              <div className={`flex-grow-1 border-top mb-3 mx-1 ${i < step ? 'border-success' : 'border-secondary'}`} />
+              <div className={`flex-1 border-t mx-1 mt-[18px] ${i < step ? 'border-emerald-500' : 'border-zinc-700'}`} />
             )}
           </div>
         ))}
       </div>
 
-      {stepError && <div className="alert alert-danger py-2">{stepError}</div>}
+      {stepError && (
+        <div className="px-4 py-2 rounded bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm mb-4">
+          {stepError}
+        </div>
+      )}
 
-      {/* ── PASO 0 ── */}
-      {step === 0 && (
+      {/* ── Step 0a: source selection ── */}
+      {step === 0 && sourceType === null && (
         <div>
-          <h4 className="mb-1">{t('setup.step0_title')}</h4>
-          <p className="text-body-secondary mb-4">{t('setup.step0_desc')}</p>
-
-          <div className="mb-4">
-            <label className="form-label fw-semibold">{t('setup.label_data_dir')}</label>
-            <div className="input-group">
-              <input className="form-control font-monospace"
-                placeholder={t('setup.placeholder_data_dir')}
-                value={form.camtrap_dir}
-                onChange={(e) => set('camtrap_dir', e.target.value)} />
-              <button type="button" className="btn btn-outline-secondary"
-                onClick={() => setPicker('camtrap_dir')} disabled={inspecting}>
-                {inspecting ? <span className="spinner-border spinner-border-sm" /> : t('setup.browse')}
-              </button>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <label className="form-label fw-semibold">
-              {t('setup.label_output_dir')}{' '}
-              <span className="text-body-secondary fw-normal">{t('setup.label_output_optional')}</span>
-            </label>
-            <div className="input-group">
-              <input className="form-control font-monospace"
-                placeholder={t('setup.placeholder_output_dir')}
-                value={form.output_dir}
-                onChange={(e) => set('output_dir', e.target.value)} />
-              <button type="button" className="btn btn-outline-secondary"
-                onClick={() => setPicker('output_dir')}>
-                {t('setup.browse')}
-              </button>
-            </div>
-            <div className="form-text text-body-secondary">{t('setup.hint_output_dir')}</div>
+          <h4 className="text-lg font-semibold mb-1">{t('setup.step0_source_title')}</h4>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t('setup.step0_source_desc')}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-center group"
+              onClick={() => setSourceType('local')}
+            >
+              <span className="text-4xl">📁</span>
+              <strong className="text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                {t('setup.source_local')}
+              </strong>
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.source_local_desc')}</span>
+            </button>
+            <button
+              className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors text-center group"
+              onClick={() => setSourceType('trapper')}
+            >
+              <span className="text-4xl">🌐</span>
+              <strong className="text-zinc-900 dark:text-zinc-100 transition-colors">
+                {t('setup.source_trapper')}
+              </strong>
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.source_trapper_desc')}</span>
+            </button>
           </div>
         </div>
       )}
 
-      {/* ── PASO 1 ── */}
+      {/* ── Step 0b: Trapper form ── */}
+      {step === 0 && sourceType === 'trapper' && (() => {
+        const tf = trapperForm
+        const setTF = (k: keyof typeof tf, v: string) => {
+          setTrapperForm(f => ({ ...f, [k]: v }))
+          if (k === 'url' || k === 'user' || k === 'password') {
+            setTrapperConn({ status: 'idle', message: '' })
+            setTrapperResearchProjects([])
+            setTrapperClassificationProjects([])
+          }
+        }
+        const hasProject = tf.researchProject !== ''
+        const canTest = tf.url !== '' && tf.user !== '' && tf.password !== ''
+        const isTesting = trapperConn.status === 'testing'
+        return (
+          <div>
+            {/* Connection */}
+            <h4 className="text-base font-semibold mb-4 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs flex items-center justify-center font-bold">1</span>
+              {t('setup.trapper_conn_title')}
+            </h4>
+
+            <div className="mb-4">
+              <label className={labelClass}>{t('setup.trapper_url')}</label>
+              <input
+                className={inputClass}
+                placeholder="https://trapper.example.com"
+                value={tf.url}
+                onChange={e => setTF('url', e.target.value)}
+                autoComplete="url"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className={labelClass}>{t('setup.trapper_user')}</label>
+                <input
+                  className={inputClass}
+                  placeholder={t('setup.trapper_user_placeholder')}
+                  value={tf.user}
+                  onChange={e => setTF('user', e.target.value)}
+                  autoComplete="username"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>{t('setup.trapper_password')}</label>
+                <input
+                  type="password"
+                  className={inputClass}
+                  placeholder="••••••••"
+                  value={tf.password}
+                  onChange={e => setTF('password', e.target.value)}
+                  autoComplete="current-password"
+                />
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  disabled={!canTest || isTesting}
+                  onClick={handleTestConn}
+                  className={[
+                    'px-4 py-2 text-sm rounded border flex items-center gap-2 transition-colors',
+                    canTest && !isTesting
+                      ? 'border-zinc-400 dark:border-zinc-500 text-zinc-700 dark:text-zinc-200 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer'
+                      : 'border-zinc-300 dark:border-zinc-700 text-zinc-400 dark:text-zinc-600 cursor-not-allowed',
+                  ].join(' ')}
+                >
+                  {isTesting && <SmallSpinner />}
+                  {t(isTesting ? 'setup.trapper_testing' : 'setup.trapper_test')}
+                </button>
+              </div>
+
+              {trapperConn.status === 'ok' && (
+                <div className="flex items-center gap-1.5 mt-2 text-sm text-emerald-600 dark:text-emerald-400 justify-end">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  {trapperConn.message}
+                </div>
+              )}
+              {trapperConn.status === 'error' && (
+                <div className="mt-2 text-sm text-red-600 dark:text-red-400 text-right">
+                  {trapperConn.message}
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-zinc-200 dark:border-zinc-700 mb-6" />
+
+            {/* Project selection */}
+            <h4 className="text-base font-semibold mb-4 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs flex items-center justify-center font-bold">2</span>
+              {t('setup.trapper_projects_title')}
+            </h4>
+
+            <div className="mb-4">
+              <label className={labelClass}>{t('setup.trapper_research_project')}</label>
+              <select
+                disabled={trapperConn.status !== 'ok' || trapperResearchProjects.length === 0}
+                className={[
+                  inputClass,
+                  trapperConn.status !== 'ok' ? 'cursor-not-allowed opacity-50' : '',
+                ].join(' ')}
+                value={tf.researchProject}
+                onChange={e => handleResearchProjectChange(e.target.value)}
+              >
+                <option value="">
+                  {trapperConn.status !== 'ok'
+                    ? t('setup.trapper_research_hint')
+                    : t('setup.trapper_research_placeholder')}
+                </option>
+                {trapperResearchProjects.map(p => (
+                  <option key={p.pk} value={String(p.pk)}>
+                    {p.acronym ? `${p.acronym} — ${p.name}` : p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-6">
+              <label className={labelClass}>{t('setup.trapper_classification')}</label>
+              <select
+                disabled={!hasProject || loadingClassProjects}
+                className={[
+                  inputClass,
+                  !hasProject || loadingClassProjects ? 'cursor-not-allowed opacity-50' : '',
+                ].join(' ')}
+                value={tf.classificationProject}
+                onChange={e => setTF('classificationProject', e.target.value)}
+              >
+                <option value="">
+                  {loadingClassProjects
+                    ? t('setup.trapper_classification_loading')
+                    : !hasProject
+                      ? t('setup.trapper_classification_wait')
+                      : t('setup.trapper_classification_placeholder')}
+                </option>
+                {trapperClassificationProjects.map(p => (
+                  <option key={p.pk} value={String(p.pk)}>
+                    {p.name}{p.is_active ? '' : ` (${t('setup.trapper_inactive')})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col items-end gap-2">
+              <button
+                type="button"
+                disabled={!tf.classificationProject || generating}
+                onClick={handleGenerate}
+                className={[
+                  'px-5 py-2 text-sm rounded bg-emerald-600 text-white flex items-center gap-2 transition-opacity',
+                  !tf.classificationProject || generating
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-emerald-700 cursor-pointer',
+                ].join(' ')}
+              >
+                {generating && <SmallSpinner />}
+                {t(generating ? 'setup.trapper_generating' : 'setup.trapper_generate')}
+              </button>
+              {genError && (
+                <p className="text-sm text-red-600 dark:text-red-400 text-right">{genError}</p>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Step 0c: local filesystem ── */}
+      {step === 0 && sourceType === 'local' && (
+        <div>
+          <h4 className="text-lg font-semibold mb-1">{t('setup.step0_title')}</h4>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t('setup.step0_desc')}</p>
+
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_data_dir')}</label>
+            <div className="flex">
+              <input
+                className={`${inputClass} rounded-r-none`}
+                placeholder={t('setup.placeholder_data_dir')}
+                value={form.camtrap_dir}
+                onChange={(e) => set('camtrap_dir', e.target.value)}
+              />
+              <button type="button" className={browseBtn}
+                onClick={() => setPicker('camtrap_dir')} disabled={inspecting}>
+                {inspecting ? <SmallSpinner /> : t('setup.browse')}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <label className={labelClass}>
+              {t('setup.label_output_dir')}{' '}
+              <span className="text-zinc-400 font-normal">{t('setup.label_output_optional')}</span>
+            </label>
+            <div className="flex">
+              <input
+                className={`${inputClass} rounded-r-none`}
+                placeholder={t('setup.placeholder_output_dir')}
+                value={form.output_dir}
+                onChange={(e) => set('output_dir', e.target.value)}
+              />
+              <button type="button" className={browseBtn}
+                onClick={() => setPicker('output_dir')}>
+                {t('setup.browse')}
+              </button>
+            </div>
+            <p className={hintClass}>{t('setup.hint_output_dir')}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 1 ── */}
       {step === 1 && (
         <div>
-          <h4 className="mb-1">{t('setup.step1_title')}</h4>
-          <p className="text-body-secondary mb-1">{t('setup.step1_desc')}</p>
+          <h4 className="text-lg font-semibold mb-1">{t('setup.step1_title')}</h4>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-1 text-sm">{t('setup.step1_desc')}</p>
 
           {availableSpecies.length > 0 && (
-            <div className="d-flex gap-2 mb-3">
-              <button type="button" className="btn btn-outline-secondary btn-sm"
+            <div className="flex gap-2 mb-3">
+              <button type="button" className={btnOutlineSm}
                 onClick={() => setSelectedSpecies(new Set(availableSpecies))}>
                 {t('setup.select_all')}
               </button>
-              <button type="button" className="btn btn-outline-secondary btn-sm"
+              <button type="button" className={btnOutlineSm}
                 onClick={() => setSelectedSpecies(new Set())}>
                 {t('setup.deselect_all')}
               </button>
             </div>
           )}
 
-          <div className="border border-secondary rounded p-3 mb-3"
-            style={{ maxHeight: 280, overflowY: 'auto' }}>
+          <div className="border border-zinc-300 dark:border-zinc-700 rounded p-3 mb-3 overflow-y-auto" style={{ maxHeight: 280 }}>
             {availableSpecies.length === 0 && (
-              <p className="text-body-secondary mb-0 small">{t('setup.no_species')}</p>
+              <p className="text-zinc-500 dark:text-zinc-400 mb-0 text-sm">{t('setup.no_species')}</p>
             )}
             {availableSpecies.map((sp) => (
-              <div key={sp} className="form-check mb-1">
-                <input className="form-check-input" type="checkbox" id={`sp-${sp}`}
-                  checked={selectedSpecies.has(sp)} onChange={() => toggleSpecies(sp)} />
-                <label className="form-check-label font-monospace" htmlFor={`sp-${sp}`}>{sp}</label>
-              </div>
+              <label key={sp} className="flex items-center gap-2 mb-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-zinc-400 accent-blue-600"
+                  id={`sp-${sp}`}
+                  checked={selectedSpecies.has(sp)}
+                  onChange={() => toggleSpecies(sp)}
+                />
+                <span className="font-mono text-sm text-zinc-900 dark:text-zinc-100">{sp}</span>
+              </label>
             ))}
           </div>
 
-          <div className="text-body-secondary small mt-1">
+          <div className="text-zinc-500 dark:text-zinc-400 text-xs mt-1">
             {t(selectedSpecies.size === 1 ? 'setup.species_count_one' : 'setup.species_count_other',
               { count: selectedSpecies.size })}
           </div>
         </div>
       )}
 
-      {/* ── PASO 2 ── */}
+      {/* ── Step 2 ── */}
       {step === 2 && (
         <div>
-          <h4 className="mb-1">{t('setup.step2_title')}</h4>
-          <p className="text-body-secondary mb-4">
-            {t('setup.step2_desc')}
-            {dataRange && (
-              <> {t('setup.data_range', { min: dataRange.min, max: dataRange.max })}</>
-            )}
-          </p>
-          <div className="row g-3">
-            <div className="col-md-6">
-              <label className="form-label fw-semibold">{t('setup.label_start')}</label>
-              <input type="date" className="form-control" value={form.study_start}
+          <h4 className="text-lg font-semibold mb-1">{t('setup.step2_title')}</h4>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm">{t('setup.step2_desc')}</p>
+          {dataRange && (
+            <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 text-sm mb-6">
+              <svg className="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M7.5 1C3.91 1 1 3.91 1 7.5S3.91 14 7.5 14 14 11.09 14 7.5 11.09 1 7.5 1zm.75 10.5h-1.5V7h1.5v4.5zm0-6h-1.5V4h1.5v1.5z" fill="currentColor"/>
+              </svg>
+              <span>{t('setup.data_range', { min: formatDate(dataRange.min), max: formatDate(dataRange.max) })}</span>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>{t('setup.label_start')}</label>
+              <input type="date" className={inputClass} value={form.study_start}
                 min={dataRange?.min} max={dataRange?.max}
                 onChange={(e) => set('study_start', e.target.value)} />
             </div>
-            <div className="col-md-6">
-              <label className="form-label fw-semibold">{t('setup.label_end')}</label>
-              <input type="date" className="form-control" value={form.study_end}
+            <div>
+              <label className={labelClass}>{t('setup.label_end')}</label>
+              <input type="date" className={inputClass} value={form.study_end}
                 min={dataRange?.min} max={dataRange?.max}
                 onChange={(e) => set('study_end', e.target.value)} />
             </div>
@@ -305,58 +727,58 @@ export default function SetupPage({ onSetup, ready }: Props) {
         </div>
       )}
 
-      {/* ── PASO 3 ── */}
+      {/* ── Step 3 ── */}
       {step === 3 && (
         <div>
-          <h4 className="mb-1">{t('setup.step3_title')}</h4>
-          <p className="text-body-secondary mb-4"
+          <h4 className="text-lg font-semibold mb-1">{t('setup.step3_title')}</h4>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm"
             dangerouslySetInnerHTML={{ __html: t('setup.step3_desc') }} />
 
-          <div className="mb-4">
-            <label className="form-label fw-semibold">{t('setup.label_occasion_days')}</label>
-            <input type="number" className="form-control" min={1} value={form.occasion_days}
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_occasion_days')}</label>
+            <input type="number" className={inputClass} min={1} value={form.occasion_days}
               onChange={(e) => set('occasion_days', Number(e.target.value))} />
-            <div className="form-text text-body-secondary">{t('setup.hint_occasion_days')}</div>
+            <p className={hintClass}>{t('setup.hint_occasion_days')}</p>
           </div>
 
-          <div className="mb-4">
-            <label className="form-label fw-semibold">{t('setup.label_gap')}</label>
-            <input type="number" className="form-control" min={1} value={form.gap_seconds}
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_gap')}</label>
+            <input type="number" className={inputClass} min={1} value={form.gap_seconds}
               onChange={(e) => set('gap_seconds', Number(e.target.value))} />
-            <div className="form-text text-body-secondary">{t('setup.hint_gap')}</div>
+            <p className={hintClass}>{t('setup.hint_gap')}</p>
           </div>
 
-          <div className="mb-4">
-            <label className="form-label fw-semibold">{t('setup.label_min_score')}</label>
-            <div className="d-flex align-items-center gap-3">
-              <input type="range" className="form-range flex-grow-1"
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_min_score')}</label>
+            <div className="flex items-center gap-3">
+              <input type="range" className="flex-1 accent-blue-600"
                 min={0} max={1} step={0.05} value={form.min_score}
                 onChange={(e) => set('min_score', Number(e.target.value))} />
-              <span className="badge bg-secondary fs-6" style={{ minWidth: 48 }}>
+              <span className="px-2 py-1 bg-zinc-700 text-zinc-200 text-sm rounded font-mono text-center" style={{ minWidth: 48 }}>
                 {form.min_score.toFixed(2)}
               </span>
             </div>
-            <div className="form-text text-body-secondary">{t('setup.hint_min_score')}</div>
+            <p className={hintClass}>{t('setup.hint_min_score')}</p>
           </div>
         </div>
       )}
 
-      {/* Navegación */}
-      <div className="d-flex justify-content-between mt-5">
-        <button type="button" className="btn btn-outline-secondary"
-          onClick={step === 0 ? () => setStep(-1) : goBack}>
-          {step === 0 ? t('setup.back_welcome') : t('setup.back')}
+      {/* Navigation */}
+      <div className="flex justify-between mt-10">
+        <button type="button" className={btnOutline} onClick={goBack}>
+          {step === 0 && sourceType === null ? t('setup.back_welcome') : t('setup.back')}
         </button>
-        {step < STEP_LABELS.length - 1 ? (
-          <button type="button" className="btn btn-primary px-4" onClick={goNext}>
+        {step === 0 && sourceType !== 'local' ? (
+          <div />
+        ) : step < STEP_LABELS.length - 1 ? (
+          <button type="button" className={btnPrimary} onClick={goNext}>
             {t('setup.next')}
           </button>
         ) : (
-          <button type="button" className="btn btn-success px-4"
+          <button type="button" className={btnSuccess}
             onClick={handleSubmit} disabled={submitting}>
-            {submitting
-              ? <><span className="spinner-border spinner-border-sm me-2" />{t('setup.submitting')}</>
-              : t('setup.submit')}
+            {submitting && <SmallSpinner />}
+            {submitting ? t('setup.submitting') : t('setup.submit')}
           </button>
         )}
       </div>

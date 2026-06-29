@@ -10,6 +10,7 @@ import re
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 import pandas as pd
 
@@ -499,7 +500,7 @@ def get_events(
         for _, row in group.iterrows():
             fp = str(row["filePath"])
             img_url = (
-                f'/api/proxy-image?url={fp}'
+                f'/api/proxy-image?url={quote(fp, safe="")}'
                 if fp.startswith("http")
                 else f'/api/image/{row["mediaID"]}'
             )
@@ -565,7 +566,7 @@ def get_review_events(
         for _, row in group.iterrows():
             fp = str(row["filePath"])
             img_url = (
-                f'/api/proxy-image?url={fp}'
+                f'/api/proxy-image?url={quote(fp, safe="")}'
                 if fp.startswith("http")
                 else f'/api/image/{row["mediaID"]}'
             )

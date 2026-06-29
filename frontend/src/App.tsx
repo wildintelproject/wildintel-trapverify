@@ -17,36 +17,33 @@ export default function App() {
   }, [])
 
   if (ready === null) return (
-    <div className="d-flex justify-content-center align-items-center vh-100">
-      <div className="spinner-border text-secondary" role="status" />
+    <div className="flex justify-center items-center min-h-screen bg-zinc-950">
+      <div className="w-8 h-8 border-2 border-zinc-700 border-t-zinc-300 rounded-full animate-spin" />
     </div>
   )
 
   return (
     <BrowserRouter>
-      <Navbar ready={ready} />
-      <Routes>
-        {/* Bienvenida — siempre accesible */}
-        <Route path="/" element={
-          <SetupPage onSetup={() => setReady(true)} ready={ready} />
-        } />
-
-        {/* Wizard de configuración (pasos 0-3) — accesible desde la bienvenida */}
-        <Route path="/setup" element={
-          <SetupPage onSetup={() => setReady(true)} ready={ready} />
-        } />
-
-        {/* Verificación — solo si hay sesión activa */}
-        <Route path="/species"
-          element={ready ? <IndexPage /> : <Navigate to="/" replace />}
-        />
-        <Route path="/gallery/:species"
-          element={ready ? <GalleryPage /> : <Navigate to="/" replace />}
-        />
-        <Route path="/results"
-          element={ready ? <ResultsPage /> : <Navigate to="/" replace />}
-        />
-      </Routes>
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+        <Navbar ready={ready} />
+        <Routes>
+          <Route path="/" element={
+            <SetupPage onSetup={() => setReady(true)} ready={ready} />
+          } />
+          <Route path="/setup" element={
+            <SetupPage onSetup={() => setReady(true)} ready={ready} />
+          } />
+          <Route path="/species"
+            element={ready ? <IndexPage /> : <Navigate to="/" replace />}
+          />
+          <Route path="/gallery/:species"
+            element={ready ? <GalleryPage /> : <Navigate to="/" replace />}
+          />
+          <Route path="/results"
+            element={ready ? <ResultsPage /> : <Navigate to="/" replace />}
+          />
+        </Routes>
+      </div>
     </BrowserRouter>
   )
 }

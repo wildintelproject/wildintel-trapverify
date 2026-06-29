@@ -32,7 +32,7 @@ export default function ResultsPage() {
   const [opening, setOpening] = useState(false)
 
   useEffect(() => {
-    api.getResults().then(setResults).catch((e: Error) => setError(e.message))
+    api.getResults().then((r) => setResults(r as Results)).catch((e: Error) => setError(e.message))
   }, [])
 
   async function handleOpenFolder() {
@@ -49,64 +49,48 @@ export default function ResultsPage() {
   }
 
   if (error) return (
-    <div className="container py-4">
-      <div className="alert alert-danger">{error}</div>
+    <div className="max-w-4xl mx-auto px-4 py-4">
+      <div className="px-4 py-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300">
+        {error}
+      </div>
     </div>
   )
 
   if (!results) return (
-    <div className="d-flex justify-content-center align-items-center" style={{ minHeight: 300 }}>
-      <div className="spinner-border text-primary" role="status" />
+    <div className="flex justify-center items-center" style={{ minHeight: 300 }}>
+      <div className="w-8 h-8 border-2 border-zinc-600 border-t-blue-500 rounded-full animate-spin" />
     </div>
   )
 
-  const pctConfirmed  = results.total > 0 ? Math.round(results.confirmed  / results.total * 100) : 0
-  const pctRejected   = results.total > 0 ? Math.round(results.rejected   / results.total * 100) : 0
-  const pctUnverified = results.total > 0 ? Math.round(results.unverified / results.total * 100) : 0
-
-  const sPctConfirmed  = results.seq_total > 0 ? Math.round(results.seq_confirmed  / results.seq_total * 100) : 0
-  const sPctRejected   = results.seq_total > 0 ? Math.round(results.seq_rejected   / results.seq_total * 100) : 0
-  const sPctUnverified = results.seq_total > 0 ? Math.round(results.seq_unverified / results.seq_total * 100) : 0
-
-  function StatsCards({ confirmed, rejected, unverified, total }: { confirmed: number; rejected: number; unverified: number; total: number }) {
+  function StatsCards({ confirmed, rejected, unverified, total }: {
+    confirmed: number; rejected: number; unverified: number; total: number
+  }) {
     const pC = total > 0 ? Math.round(confirmed  / total * 100) : 0
     const pR = total > 0 ? Math.round(rejected   / total * 100) : 0
     const pU = total > 0 ? Math.round(unverified / total * 100) : 0
     return (
       <>
-        <div className="row g-3 mb-3">
-          <div className="col-md-4">
-            <div className="card text-center border-success">
-              <div className="card-body">
-                <div className="fs-1 fw-bold text-success">{confirmed}</div>
-                <div className="text-body-secondary">{t('results.confirmed')}</div>
-                <div className="text-success small">{t('results.pct_total', { pct: pC })}</div>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <div className="rounded-lg border border-emerald-500 bg-white dark:bg-zinc-900 text-center p-4">
+            <div className="text-4xl font-bold text-emerald-500 mb-1">{confirmed}</div>
+            <div className="text-zinc-500 dark:text-zinc-400 text-sm">{t('results.confirmed')}</div>
+            <div className="text-emerald-500 text-xs">{t('results.pct_total', { pct: pC })}</div>
           </div>
-          <div className="col-md-4">
-            <div className="card text-center border-danger">
-              <div className="card-body">
-                <div className="fs-1 fw-bold text-danger">{rejected}</div>
-                <div className="text-body-secondary">{t('results.rejected')}</div>
-                <div className="text-danger small">{t('results.pct_total', { pct: pR })}</div>
-              </div>
-            </div>
+          <div className="rounded-lg border border-red-500 bg-white dark:bg-zinc-900 text-center p-4">
+            <div className="text-4xl font-bold text-red-500 mb-1">{rejected}</div>
+            <div className="text-zinc-500 dark:text-zinc-400 text-sm">{t('results.rejected')}</div>
+            <div className="text-red-500 text-xs">{t('results.pct_total', { pct: pR })}</div>
           </div>
-          <div className="col-md-4">
-            <div className="card text-center border-secondary">
-              <div className="card-body">
-                <div className="fs-1 fw-bold text-secondary">{unverified}</div>
-                <div className="text-body-secondary">{t('results.unverified')}</div>
-                <div className="text-secondary small">{t('results.pct_total', { pct: pU })}</div>
-              </div>
-            </div>
+          <div className="rounded-lg border border-zinc-400 bg-white dark:bg-zinc-900 text-center p-4">
+            <div className="text-4xl font-bold text-zinc-400 mb-1">{unverified}</div>
+            <div className="text-zinc-500 dark:text-zinc-400 text-sm">{t('results.unverified')}</div>
+            <div className="text-zinc-400 text-xs">{t('results.pct_total', { pct: pU })}</div>
           </div>
         </div>
-        <div className="progress mb-4" style={{ height: 12 }}>
-          <div className="progress-bar bg-success" style={{ width: `${pC}%` }} />
-          <div className="progress-bar bg-danger"  style={{ width: `${pR}%` }} />
-          <div className="progress-bar bg-secondary" style={{ width: `${pU}%` }} />
+        <div className="flex w-full rounded-full overflow-hidden mb-4" style={{ height: 12 }}>
+          <div className="bg-emerald-500 transition-all" style={{ width: `${pC}%` }} />
+          <div className="bg-red-500 transition-all"     style={{ width: `${pR}%` }} />
+          <div className="bg-zinc-400 transition-all"    style={{ width: `${pU}%` }} />
         </div>
       </>
     )
@@ -114,27 +98,27 @@ export default function ResultsPage() {
 
   function BreakdownTable({ rows }: { rows: SpeciesRow[] }) {
     return (
-      <div className="table-responsive">
-        <table className="table table-hover table-sm mb-0">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
           <thead>
-            <tr>
-              <th>{t('results.col_species')}</th>
-              <th className="text-end text-success">{t('results.col_confirmed')}</th>
-              <th className="text-end text-danger">{t('results.col_rejected')}</th>
-              <th className="text-end text-body-secondary">{t('results.col_unverified')}</th>
-              <th className="text-end">{t('results.col_total')}</th>
+            <tr className="border-b border-zinc-200 dark:border-zinc-700">
+              <th className="text-left py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_species')}</th>
+              <th className="text-right py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{t('results.col_confirmed')}</th>
+              <th className="text-right py-2 px-3 font-semibold text-red-600 dark:text-red-400">{t('results.col_rejected')}</th>
+              <th className="text-right py-2 px-3 font-semibold text-zinc-500">{t('results.col_unverified')}</th>
+              <th className="text-right py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_total')}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
               const tot = row.confirmed + row.rejected + row.unverified
               return (
-                <tr key={row.species}>
-                  <td className="font-monospace">{row.species}</td>
-                  <td className="text-end text-success">{row.confirmed}</td>
-                  <td className="text-end text-danger">{row.rejected}</td>
-                  <td className="text-end text-body-secondary">{row.unverified}</td>
-                  <td className="text-end">{tot}</td>
+                <tr key={row.species} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+                  <td className="py-2 px-3 font-mono text-zinc-900 dark:text-zinc-100">{row.species}</td>
+                  <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">{row.confirmed}</td>
+                  <td className="py-2 px-3 text-right text-red-600 dark:text-red-400">{row.rejected}</td>
+                  <td className="py-2 px-3 text-right text-zinc-500">{row.unverified}</td>
+                  <td className="py-2 px-3 text-right text-zinc-700 dark:text-zinc-300">{tot}</td>
                 </tr>
               )
             })}
@@ -144,36 +128,48 @@ export default function ResultsPage() {
     )
   }
 
+  const cardClass = 'rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
+  const cardHeader = 'px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 font-medium text-sm text-zinc-700 dark:text-zinc-300'
+
   return (
-    <div className="container py-4" style={{ maxWidth: 860 }}>
-      <h2 className="mb-4">{t('results.title')}</h2>
-      <p className="text-body-secondary mb-4"
+    <div className="max-w-4xl mx-auto px-4 py-4">
+      <h2 className="text-2xl font-semibold mb-4">{t('results.title')}</h2>
+      <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm"
         dangerouslySetInnerHTML={{ __html: t('results.subtitle') }} />
 
-      <div className="card mb-4">
-        <div className="card-header">{t('results.output_header')}</div>
-        <div className="card-body">
-          <div className="input-group">
+      {/* Output directory */}
+      <div className={`${cardClass} mb-4`}>
+        <div className={cardHeader}>{t('results.output_header')}</div>
+        <div className="p-4">
+          <div className="flex">
             <input
-              className="form-control font-monospace"
+              className="flex-1 px-3 py-2 text-sm rounded-l border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none"
               readOnly
               value={results.output_dir}
             />
-            <button className="btn btn-outline-secondary" onClick={() => handleCopy(results.output_dir)}>
+            <button
+              className="px-3 py-2 text-sm border-t border-b border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+              onClick={() => handleCopy(results.output_dir)}
+            >
               {copied ? t('results.copied') : t('results.copy')}
             </button>
-            <button className="btn btn-outline-primary" onClick={handleOpenFolder} disabled={opening}>
+            <button
+              className="px-3 py-2 text-sm border border-l-0 border-zinc-300 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors rounded-r disabled:opacity-50 flex items-center"
+              onClick={handleOpenFolder}
+              disabled={opening}
+            >
               {opening
-                ? <span className="spinner-border spinner-border-sm" role="status" />
+                ? <div className="w-4 h-4 border border-zinc-400 border-t-zinc-700 dark:border-t-zinc-300 rounded-full animate-spin" />
                 : t('results.open_folder')}
             </button>
           </div>
-          <div className="form-text text-body-secondary"
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1"
             dangerouslySetInnerHTML={{ __html: t('results.output_hint') }} />
         </div>
       </div>
 
-      <h5 className="mb-3">{t('results.periods_title')}</h5>
+      {/* Periods */}
+      <h5 className="text-base font-semibold mb-3">{t('results.periods_title')}</h5>
       <StatsCards
         confirmed={results.confirmed}
         rejected={results.rejected}
@@ -181,13 +177,14 @@ export default function ResultsPage() {
         total={results.total}
       />
       {results.by_species.length > 0 && (
-        <div className="card mb-5">
-          <div className="card-header">{t('results.by_species')}</div>
+        <div className={`${cardClass} mb-10`}>
+          <div className={cardHeader}>{t('results.by_species')}</div>
           <BreakdownTable rows={results.by_species} />
         </div>
       )}
 
-      <h5 className="mb-3">{t('results.seq_title')}</h5>
+      {/* Sequences */}
+      <h5 className="text-base font-semibold mb-3">{t('results.seq_title')}</h5>
       <StatsCards
         confirmed={results.seq_confirmed}
         rejected={results.seq_rejected}
@@ -195,8 +192,8 @@ export default function ResultsPage() {
         total={results.seq_total}
       />
       {results.by_species_seqs.length > 0 && (
-        <div className="card mb-4">
-          <div className="card-header">{t('results.by_species')}</div>
+        <div className={`${cardClass} mb-4`}>
+          <div className={cardHeader}>{t('results.by_species')}</div>
           <BreakdownTable rows={results.by_species_seqs} />
         </div>
       )}

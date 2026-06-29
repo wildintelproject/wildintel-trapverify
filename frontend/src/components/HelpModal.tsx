@@ -7,64 +7,64 @@ export default function HelpModal({ onClose }: Props) {
 
   return (
     <>
-      {/* Backdrop */}
       <div
         onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,.6)',
-          zIndex: 1040,
-        }}
+        className="fixed inset-0 bg-black/60 z-[1040]"
       />
-
-      {/* Modal */}
       <div
         role="dialog"
         aria-modal="true"
-        style={{
-          position: 'fixed',
-          top: '50%', left: '50%',
-          transform: 'translate(-50%,-50%)',
-          zIndex: 1050,
-          width: '100%',
-          maxWidth: 620,
-          maxHeight: '85vh',
-          overflowY: 'auto',
-          borderRadius: 8,
-        }}
-        className="card shadow-lg"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1050] w-full max-w-[620px] max-h-[85vh] overflow-y-auto rounded-lg shadow-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700"
       >
-        <div className="card-header d-flex align-items-center justify-content-between">
-          <strong>{t('help.title')}</strong>
-          <button className="btn-close" onClick={onClose} aria-label="Cerrar" />
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-700">
+          <strong className="text-zinc-900 dark:text-zinc-100">{t('help.title')}</strong>
+          <button
+            className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-xl rounded transition-colors"
+            onClick={onClose}
+            aria-label="Cerrar"
+          >
+            ×
+          </button>
         </div>
-        <div className="card-body" style={{ fontSize: 14.5 }}>
 
-          <h6 className="fw-bold">{t('help.what_title')}</h6>
-          <p className="text-body-secondary">{t('help.what_body')}</p>
+        <div className="p-4 text-sm space-y-4">
+          <div>
+            <h6 className="font-bold mb-1 text-zinc-900 dark:text-zinc-100">{t('help.what_title')}</h6>
+            <p className="text-zinc-500 dark:text-zinc-400">{t('help.what_body')}</p>
+          </div>
 
-          <h6 className="fw-bold">{t('help.workflow_title')}</h6>
-          <ol className="text-body-secondary">
-            {(t('help.workflow_steps', { returnObjects: true }) as string[]).map((s, i) => (
-              <li key={i} className="mb-1">{s}</li>
-            ))}
-          </ol>
+          <div>
+            <h6 className="font-bold mb-1 text-zinc-900 dark:text-zinc-100">{t('help.workflow_title')}</h6>
+            <ol className="text-zinc-500 dark:text-zinc-400 pl-5 space-y-1 list-decimal">
+              {(t('help.workflow_steps', { returnObjects: true }) as string[]).map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+          </div>
 
-          <h6 className="fw-bold">{t('help.concepts_title')}</h6>
-          <dl className="text-body-secondary">
-            {(t('help.concepts', { returnObjects: true }) as { term: string; def: string }[]).map((c, i) => (
-              <div key={i} className="mb-2">
-                <dt className="text-body">{c.term}</dt>
-                <dd className="mb-0">{c.def}</dd>
-              </div>
-            ))}
-          </dl>
+          <div>
+            <h6 className="font-bold mb-1 text-zinc-900 dark:text-zinc-100">{t('help.concepts_title')}</h6>
+            <dl className="text-zinc-500 dark:text-zinc-400 space-y-2">
+              {(t('help.concepts', { returnObjects: true }) as { term: string; def: string }[]).map((c, i) => (
+                <div key={i}>
+                  <dt className="font-medium text-zinc-700 dark:text-zinc-300">{c.term}</dt>
+                  <dd className="mb-0">{c.def}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
 
-          <h6 className="fw-bold">{t('help.decisions_title')}</h6>
-          <p className="text-body-secondary mb-0">{t('help.decisions_body')}</p>
+          <div>
+            <h6 className="font-bold mb-1 text-zinc-900 dark:text-zinc-100">{t('help.decisions_title')}</h6>
+            <p className="text-zinc-500 dark:text-zinc-400 mb-0">{t('help.decisions_body')}</p>
+          </div>
         </div>
-        <div className="card-footer text-end">
-          <button className="btn btn-primary btn-sm" onClick={onClose}>
+
+        <div className="flex justify-end px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+          <button
+            className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+            onClick={onClose}
+          >
             {t('help.close')}
           </button>
         </div>

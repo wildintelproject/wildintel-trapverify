@@ -26,17 +26,18 @@ export default function EventCard({
   readOnly = false,
 }: Props) {
   const { t } = useTranslation()
-  const borderColor = decision === 'confirmed'
-    ? '2px solid #198754'
+
+  const borderClass = decision === 'confirmed'
+    ? 'border-2 border-emerald-500'
     : decision === 'rejected'
-    ? '2px solid #dc3545'
+    ? 'border-2 border-red-500'
     : needsDecision
-    ? '2px solid #ffc107'
-    : '1px solid #444'
+    ? 'border-2 border-amber-400'
+    : 'border border-zinc-700'
 
   return (
-    <div className="card bg-dark text-white" style={{ border: borderColor }}>
-      <div className="position-relative" style={{ aspectRatio: '16/10', background: '#000' }}>
+    <div className={`rounded-lg overflow-hidden bg-zinc-900 text-zinc-100 ${borderClass}`}>
+      <div className="relative" style={{ aspectRatio: '16/10', background: '#000' }}>
         <Swiper
           modules={[Navigation, Pagination]}
           navigation={event.frames.length > 1}
@@ -53,9 +54,8 @@ export default function EventCard({
                 onClick={() => onOpenLightbox(eventIdx, i)}
                 loading="lazy"
               />
-              {/* Overlay info */}
               <div
-                className="position-absolute bottom-0 start-0 end-0 d-flex justify-content-between px-2 py-1"
+                className="absolute bottom-0 left-0 right-0 flex justify-between px-2 py-1"
                 style={{
                   background: 'linear-gradient(transparent, rgba(0,0,0,.8))',
                   fontSize: 11,
@@ -64,25 +64,23 @@ export default function EventCard({
                 }}
               >
                 <span>{frame.ts}</span>
-                <span className="badge bg-dark bg-opacity-50">{frame.prob.toFixed(2)}</span>
+                <span className="bg-black/50 px-1.5 py-0.5 rounded text-xs">{frame.prob.toFixed(2)}</span>
               </div>
             </SwiperSlide>
           ))}
         </Swiper>
 
-        {/* Período de muestreo + secuencia */}
         <span
-          className="badge bg-dark bg-opacity-75 position-absolute top-0 end-0 m-1 d-flex flex-column align-items-end"
+          className="absolute top-0 right-0 m-1 flex flex-col items-end bg-black/75 px-1.5 py-0.5 rounded"
           style={{ zIndex: 20, fontSize: 11, gap: 2 }}
         >
           <span>{t('gallery.occasion_label', { n: event.occasion })}</span>
           <span>{t('gallery.sequence', { rank: event.rank, total: event.totalSeqs })}</span>
         </span>
 
-        {/* Zoom button */}
         <button
-          className="btn btn-sm btn-dark bg-opacity-50 position-absolute top-0 start-0 m-1"
-          style={{ zIndex: 20, opacity: 0.7 }}
+          className="absolute top-0 left-0 m-1 bg-black/50 text-white text-sm px-1.5 py-0.5 rounded opacity-70 hover:opacity-100 transition-opacity"
+          style={{ zIndex: 20 }}
           title={t('gallery.zoom')}
           onClick={() => onOpenLightbox(eventIdx, 0)}
         >
@@ -90,17 +88,24 @@ export default function EventCard({
         </button>
       </div>
 
-      {/* Acción */}
-      <div className="d-flex gap-2 p-2" style={{ opacity: readOnly ? 0.5 : 1 }}>
+      <div className="flex gap-2 p-2" style={{ opacity: readOnly ? 0.5 : 1 }}>
         <button
-          className={`btn btn-sm flex-fill ${decision === 'confirmed' ? 'btn-success' : 'btn-outline-success'}`}
+          className={`flex-1 py-1.5 text-sm rounded font-medium transition-colors disabled:opacity-50 ${
+            decision === 'confirmed'
+              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+              : 'border border-emerald-600 text-emerald-400 hover:bg-emerald-600 hover:text-white'
+          }`}
           onClick={() => onDecide(event.key, event.repObsId, 'confirmed')}
           disabled={readOnly}
         >
           {t('gallery.confirmed_btn')}
         </button>
         <button
-          className={`btn btn-sm flex-fill ${decision === 'rejected' ? 'btn-danger' : 'btn-outline-danger'}`}
+          className={`flex-1 py-1.5 text-sm rounded font-medium transition-colors disabled:opacity-50 ${
+            decision === 'rejected'
+              ? 'bg-red-600 text-white hover:bg-red-700'
+              : 'border border-red-600 text-red-400 hover:bg-red-600 hover:text-white'
+          }`}
           onClick={() => onDecide(event.key, event.repObsId, 'rejected')}
           disabled={readOnly}
         >
