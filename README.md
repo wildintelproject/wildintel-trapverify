@@ -39,7 +39,7 @@ Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP pac
 ## 📚 Documentation
 
 Full documentation available at:
-**https://wildintelproject.github.io/wildintel-trap-verify/**
+**https://wildintelproject.github.io/wildintel-trapverify/**
   
 ## 🚀 Quick start
 
@@ -54,7 +54,7 @@ cd wildintel-trapverify
 uv run cli  dev
 ```
 
-The browser will open at `http://localhost:5173`. See the [user manual](https://wildintelproject.github.io/wildintel-trap-verify/user-manual/) for a full walkthrough using the included example dataset.
+The browser will open at `http://localhost:5173`. See the [user manual](https://wildintelproject.github.io/wildintel-trapverify/user-manual/) for a full walkthrough using the included example dataset.
 
 ## 🤝 Contributing
 
