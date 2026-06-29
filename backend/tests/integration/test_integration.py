@@ -29,9 +29,13 @@ class _ServerThread(threading.Thread):
         self._server: uvicorn.Server | None = None
 
     def run(self) -> None:
+        import tempfile
         import main  # noqa: PLC0415
         import services.session_service as _session
+        _tmp = Path(tempfile.mkdtemp())
         _session._state.clear()
+        _session.SESSION_FILE = _tmp / "last_session.json"
+        _session.APP_DIR = _tmp
 
         cfg = uvicorn.Config(
             main.app,

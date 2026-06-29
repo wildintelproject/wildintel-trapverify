@@ -11,9 +11,10 @@ Uso:
     uv run cli frontend docs serve
     uv run cli frontend docs build
     uv run cli dev
-    uv run cli package build [--format deb|rpm|all] [--version 0.1.0]
+    uv run cli package build [--format deb|rpm|appimage|windows|all] [--version 0.1.0]
 """
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -337,7 +338,7 @@ def dev(
 
 # ── package ───────────────────────────────────────────────────────────────────
 
-package_app = typer.Typer(help="Construye paquetes de distribución (.deb / .rpm).")
+package_app = typer.Typer(help="Construye paquetes de distribución (.deb / .rpm / .AppImage / .exe).")
 app.add_typer(package_app, name="package")
 
 

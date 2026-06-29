@@ -10,10 +10,12 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)
-def reset_state(monkeypatch):
-    """Clear the global _state dict before every test."""
+def reset_state(monkeypatch, tmp_path):
+    """Clear in-memory state and redirect session persistence to a temp dir."""
     import services.session_service as session_service
     monkeypatch.setattr(session_service, "_state", {})
+    monkeypatch.setattr(session_service, "SESSION_FILE", tmp_path / "last_session.json")
+    monkeypatch.setattr(session_service, "APP_DIR", tmp_path)
 
 
 @pytest.fixture
