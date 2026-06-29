@@ -15,7 +15,7 @@ on:
 
 jobs:
   build-linux:
-    name: Linux packages (.deb / .rpm)
+    name: Linux packages (.deb / .rpm / .AppImage)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +45,29 @@ jobs:
             --output type=local,dest=dist/ \
             .
 
+      - name: Build AppImage
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          sudo apt-get install -y libfuse2
+          wget -q -O appimagetool \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+
+          mkdir -p AppDir
+          cp -r dist/binary/. AppDir/camtrap-verify/
+
+          printf '#!/bin/sh\nexec "$(dirname "$0")/camtrap-verify/camtrap-verify" "$@"\n' \
+            > AppDir/AppRun
+          chmod +x AppDir/AppRun
+
+          printf '[Desktop Entry]\nType=Application\nName=CamTrap Verify\nExec=camtrap-verify\nIcon=camtrap-verify\nTerminal=false\nCategories=Science;\n' \
+            > AppDir/camtrap-verify.desktop
+
+          cp docs/img/WildINTEL_onlyCircle_25.png AppDir/camtrap-verify.png
+
+          ARCH=x86_64 ./appimagetool AppDir/ \
+            "dist/camtrap-verify-${VERSION}-linux-x86_64.AppImage"
+
       - name: List artifacts
         run: ls -lh dist/
 
@@ -55,6 +78,7 @@ jobs:
           path: |
             dist/*.deb
             dist/*.rpm
+            dist/*.AppImage
 
   build-windows:
     name: Windows packages (.exe portable + installer)
