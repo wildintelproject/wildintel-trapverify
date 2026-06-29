@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
       - 'backend/docs/**'
       - 'backend/mkdocs.yml'
       - 'README.md'
@@ -31,13 +33,21 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --group dev
 
-      - name: Build documentation
+      - name: Build project docs (user + developer manuals)
+        run: uv run mkdocs build --config-file mkdocs.yml
+
+      - name: Build API docs (backend reference)
         run: uv run mkdocs build --config-file backend/mkdocs.yml
+
+      - name: Assemble unified site
+        run: |
+          # Project docs at /  and  API docs at /api/
+          mv backend/site site/api
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: backend/site
+          path: site
 
   deploy:
     needs: build
