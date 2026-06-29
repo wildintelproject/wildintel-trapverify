@@ -8,8 +8,8 @@ site_dir: site
 theme:
   name: material
   language: en
-  logo: img/WildINTEL_onlyCircle_25.png
-  favicon: img/WildINTEL_onlyCircle_25.png
+  logo: img/wildIntel_logo.webp
+  favicon: img/wildIntel_logo.webp
 
   palette:
     - scheme: default
@@ -42,6 +42,9 @@ extra:
       link: https://wildintel.eu/
       name: WildINTEL website
 
+extra_css:
+  - stylesheets/extras.css
+
 markdown_extensions:
   - toc:
       title: On this page
@@ -67,5 +70,8 @@ plugins:
   - search
 
 nav:
+  - Home: index.md
   - User Manual: user-manual.md
   - Developer Manual: developer-manual.md
+  - Features: features.md
+  - About: about.md

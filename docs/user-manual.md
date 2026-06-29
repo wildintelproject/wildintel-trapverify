@@ -7,22 +7,23 @@
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Getting Started](#2-getting-started)
-3. [Welcome Screen](#3-welcome-screen)
-4. [Setup Wizard](#4-setup-wizard)
-   - [Step 1 — Directory](#step-1--directory)
+2. [Installation](#2-installation)
+3. [Getting Started](#3-getting-started)
+4. [Welcome Screen](#4-welcome-screen)
+5. [Setup Wizard](#5-setup-wizard)
+   - [Step 1 — Source](#step-1--source)
    - [Step 2 — Species](#step-2--species)
    - [Step 3 — Study Period](#step-3--study-period)
    - [Step 4 — Parameters](#step-4--parameters)
-5. [Species Index](#5-species-index)
-6. [Image Gallery](#6-image-gallery)
+6. [Species Index](#6-species-index)
+7. [Image Gallery](#7-image-gallery)
    - [Reviewing Sequences](#reviewing-sequences)
    - [Fullscreen Lightbox](#fullscreen-lightbox)
    - [Image Controls](#image-controls)
    - [Keyboard Shortcuts](#keyboard-shortcuts)
    - [Saving Decisions](#saving-decisions)
    - [Completed Species](#completed-species)
-7. [Results](#7-results)
+8. [Results](#8-results)
 
 ---
 
@@ -42,7 +43,41 @@ At the end of the review, the tool exports:
 
 ---
 
-## 2. Getting Started
+## 2. Installation
+
+Download the latest release from the [GitHub Releases page](https://github.com/wildintelproject/wildintel-trapverify/releases).
+
+### Linux
+
+Download the `.deb` (Debian/Ubuntu) or `.rpm` (Fedora/RHEL) package and install it with your package manager:
+
+```bash
+# Debian / Ubuntu
+sudo apt install ./camtrap-verify_X.Y.Z_amd64.deb
+
+# Fedora / RHEL
+sudo dnf localinstall camtrap-verify-X.Y.Z.x86_64.rpm
+```
+
+Then launch the application from the terminal:
+
+```bash
+camtrap-verify
+```
+
+### Windows
+
+Two options are available:
+
+- **Portable executable** (`camtrap-verify-X.Y.Z-windows-x64.exe`) — download, double-click and run. No installation required, no administrator rights needed.
+- **Installer** (`camtrap-verify-installer-X.Y.Z-windows-x64.exe`) — installs the application with a Start Menu shortcut and an uninstaller entry in *Add or Remove Programs*. Also runs without administrator rights.
+
+Once launched, the application opens automatically in your default browser.
+
+---
+
+## 3. Getting Started
+
 
 Open your browser and navigate to the application URL (default: `http://localhost:8765` for the desktop app, or the address provided by your administrator).
 
@@ -50,11 +85,11 @@ Open your browser and navigate to the application URL (default: `http://localhos
 
 ---
 
-## 3. Welcome Screen
+## 4. Welcome Screen
 
 When you open the application for the first time, or when no session is active, you will see the **Welcome Screen**.
 
-![Welcome screen](./screenshots/welcome-screen.png)
+![Welcome screen](./img/welcome-screen.png)
 *The Welcome Screen, showing the three session buttons.*
 
 Three buttons are available:
@@ -69,7 +104,7 @@ Three buttons are available:
 
 ---
 
-## 4. Setup Wizard
+## 5. Setup Wizard
 
 The Setup Wizard guides you through four steps. A step indicator at the top shows your progress.
 
@@ -78,23 +113,43 @@ The Setup Wizard guides you through four steps. A step indicator at the top show
 
 You can navigate between steps using the **← Back** and **Next →** buttons, or return to the Welcome Screen with **← Welcome**.
 
-### Step 1 — Directory
+### Step 1 — Source
 
-Select the folder that contains your CamtrapDP data (`deployments.csv`, `media.csv`, `observations.csv`).
+First choose where your CamtrapDP data comes from:
 
-![Setup — Step 1: Directory](./screenshots/setup-step1-directory.png)
-*Directory selection step. The Browse button opens a folder picker.*
+![Setup — Step 1: Data source](./screenshots/setup-step1-source.png)
+*Data source selector: local filesystem or Trapper instance.*
+
+**Option A — Local filesystem**
+
+Select the folder on your machine that contains the CamtrapDP files (`deployments.csv`, `media.csv`, `observations.csv`).
+
+![Setup — Step 1: Local directory](./img/setup-step1-directory.png)
+*Local directory selection. The Browse button opens a folder picker.*
 
 - **Data directory** — path to your CamtrapDP folder. Use the **📁 Browse** button or type the path manually.
 - **Output directory** *(optional)* — where results will be saved. Defaults to `~/Documents/camtrap_verify`. Each run creates a timestamped subfolder.
 
 After selecting the folder, the application reads species and date ranges automatically.
 
+**Option B — Trapper instance**
+
+Connect to a [Trapper](https://trapper-project.readthedocs.io/) installation to download a CamtrapDP package directly from the platform.
+
+![Setup — Step 1: Trapper](./img/setup-step1-trapper.png)
+*Trapper connection form.*
+
+1. Enter the **Trapper URL**, **username** and **password**, then click **Test connection**.
+2. Once connected, select the **Research project** and the **Classification project**.
+3. Click **Generate CamtrapDP** — the package is downloaded and loaded automatically.
+
+> **Note:** Trapper integration is currently under active development. Some features may not yet be available.
+
 ### Step 2 — Species
 
 Choose which species you want to verify. The list is populated from the `scientificName` column in `observations.csv`.
 
-![Setup — Step 2: Species](./screenshots/setup-step2-species.png)
+![Setup — Step 2: Species](./img/setup-step2-species.png)
 *Species selection step. Check the species you want to review.*
 
 - Use **Select all** / **Deselect all** for bulk actions.
@@ -104,7 +159,7 @@ Choose which species you want to verify. The list is populated from the `scienti
 
 Set the date range for the review. Only images whose timestamp falls within this range will be included.
 
-![Setup — Step 3: Study Period](./screenshots/setup-step3-period.png)
+![Setup — Step 3: Study Period](./img/setup-step3-period.png)
 *Study period step. The data range hint shows the earliest and latest dates in your dataset.*
 
 - An info hint shows the full date span available in your data.
@@ -114,7 +169,7 @@ Set the date range for the review. Only images whose timestamp falls within this
 
 Fine-tune how images are grouped into sampling periods and sequences.
 
-![Setup — Step 4: Parameters](./screenshots/setup-step4-parameters.png)
+![Setup — Step 4: Parameters](./img/setup-step4-parameters.png)
 *Sampling parameters step.*
 
 | Parameter | Default | Description |
@@ -127,11 +182,11 @@ Click **✓ Start verification** to process the data and begin the review.
 
 ---
 
-## 5. Species Index
+## 6. Species Index
 
 After setup (or when resuming a session), you arrive at the **Species Index** — an overview of all target species and their review progress.
 
-![Species index](./screenshots/species-index.png)
+![Species index](./img/species-index.png)
 *Species index showing species cards with progress bars.*
 
 An information panel at the top shows the session parameters:
@@ -155,11 +210,11 @@ The header shows overall progress and two action buttons:
 
 ---
 
-## 6. Image Gallery
+## 7. Image Gallery
 
 The Image Gallery is the main review screen. It shows all sampling periods for a single species, grouped by location.
 
-![Image gallery overview](./screenshots/gallery-overview.png)
+![Image gallery overview](./img/gallery-overview.png)
 *Gallery showing sampling period cards grouped by site.*
 
 The header shows:
@@ -252,11 +307,16 @@ When all periods for a species have been decided, the gallery shows a **Complete
 
 ---
 
-## 7. Results
+## 8. Results
 
-Once all species are complete, the **Results** page summarises the entire review.
+Once all species are complete, the **See results** button in the Species Index header becomes active.
 
-![Results page](./screenshots/results.png)
+![See results button enabled](./img/results-button-enabled.png)
+*The "See results" button turns green when all species have been reviewed.*
+
+Click it to open the **Results** page, which summarises the entire review.
+
+![Results page](./img/results.png)
 *Results page showing overall counts and per-species breakdown.*
 
 The page shows:
@@ -270,9 +330,31 @@ A **← Back** button in the header returns to the Species Index.
 
 ### Output Files
 
-The output folder contains two subdirectories:
+Each session is saved in a timestamped subfolder inside the output directory (e.g. `~/Documents/camtrap_verify/20260629_143021/`). The folder contains:
 
-| Directory | Contents |
+**Session files (root)**
+
+| File | Description |
 |---|---|
-| `camtrap_dp_verified/` | Original CamtrapDP modified — confirmed observations have `classificationMethod='human'`, `classificationProbability=1.0`, `classifiedBy='expert_review'`. |
-| `occupancy_inputs/` | Per-species detection histories (`dethist_naive_*.csv`, `dethist_verified_*.csv`), camera operation matrix, verification summary and review effort report. |
+| `config.json` | Session configuration: data directory, date range, parameters. |
+| `candidate_manifest.csv` | Full list of candidate sequences generated at setup. |
+| `rejected_media.json` | IDs of media files rejected during the review. |
+| `decisions/` | Per-species decision CSVs, one file per review round (`iter1.csv`, `iter2.csv`, …). |
+
+**`camtrap_dp_verified/`** — verified CamtrapDP package
+
+| File | Description |
+|---|---|
+| `deployments.csv` | Original deployment table (unchanged). |
+| `media.csv` | Original media table (unchanged). |
+| `observations.csv` | Confirmed observations, tagged with `classificationMethod='human'`, `classificationProbability=1.0` and `classifiedBy='expert_review'`. |
+
+**`occupancy_inputs/`** — ready-to-use files for occupancy models
+
+| File | Description |
+|---|---|
+| `camera_operation.csv` | Camera operation matrix (sites × sampling periods). |
+| `dethist_naive_<species>.csv` | Naive detection history per species (AI detections, not human-validated). One file per species. |
+| `dethist_verified_<species>.csv` | Verified detection history per species (confirmed by expert). One file per species. |
+| `verification_summary.csv` | Per-species summary: confirmed, rejected and unreviewed counts. |
+| `review_effort.csv` | Total review effort: number of sequences and images inspected. |

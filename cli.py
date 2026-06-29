@@ -33,7 +33,9 @@ ROOT_DIR        = Path(__file__).parent
 BACKEND_DIR     = ROOT_DIR / "backend"
 SRC_DIR         = BACKEND_DIR / "src"
 MKDOCS_CFG      = BACKEND_DIR / "mkdocs.yml"
+ROOT_MKDOCS_CFG = ROOT_DIR / "mkdocs.yml"
 DIST_DIR        = ROOT_DIR / "dist"
+DOCS_DIR        = ROOT_DIR / "docs"
 FRONTEND_DIR    = ROOT_DIR / "frontend"
 FRONTEND_MKDOCS = FRONTEND_DIR / "mkdocs.yml"
 COMPOSE_FILE    = ROOT_DIR / "docker-compose.yml"
@@ -78,6 +80,30 @@ def _require(tool: str, hint: str) -> None:
 def _npm(*args: str) -> None:
     _require("npm", "Instala Node.js desde https://nodejs.org/ (v18+)")
     _run("npm", *args, cwd=FRONTEND_DIR)
+
+
+# ── docs (manuales de usuario y desarrollador) ───────────────────────────────
+
+docs_app = typer.Typer(help="Genera o sirve los manuales de usuario y desarrollador.")
+app.add_typer(docs_app, name="docs")
+
+
+@docs_app.command("serve")
+def docs_serve(
+    port: int = typer.Option(8080, "--port", "-p", help="Puerto del servidor de documentación."),
+) -> None:
+    """Sirve los manuales en local con recarga automática (http://127.0.0.1:<port>)."""
+    console.print(f"[green]Documentación en http://127.0.0.1:{port}[/green]\n")
+    _run("mkdocs", "serve", "--config-file", str(ROOT_MKDOCS_CFG),
+         "--dev-addr", f"127.0.0.1:{port}", cwd=ROOT_DIR)
+
+
+@docs_app.command("build")
+def docs_build() -> None:
+    """Genera el sitio estático de los manuales en site/."""
+    console.print("[green]Generando manuales...[/green]")
+    _run("mkdocs", "build", "--config-file", str(ROOT_MKDOCS_CFG), cwd=ROOT_DIR)
+    console.print(f"[green]✔  Sitio generado en {ROOT_DIR / 'site'}[/green]")
 
 
 # ── backend ───────────────────────────────────────────────────────────────────
