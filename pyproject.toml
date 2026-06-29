@@ -25,6 +25,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "debugpy>=1.8",
+    "mike>=2.0",
     "mkdocs-material>=9.7.6",
     "pyinstaller>=6.21.0",
     "pytest>=8.0",

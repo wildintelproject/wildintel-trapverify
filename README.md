@@ -39,7 +39,7 @@ Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP pac
 
 Full documentation available at:
 **https://wildintelproject.github.io/wildintel-trap-verify/**
-
+  
 ## 🚀 Quick start
 
 ```bash

@@ -34,6 +34,8 @@ theme:
     - content.code.annotate
 
 extra:
+  version:
+    provider: mike
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/wildintelproject
@@ -68,6 +70,8 @@ markdown_extensions:
 
 plugins:
   - search
+  - mike:
+      version_selector: true
 
 nav:
   - Home: index.md
