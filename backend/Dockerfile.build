@@ -19,8 +19,10 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 # ── Backend sources ───────────────────────────────────────────────────────────
+# Build context is the repo root so uv can find pyproject.toml + uv.lock
 WORKDIR /build
-COPY . .
+COPY pyproject.toml uv.lock ./
+COPY backend/ ./
 
 # ── Build PyInstaller binary ──────────────────────────────────────────────────
 RUN uv sync --frozen \

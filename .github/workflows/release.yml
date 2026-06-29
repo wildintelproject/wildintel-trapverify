@@ -38,7 +38,7 @@ jobs:
             --build-arg PKG_FORMAT=all \
             -f backend/Dockerfile.build \
             --output type=local,dest=dist/ \
-            backend/
+            .
 
       - name: List artifacts
         run: ls -lh dist/

@@ -336,7 +336,7 @@ def _build_linux_package(fmt: str, version: str) -> None:
         "--build-arg", f"PKG_FORMAT={fmt}",
         "-f", str(BACKEND_DIR / "Dockerfile.build"),
         "--output", f"type=local,dest={DIST_DIR}",
-        str(BACKEND_DIR),
+        str(ROOT_DIR),
     )
     pkgs = list(DIST_DIR.glob(f"*.{fmt}"))
     if not pkgs:
