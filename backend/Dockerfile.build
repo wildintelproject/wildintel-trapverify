@@ -29,6 +29,7 @@ RUN uv sync --frozen --group dev --no-install-project \
     && uv run pyinstaller src/app_entry.py \
         --onedir \
         --name camtrap-verify \
+        --copy-metadata camtrap-verify \
         --add-data "src/camtrap_workflow.py:." \
         --add-data "src/settings.py:." \
         --hidden-import uvicorn.logging \

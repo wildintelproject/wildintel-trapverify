@@ -29,6 +29,9 @@ jobs:
             echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Write version file
+        run: echo '__version__ = "${{ steps.ver.outputs.version }}"' > backend/src/_version.py
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -90,6 +93,10 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --frozen --group dev
 
+      - name: Write version file
+        shell: bash
+        run: echo '__version__ = "${{ steps.ver.outputs.version }}"' > backend/src/_version.py
+
       - name: Build Windows executable
         working-directory: backend
         shell: bash
@@ -97,6 +104,7 @@ jobs:
           uv run pyinstaller src/app_entry.py \
             --onefile \
             --name camtrap-verify \
+            --copy-metadata camtrap-verify \
             --add-data "src/camtrap_workflow.py;." \
             --add-data "src/settings.py;." \
             --add-data "../frontend/dist:static" \

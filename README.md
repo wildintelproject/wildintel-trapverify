@@ -17,7 +17,7 @@ In each round, the tool presents the **highest-confidence sequence** not yet rev
 
 Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP package with confirmed observations tagged as human classifications, together with detection histories and camera-operation matrices ready to feed directly into species occupancy models.
 
-<img src="img/welcome_screen.png" alt="WildINTEL CamTrap Verify" height="260">
+<img src="img/welcome-screen.png" alt="Welcome screen" height="200"> <img src="img/setup-step1-directory.png" alt="Setup wizard" height="200"> <img src="img/species-index.png" alt="Species index" height="200"> <img src="img/gallery-overview.png" alt="Image gallery" height="200">
 
 ## ✨ Features
 
@@ -43,7 +43,7 @@ Full documentation available at:
 ## 🚀 Quick start
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/wildintelproject/wildintel-trapverify.git
 cd wildintel-trapverify
 
 # Install dependencies
@@ -53,7 +53,7 @@ cd wildintel-trapverify
 uv run cli  dev
 ```
 
-The browser will open at `http://localhost:5173`. See the [quick start guide](docs/quickstart.md) for a full walkthrough using the included example dataset.
+The browser will open at `http://localhost:5173`. See the [user manual](https://wildintelproject.github.io/wildintel-trap-verify/user-manual/) for a full walkthrough using the included example dataset.
 
 ## 🤝 Contributing
 

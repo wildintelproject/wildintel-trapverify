@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-interface Props { ready: boolean }
+interface Props { ready: boolean; version: string | null }
 
 const LANGS = [
   { code: 'es', flag: '🇪🇸', label: 'Español' },
@@ -11,7 +11,7 @@ const LANGS = [
 
 const btnOutline = 'px-3 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors'
 
-export default function Navbar({ ready: _ready }: Props) {
+export default function Navbar({ ready: _ready, version }: Props) {
   const { t, i18n } = useTranslation()
   const [dark, setDark] = useState(true)
   const [open, setOpen] = useState(false)
@@ -37,6 +37,11 @@ export default function Navbar({ ready: _ready }: Props) {
         <Link className="font-bold text-zinc-900 dark:text-zinc-100 text-base no-underline" to="/">
           🦌 {t('nav.brand')}
         </Link>
+        {version && (
+          <span className="ml-2 text-xs text-zinc-400 dark:text-zinc-500 font-mono">
+            v{version}
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
 

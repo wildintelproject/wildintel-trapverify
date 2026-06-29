@@ -1,4 +1,9 @@
 {
+  "update": {
+    "available": "New version available: {{latest}}",
+    "download": "Download",
+    "dismiss": "Dismiss"
+  },
   "nav": {
     "brand": "CamTrap Verify",
     "theme_dark": "Switch to dark theme",

@@ -5,6 +5,7 @@ __pycache__/
 node_modules/
 dist/
 .env
+backend/src/_version.py
 /.claude/
 /backend/site/
 /examples/

@@ -109,4 +109,7 @@ export const api = {
 
   openFolder: () =>
     req<{ ok: boolean; path: string }>('/api/open-folder', { method: 'POST' }),
+
+  checkVersion: () =>
+    req<{ current: string; latest: string | null; update_available: boolean; release_url: string | null }>('/api/version'),
 }
