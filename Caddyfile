@@ -1,0 +1,14 @@
+# CADDY_SITE_ADDRESS defaults to :80 (HTTP only).
+# For HTTPS with a real domain set it in .env: CADDY_SITE_ADDRESS=example.com
+{$CADDY_SITE_ADDRESS:":80"} {
+
+    # API requests → FastAPI backend
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Everything else → React SPA (served by nginx inside the frontend container)
+    handle {
+        reverse_proxy frontend:80
+    }
+}

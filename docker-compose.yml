@@ -1,0 +1,46 @@
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      CAMTRAP_PORT: "8000"
+      CAMTRAP_LOG_LEVEL: "WARNING"
+      CAMTRAP_CORS_ORIGINS: '["http://localhost","http://localhost:80"]'
+    env_file:
+      - path: .env
+        required: false
+    networks:
+      - internal
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    networks:
+      - internal
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+networks:
+  internal:
+
+volumes:
+  caddy_data:
+  caddy_config:
