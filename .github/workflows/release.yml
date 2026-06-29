@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.1.0)'
+        required: false
+        default: '0.0.0-dev'
+
+jobs:
+  build-linux:
+    name: Linux packages (.deb / .rpm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build .deb and .rpm
+        run: |
+          mkdir -p dist
+          docker build \
+            --build-arg APP_VERSION=${{ steps.ver.outputs.version }} \
+            --build-arg PKG_FORMAT=all \
+            -f backend/Dockerfile.build \
+            --output type=local,dest=dist/ \
+            backend/
+
+      - name: List artifacts
+        run: ls -lh dist/
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm
+
+  build-windows:
+    name: Windows packages (.exe portable + installer)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Frontend ──────────────────────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      # ── Backend (PyInstaller) ─────────────────────────────────────────────────
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Build Windows executable
+        working-directory: backend
+        shell: bash
+        run: |
+          uv run pyinstaller src/app_entry.py \
+            --onefile \
+            --name camtrap-verify-backend \
+            --add-data "src/camtrap_workflow.py;." \
+            --add-data "src/settings.py;." \
+            --add-data "../frontend/dist:static" \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import anyio._backends._asyncio \
+            --hidden-import pandas \
+            --hidden-import httpx \
+            --hidden-import platformdirs \
+            --hidden-import pydantic_settings \
+            --collect-submodules fastapi \
+            --collect-submodules starlette
+
+      # ── Stage artifacts ───────────────────────────────────────────────────────
+      - name: Stage portable exe
+        shell: bash
+        run: |
+          mkdir -p dist
+          # Versioned copy for the release
+          cp backend/dist/camtrap-verify-backend.exe \
+             dist/camtrap-verify-backend-${{ steps.ver.outputs.version }}-windows-x64.exe
+          # Unversioned copy referenced by the Inno Setup script
+          cp backend/dist/camtrap-verify-backend.exe \
+             dist/camtrap-verify-backend.exe
+
+      # ── Inno Setup installer ──────────────────────────────────────────────────
+      - name: Build installer
+        shell: cmd
+        run: >
+          "%PROGRAMFILES(X86)%\Inno Setup 6\iscc.exe"
+          /DMyAppVersion=${{ steps.ver.outputs.version }}
+          installer\windows.iss
+
+      - name: Remove staging exe
+        shell: bash
+        run: rm dist/camtrap-verify-backend.exe
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: dist/*.exe
+
+  release:
+    name: Create GitHub Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true

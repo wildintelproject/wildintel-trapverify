@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 
@@ -25,6 +26,7 @@ interface Results {
 }
 
 export default function ResultsPage() {
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const [results, setResults] = useState<Results | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -133,7 +135,18 @@ export default function ResultsPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-4">
-      <h2 className="text-2xl font-semibold mb-4">{t('results.title')}</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-semibold mb-0">{t('results.title')}</h2>
+        <button
+          className="px-4 py-1.5 text-sm rounded transition-colors bg-zinc-700 text-white hover:bg-zinc-600 flex items-center gap-1.5"
+          onClick={() => navigate('/species')}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          {t('gallery.back')}
+        </button>
+      </div>
       <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm"
         dangerouslySetInnerHTML={{ __html: t('results.subtitle') }} />
 

@@ -246,29 +246,40 @@ export default function GalleryPage() {
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-4">
       <div className="mb-3">
-        <div className="flex items-baseline gap-3 mb-1">
-          <h2 className="text-2xl font-semibold mb-0 cursor-pointer" onClick={() => navigate(-1)} title="Volver">
-            {t('gallery.title')}
-          </h2>
-          <span className="italic text-zinc-500 dark:text-zinc-400 text-lg">— {species?.replace(/_/g, ' ')}</span>
-          {completed ? (
-            <span className="flex items-center gap-1">
-              <span className="px-2 py-0.5 text-xs font-medium bg-emerald-600 text-white rounded-full">
-                {t('gallery.completed_badge')}
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-2xl font-semibold mb-0">
+              {t('gallery.title')}
+            </h2>
+            <span className="italic text-zinc-500 dark:text-zinc-400 text-lg">— {species?.replace(/_/g, ' ')}</span>
+            {completed ? (
+              <span className="flex items-center gap-1">
+                <span className="px-2 py-0.5 text-xs font-medium bg-emerald-600 text-white rounded-full">
+                  {t('gallery.completed_badge')}
+                </span>
+                <button
+                  className="ml-1 bg-transparent border-0 cursor-pointer text-xl leading-none"
+                  title={locked ? t('gallery.unlock_tooltip') : t('gallery.lock_tooltip')}
+                  onClick={() => setLocked((l) => !l)}
+                >
+                  {locked ? '🔒' : '🔓'}
+                </button>
               </span>
-              <button
-                className="ml-1 bg-transparent border-0 cursor-pointer text-xl leading-none"
-                title={locked ? t('gallery.unlock_tooltip') : t('gallery.lock_tooltip')}
-                onClick={() => setLocked((l) => !l)}
-              >
-                {locked ? '🔒' : '🔓'}
-              </button>
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 text-xs font-medium bg-zinc-600 text-zinc-200 rounded-full">
-              {t('gallery.round', { n: iteration })}
-            </span>
-          )}
+            ) : (
+              <span className="px-2 py-0.5 text-xs font-medium bg-zinc-600 text-zinc-200 rounded-full">
+                {t('gallery.round', { n: iteration })}
+              </span>
+            )}
+          </div>
+          <button
+            className="px-4 py-1.5 text-sm rounded transition-colors bg-zinc-700 text-white hover:bg-zinc-600 flex items-center gap-1.5"
+            onClick={() => navigate(-1)}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {t('gallery.back')}
+          </button>
         </div>
 
         {spStats && (() => {
@@ -308,15 +319,6 @@ export default function GalleryPage() {
       {!completed && (
         <div className="fixed bottom-6 right-6 z-[200] flex gap-2">
           <button
-            className="px-5 py-2.5 bg-zinc-700 text-white rounded-lg shadow-xl hover:bg-zinc-600 transition-colors flex items-center gap-2"
-            onClick={() => navigate(-1)}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            {t('gallery.back')}
-          </button>
-          <button
             className="px-5 py-2.5 bg-zinc-600 text-white rounded-lg shadow-xl hover:bg-zinc-500 transition-colors disabled:opacity-50 flex items-center gap-2"
             onClick={confirmAll}
             disabled={saving || events.length === 0}
@@ -343,14 +345,16 @@ export default function GalleryPage() {
       )}
 
       {completed && !locked && (
-        <button
-          className="fixed bottom-6 right-6 z-[200] px-5 py-2.5 bg-amber-500 text-white rounded-lg shadow-xl hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-2"
-          onClick={handleUpdateDecisions}
-          disabled={saving}
-        >
-          {saving && <Spinner sm />}
-          {saving ? t('gallery.updating') : t('gallery.update_decisions')}
-        </button>
+        <div className="fixed bottom-6 right-6 z-[200]">
+          <button
+            className="px-5 py-2.5 bg-amber-500 text-white rounded-lg shadow-xl hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+            onClick={handleUpdateDecisions}
+            disabled={saving}
+          >
+            {saving && <Spinner sm />}
+            {saving ? t('gallery.updating') : t('gallery.update_decisions')}
+          </button>
+        </div>
       )}
 
       {error && (
