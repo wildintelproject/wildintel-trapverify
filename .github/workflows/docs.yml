@@ -61,6 +61,7 @@ jobs:
           ALIAS="${{ steps.ver.outputs.alias }}"
           VERSION="${{ steps.ver.outputs.version }}"
           if [ -n "$ALIAS" ]; then
+            uv run mike delete --push "$ALIAS" 2>/dev/null || true
             uv run mike deploy --push --update-aliases "$VERSION" "$ALIAS"
           else
             uv run mike deploy --push "$VERSION"
