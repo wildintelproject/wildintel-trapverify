@@ -20,6 +20,7 @@ from camtrap_workflow import (
     export_verified_camtrapdp,
     load_camtrapdp,
 )
+from occupancy_model import fit_naive_vs_verified
 
 from schemas.requests import SetupRequest
 from services import session_service
@@ -38,6 +39,7 @@ def rebuild_outputs() -> None:
     )
     build_occupancy_inputs(candidates, p["decisions"], config, p["occupancy_out"])
     build_review_effort(candidates, p["decisions"], config, p["occupancy_out"])
+    fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))
     logger.info("Output files rebuilt successfully")
 
 
