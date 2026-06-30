@@ -5,6 +5,7 @@ import DirectoryPicker from './DirectoryPicker'
 
 interface Props {
   onConverted: (camtrapDir: string) => void
+  onBack?: () => void
 }
 
 const NONANIMAL = new Set(['empty', 'vide', 'blank', 'human', 'humain', 'person', 'undefined', 'unknown'])
@@ -22,7 +23,7 @@ const browseBtn =
 const labelClass = 'block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1'
 const hintClass  = 'mt-1 text-xs text-zinc-500 dark:text-zinc-400'
 
-export default function CsvImportForm({ onConverted }: Props) {
+export default function CsvImportForm({ onConverted, onBack }: Props) {
   const { t } = useTranslation()
 
   const [csvPath,      setCsvPath]      = useState('')
@@ -259,20 +260,29 @@ export default function CsvImportForm({ onConverted }: Props) {
       )}
 
       {/* ── Botón convertir ── */}
-      <div className="flex flex-col items-end gap-2">
-        <button
-          type="button"
-          disabled={!canConvert}
-          onClick={handleConvert}
-          className={[
-            'px-5 py-2 text-sm rounded bg-emerald-600 text-white flex items-center gap-2 transition-opacity',
-            canConvert ? 'hover:bg-emerald-700 cursor-pointer' : 'opacity-40 cursor-not-allowed',
-          ].join(' ')}
-        >
-          {converting && <SmallSpinner />}
-          {t(converting ? 'setup.csv_converting' : 'setup.csv_convert')}
-        </button>
-        {error && <p className="text-sm text-red-600 dark:text-red-400 text-right">{error}</p>}
+      <div className="flex items-center justify-between gap-2">
+        {onBack && (
+          <button type="button"
+            className="px-4 py-2 text-sm border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+            onClick={onBack}>
+            {t('setup.back')}
+          </button>
+        )}
+        <div className="flex flex-col items-end gap-2">
+          <button
+            type="button"
+            disabled={!canConvert}
+            onClick={handleConvert}
+            className={[
+              'px-5 py-2 text-sm rounded bg-emerald-600 text-white flex items-center gap-2 transition-opacity',
+              canConvert ? 'hover:bg-emerald-700 cursor-pointer' : 'opacity-40 cursor-not-allowed',
+            ].join(' ')}
+          >
+            {converting && <SmallSpinner />}
+            {t(converting ? 'setup.csv_converting' : 'setup.csv_convert')}
+          </button>
+          {error && <p className="text-sm text-red-600 dark:text-red-400 text-right">{error}</p>}
+        </div>
       </div>
 
       {/* ── Picker ── */}

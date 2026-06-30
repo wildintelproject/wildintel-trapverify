@@ -389,3 +389,126 @@ def test_results_by_species_breakdown(http, camtrap_dir, tmp_path):
     sp = data["by_species"][0]
     assert sp["species"] == "Vulpes vulpes"
     assert sp["confirmed"] == 1
+
+
+# ─── classified_by parameter ─────────────────────────────────────────────────
+
+def test_classified_by_custom_label_in_verified_camtrapdp(http, camtrap_dir, tmp_path):
+    """Custom classified_by value is written to classifiedBy in the verified CamtrapDP."""
+    resp = http.post("/api/setup", json={
+        "camtrap_dir":      str(camtrap_dir),
+        "output_dir":       str(tmp_path / "session_clsfy"),
+        "target_species":   ["Vulpes vulpes"],
+        "study_start":      "2025-11-01",
+        "study_end":        "2025-11-10",
+        "occasion_days":    5,
+        "total_iterations": 100_000,
+        "gap_seconds":      60,
+        "min_score":        0.5,
+        "classified_by":    "wildlife_expert",
+    })
+    assert resp.status_code == 200
+    session_dir = Path(resp.json()["session_dir"])
+
+    events = http.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    rep_id = events[0]["repObsId"]
+    http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rep_id]})
+
+    obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
+    assert obs[obs["observationID"] == rep_id].iloc[0]["classifiedBy"] == "wildlife_expert"
+
+def test_classified_by_default_is_expert_review(http, camtrap_dir, tmp_path):
+    """Without classified_by, the default 'expert_review' label is used."""
+    data = _do_setup(http, camtrap_dir, tmp_path / "session_clsfy_def")
+    session_dir = Path(data["session_dir"])
+
+    events = http.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    rep_id = events[0]["repObsId"]
+    http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rep_id]})
+
+    obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
+    assert obs[obs["observationID"] == rep_id].iloc[0]["classifiedBy"] == "expert_review"
+
+
+# ─── extended_confirmation parameter ─────────────────────────────────────────
+
+def test_extended_confirmation_false_marks_only_rep(http, camtrap_dir, tmp_path):
+    """Without extended_confirmation, only the representative observation is marked."""
+    resp = http.post("/api/setup", json={
+        "camtrap_dir":           str(camtrap_dir),
+        "output_dir":            str(tmp_path / "session_noext"),
+        "target_species":        ["Vulpes vulpes"],
+        "study_start":           "2025-11-01",
+        "study_end":             "2025-11-10",
+        "occasion_days":         5,
+        "total_iterations":      100_000,
+        "gap_seconds":           60,
+        "min_score":             0.5,
+        "extended_confirmation": False,
+    })
+    assert resp.status_code == 200
+    session_dir = Path(resp.json()["session_dir"])
+
+    events = http.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    # Confirm the rank-1 burst for SITE_A/occ1 (burst0 has 2 obs: o001 + o002)
+    rank1_a = next(e for e in events if e["rank"] == 1 and "SITE_A" in e["key"])
+    http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rank1_a["repObsId"]]})
+
+    obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
+    assert (obs["classificationMethod"] == "human").sum() == 1
+
+def test_extended_confirmation_true_marks_all_burst_obs(http, camtrap_dir, tmp_path):
+    """With extended_confirmation, all observations in the confirmed burst are marked.
+
+    burst0 of SITE_A/occ1 contains m001 (o001, 0.9, rep) and m002 (o002, 0.8).
+    Both should receive classificationMethod='human'.
+    """
+    resp = http.post("/api/setup", json={
+        "camtrap_dir":           str(camtrap_dir),
+        "output_dir":            str(tmp_path / "session_ext"),
+        "target_species":        ["Vulpes vulpes"],
+        "study_start":           "2025-11-01",
+        "study_end":             "2025-11-10",
+        "occasion_days":         5,
+        "total_iterations":      100_000,
+        "gap_seconds":           60,
+        "min_score":             0.5,
+        "extended_confirmation": True,
+    })
+    assert resp.status_code == 200
+    session_dir = Path(resp.json()["session_dir"])
+
+    events = http.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    rank1_a = next(e for e in events if e["rank"] == 1 and "SITE_A" in e["key"])
+    http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rank1_a["repObsId"]]})
+
+    obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
+    human_rows = obs[obs["classificationMethod"] == "human"]
+    assert len(human_rows) == 2  # o001 (rep) + o002 (burst mate)
+
+def test_extended_confirmation_does_not_mark_other_bursts(http, camtrap_dir, tmp_path):
+    """Extended confirmation must not spill over into other bursts or sites."""
+    resp = http.post("/api/setup", json={
+        "camtrap_dir":           str(camtrap_dir),
+        "output_dir":            str(tmp_path / "session_ext2"),
+        "target_species":        ["Vulpes vulpes"],
+        "study_start":           "2025-11-01",
+        "study_end":             "2025-11-10",
+        "occasion_days":         5,
+        "total_iterations":      100_000,
+        "gap_seconds":           60,
+        "min_score":             0.5,
+        "extended_confirmation": True,
+    })
+    assert resp.status_code == 200
+    session_dir = Path(resp.json()["session_dir"])
+
+    events = http.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    rank1_a = next(e for e in events if e["rank"] == 1 and "SITE_A" in e["key"])
+    http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rank1_a["repObsId"]]})
+
+    obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
+    human_obs = set(obs[obs["classificationMethod"] == "human"]["observationID"])
+    assert "o003" not in human_obs  # SITE_A occ2
+    assert "o004" not in human_obs  # SITE_B occ1
+    assert "o005" not in human_obs  # SITE_A occ1 burst1

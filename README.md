@@ -22,11 +22,27 @@ Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP pac
 
 ## ✨ Features
 
-- Accepts any [CamtrapDP v1.0](https://camtrap-dp.tdwg.org/) directory — output from AI classifiers (e.g. DeepFaune) or citizen-science platforms
-- Interactive image gallery with zoom, pan, tonal inversion and full keyboard navigation
-- Iterative review by rounds: highest-confidence sequences always shown first
-- Exports `camtrap_dp_verified/` with confirmed observations tagged as human classifications
-- Generates naive vs. verified detection histories ready for occupancy models (`occupancy_inputs/`)
+**Data ingestion**
+- Accepts any [CamtrapDP v1.0](https://camtrap-dp.tdwg.org/) directory directly
+- Built-in converter for [DeepFaune](https://www.deepfaune.cnrs.fr/) CSV exports
+- Generic CSV importer with configurable column mapping and interactive species-name editor for any AI classifier output
+
+**Review workflow**
+- Iterative review by rounds: for each site × sampling-period × species cell, the highest-confidence detection sequence is always shown first
+- Confirming a sequence closes the cell; rejecting it queues the next-best sequence in the following round, minimising total expert effort
+- Optional burst-context mode: shows all frames of the physical burst (not only those labelled as the target species) so the expert can see the animal entering and leaving
+- Optional extended confirmation: marks all observations in the confirmed burst — not just the highest-confidence frame — as human-verified in the output
+
+**Image viewer**
+- Interactive carousel with zoom, pan, rotation, tonal inversion and full keyboard navigation
+- Brightness and contrast controls
+- Full-screen lightbox
+
+**Output**
+- Exports `camtrap_dp_verified/` with confirmed observations tagged as human classifications; configurable `classifiedBy` label
+- Generates naive vs. verified detection histories and camera-operation matrices ready for occupancy models (`occupancy_inputs/`)
+
+**General**
 - Bilingual interface (Spanish / English)
 - Docker deployment or hot-reload development mode
 

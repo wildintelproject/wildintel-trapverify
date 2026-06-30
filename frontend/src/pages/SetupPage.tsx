@@ -766,31 +766,36 @@ export default function SetupPage({ onSetup, ready }: Props) {
             <p className={hintClass}>{t('setup.deepfaune_imgdir_hint')}</p>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
-            <button
-              type="button"
-              disabled={!deepfauneForm.csvPath || converting}
-              onClick={handleDeepfauneConvert}
-              className={[
-                'px-5 py-2 text-sm rounded bg-emerald-600 text-white flex items-center gap-2 transition-opacity',
-                !deepfauneForm.csvPath || converting
-                  ? 'opacity-40 cursor-not-allowed'
-                  : 'hover:bg-emerald-700 cursor-pointer',
-              ].join(' ')}
-            >
-              {converting && <SmallSpinner />}
-              {t(converting ? 'setup.deepfaune_converting' : 'setup.deepfaune_convert')}
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" className={btnOutline} onClick={goBack}>
+              {t('setup.back')}
             </button>
-            {convertError && (
-              <p className="text-sm text-red-600 dark:text-red-400 text-right">{convertError}</p>
-            )}
+            <div className="flex flex-col items-end gap-2">
+              <button
+                type="button"
+                disabled={!deepfauneForm.csvPath || converting}
+                onClick={handleDeepfauneConvert}
+                className={[
+                  'px-5 py-2 text-sm rounded bg-emerald-600 text-white flex items-center gap-2 transition-opacity',
+                  !deepfauneForm.csvPath || converting
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-emerald-700 cursor-pointer',
+                ].join(' ')}
+              >
+                {converting && <SmallSpinner />}
+                {t(converting ? 'setup.deepfaune_converting' : 'setup.deepfaune_convert')}
+              </button>
+              {convertError && (
+                <p className="text-sm text-red-600 dark:text-red-400 text-right">{convertError}</p>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* ── Step 0f: CSV personalizado ── */}
       {step === 0 && sourceType === 'local' && localFormat === 'csv' && (
-        <CsvImportForm onConverted={afterConversion} />
+        <CsvImportForm onConverted={afterConversion} onBack={goBack} />
       )}
 
       {/* ── Step 1 ── */}
@@ -870,8 +875,13 @@ export default function SetupPage({ onSetup, ready }: Props) {
       {/* ── Step 3 ── */}
       {step === 3 && (
         <div>
-          <h4 className="text-lg font-semibold mb-1">{t('setup.step3_title')}</h4>
-          <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm"
+          <h4 className="text-lg font-semibold mb-6">{t('setup.step3_title')}</h4>
+
+          {/* ── Sampling parameters ── */}
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1">
+            {t('setup.section_sampling')}
+          </p>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm"
             dangerouslySetInnerHTML={{ __html: t('setup.step3_desc') }} />
 
           <div className="mb-6">
@@ -900,6 +910,12 @@ export default function SetupPage({ onSetup, ready }: Props) {
             </div>
             <p className={hintClass}>{t('setup.hint_min_score')}</p>
           </div>
+
+          {/* ── Confirmation parameters ── */}
+          <div className="border-t border-zinc-200 dark:border-zinc-700 mt-2 mb-5" />
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-4">
+            {t('setup.section_confirmation')}
+          </p>
 
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_classified_by')}</label>
@@ -973,9 +989,12 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
       {/* Navigation */}
       <div className="flex justify-between mt-10">
-        <button type="button" className={btnOutline} onClick={goBack}>
-          {step === 0 && sourceType === null ? t('setup.back_welcome') : t('setup.back')}
-        </button>
+        {step === 0 && sourceType === 'local' && (localFormat === 'deepfaune' || localFormat === 'csv')
+          ? <div />
+          : <button type="button" className={btnOutline} onClick={goBack}>
+              {step === 0 && sourceType === null ? t('setup.back_welcome') : t('setup.back')}
+            </button>
+        }
         {(step === 0 && sourceType === null) || (step === 0 && sourceType === 'local' && localFormat === null) || (step === 0 && sourceType === 'local' && localFormat === 'deepfaune') || (step === 0 && sourceType === 'local' && localFormat === 'csv') || (step === 0 && sourceType === 'trapper') ? (
           <div />
         ) : step < STEP_LABELS.length - 1 ? (

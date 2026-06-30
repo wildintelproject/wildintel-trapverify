@@ -387,6 +387,81 @@ def test_export_no_decisions_all_unchanged(camtrap_dir, tmp_path):
     obs_new  = pd.read_csv(out / "observations.csv", dtype=str)
     assert obs_orig["classificationMethod"].tolist() == obs_new["classificationMethod"].tolist()
 
+# ─── classified_by parameter ──────────────────────────────────────────────────
+
+def test_export_default_classified_by_is_expert_review(camtrap_dir, tmp_path, decisions_dir):
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, decisions_dir, set())
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    conf_id = pd.read_csv(decisions_dir / "decisions_Vulpes_vulpes_iter1.csv", dtype=str)["observationID"].iloc[0]
+    assert obs[obs["observationID"] == conf_id].iloc[0]["classifiedBy"] == "expert_review"
+
+def test_export_custom_classified_by(camtrap_dir, tmp_path, decisions_dir):
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, decisions_dir, set(), classified_by_label="wildlife_expert")
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    conf_id = pd.read_csv(decisions_dir / "decisions_Vulpes_vulpes_iter1.csv", dtype=str)["observationID"].iloc[0]
+    assert obs[obs["observationID"] == conf_id].iloc[0]["classifiedBy"] == "wildlife_expert"
+
+def test_export_classified_by_does_not_affect_unconfirmed(camtrap_dir, tmp_path, decisions_dir):
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, decisions_dir, set(), classified_by_label="my_label")
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    # o004 is SITE_B, never confirmed — classifiedBy must remain the original value
+    row = obs[obs["observationID"] == "o004"].iloc[0]
+    assert row["classifiedBy"] == "DeepFaune"
+
+# ─── extended_confirmation parameter ─────────────────────────────────────────
+
+def test_export_extended_false_marks_only_rep(camtrap_dir, tmp_path, decisions_dir, candidates):
+    """Default (extended=False) marks only the representative observation."""
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(
+        camtrap_dir, out, decisions_dir, set(),
+        extended_confirmation=False, candidates=candidates,
+    )
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    assert (obs["classificationMethod"] == "human").sum() == 1
+
+def test_export_extended_true_marks_all_burst_mates(camtrap_dir, tmp_path, decisions_dir, candidates):
+    """With extended=True, every obs in the confirmed burst is marked.
+
+    burst0 of SITE_A/occ1 has m001 (o001, 0.9, rep) and m002 (o002, 0.8).
+    Confirming the rep must also mark o002.
+    """
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(
+        camtrap_dir, out, decisions_dir, set(),
+        extended_confirmation=True, candidates=candidates,
+    )
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    human_rows = obs[obs["classificationMethod"] == "human"]
+    assert len(human_rows) == 2
+    assert set(human_rows["observationID"]) == {"o001", "o002"}
+
+def test_export_extended_true_does_not_mark_other_bursts(camtrap_dir, tmp_path, decisions_dir, candidates):
+    """Extended confirmation must not spill into other bursts or sites."""
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(
+        camtrap_dir, out, decisions_dir, set(),
+        extended_confirmation=True, candidates=candidates,
+    )
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    # o003 (SITE_A occ2), o004 (SITE_B occ1), o005 (SITE_A occ1 burst1) are NOT confirmed
+    for oid in ["o003", "o004", "o005"]:
+        row = obs[obs["observationID"] == oid].iloc[0]
+        assert row["classificationMethod"] == "machine", f"{oid} should remain machine"
+
+def test_export_extended_true_without_candidates_fallback(camtrap_dir, tmp_path, decisions_dir):
+    """extended=True with candidates=None gracefully falls back to rep-only behaviour."""
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(
+        camtrap_dir, out, decisions_dir, set(),
+        extended_confirmation=True, candidates=None,
+    )
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    assert (obs["classificationMethod"] == "human").sum() == 1
+
 
 # ─── build_occupancy_inputs ───────────────────────────────────────────────────
 

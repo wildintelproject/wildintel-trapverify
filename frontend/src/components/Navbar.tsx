@@ -7,6 +7,8 @@ interface Props { ready: boolean; version: string | null }
 const LANGS = [
   { code: 'es', flag: '🇪🇸', label: 'Español' },
   { code: 'en', flag: '🇬🇧', label: 'English' },
+  { code: 'de', flag: '🇩🇪', label: 'Deutsch' },
+  { code: 'pl', flag: '🇵🇱', label: 'Polski' },
 ]
 
 const btnOutline = 'px-3 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors'

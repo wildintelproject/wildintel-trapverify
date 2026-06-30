@@ -3,6 +3,8 @@
 ## Data ingestion
 
 - **CamtrapDP v1.0** — loads any directory with `deployments.csv`, `media.csv`, and `observations.csv` produced by an AI classifier or citizen-science platform. No conversion required.
+- **DeepFaune CSV importer** — converts DeepFaune classification exports directly to CamtrapDP format; species labels are mapped automatically to scientific names via a built-in lookup table.
+- **Generic CSV importer** — accepts any classifier CSV with configurable column mapping (image path, datetime, species label, confidence score, site). An interactive species-name editor allows mapping custom labels to scientific names; non-animal labels (`empty`, `human`, `blank`, etc.) are handled automatically.
 - **Flexible timestamp parsing** — accepts ISO 8601 and EXIF-style (`YYYY:MM:DD HH:MM:SS`) timestamps transparently.
 - **Automatic metadata detection** — infers available species and the study date range directly from `observations.csv` on load.
 - **Site resolution** — uses `locationID` when present; falls back to `deploymentID`, so both survey designs are supported.
@@ -23,8 +25,10 @@
 - **One card per cell** — each site × period combination is shown as a single card; the expert makes one decision per card per round.
 - **Frame navigation** — arrows step through the individual frames of a sequence; the progress badge shows "Frame N / M".
 - **Sequence counter** — the badge "Sequence N / M" shows which ranked sequence is currently displayed and how many are available.
+- **Burst context mode** — when enabled, all frames of the physical burst are shown (not only those labelled as the target species), so the expert can see the animal entering and leaving the scene. Context frames are visually dimmed and do not affect the decision.
 - **Lightbox** — click any image to open it full-screen with:
     - Mouse-wheel zoom and drag-to-pan
+    - Brightness and contrast controls
     - Tonal inversion (useful for night-vision / near-infrared images)
     - Left / right arrows to move between periods without closing
 - **Keyboard navigation** — arrow keys advance frames; `C` confirms, `R` rejects (configurable).
@@ -46,19 +50,21 @@
 - **`camtrap_dp_verified/`** — a complete CamtrapDP dataset in which confirmed observations are updated:
 
     | Field | Value after confirmation |
-    |-------|--------------------------|
+    |---|---|
     | `classificationMethod` | `"human"` |
     | `classificationProbability` | `1.0` |
-    | `classifiedBy` | `"expert_review"` |
+    | `classifiedBy` | configurable (default `"expert_review"`) |
     | `classificationTimestamp` | current UTC timestamp |
 
+- **Configurable `classifiedBy` label** — the value written to `classifiedBy` can be set per session (e.g. `"expert_review"`, `"ornithologist_A"`).
+- **Extended confirmation** — when enabled, all observations in the confirmed burst (not just the highest-confidence representative frame) are marked as human-verified in the output.
 - **`occupancy_inputs/`** — ready-to-use files for single-species occupancy models:
 
     | File | Description |
     |------|-------------|
     | `camera_operation.csv` | Active days per site × period |
-    | `dethist_naive_<sp>.csv` | Detection history from the classifier (1 / 0 / NA) |
-    | `dethist_verified_<sp>.csv` | Detection history after human verification |
+    | `dethist_naive_{sp}.csv` | Detection history from the classifier (1 / 0 / NA) |
+    | `dethist_verified_{sp}.csv` | Detection history after human verification |
     | `verification_summary.csv` | Per-species: combos, detections, false positives, ψ_obs |
     | `review_effort.csv` | Actual number of images inspected per cell |
 

@@ -85,6 +85,8 @@
     "label_end": "Fecha de fin",
     "step3_title": "Parámetros del muestreo",
     "step3_desc": "Ajusta cómo se agrupan las imágenes en <b>períodos de muestreo</b> y cómo se dividirán en <b>secuencias</b>.",
+    "section_sampling": "Parámetros de muestreo",
+    "section_confirmation": "Parámetros de confirmación",
     "label_occasion_days": "Duración de cada período de muestreo en días",
     "hint_occasion_days": "Un período de muestreo agrupa las imágenes tomadas en una localización dentro de una ventana de N días.",
     "label_gap": "Gap entre secuencias (segundos)",

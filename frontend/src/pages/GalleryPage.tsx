@@ -36,7 +36,8 @@ export default function GalleryPage() {
   const [decisions, setDecisions] = useState<Record<string, 'confirmed' | 'rejected'>>({})
   const [needsDecision, setNeedsDecision] = useState<Set<string>>(new Set())
   const [lbOpen, setLbOpen] = useState(false)
-  const [lbIndex, setLbIndex] = useState(0)
+  const [lbEvIdx, setLbEvIdx] = useState(0)   // which event is shown in the lightbox
+  const [lbIndex, setLbIndex] = useState(0)   // frame index within that event
   const [lbInverted, setLbInverted] = useState(false)
   const [lbBrightness, setLbBrightness] = useState(100)
   const [lbContrast, setLbContrast] = useState(100)
@@ -108,45 +109,55 @@ export default function GalleryPage() {
 
   useEffect(() => {
     if (!lbOpen) return
+    const curSiteId = events[lbEvIdx]?.siteId
+    const siteIndices = events
+      .map((ev, i) => ({ i, siteId: ev.siteId }))
+      .filter(x => x.siteId === curSiteId)
+    const posInSite = siteIndices.findIndex(x => x.i === lbEvIdx)
+
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'y' || e.key === 'Y') decideInLbRef.current('confirmed')
       if (e.key === 'n' || e.key === 'N') decideInLbRef.current('rejected')
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (posInSite > 0) {
+          setLbEvIdx(siteIndices[posInSite - 1].i)
+          setLbIndex(0)
+        }
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (posInSite < siteIndices.length - 1) {
+          setLbEvIdx(siteIndices[posInSite + 1].i)
+          setLbIndex(0)
+        }
+      }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [lbOpen])
+    window.addEventListener('keydown', onKey, { capture: true })
+    return () => window.removeEventListener('keydown', onKey, { capture: true })
+  }, [lbOpen, lbEvIdx, events])
 
-  const slides: EventSlide[] = events.flatMap((ev) =>
-    ev.frames.map((fr) => ({
-      src: fr.img,
-      title: t('gallery.lb_title', { site: ev.siteId, occasion: ev.occasion }),
-      description: fr.prob != null
-        ? `${(fr.prob * 100).toFixed(0)}%  ·  ${fr.ts}`
-        : fr.ts,
-      eventKey: ev.key,
-      repObsId: ev.repObsId,
-      siteId: ev.siteId,
-      occasion: ev.occasion,
-      prob: fr.prob ?? 0,
-      frameTs: fr.ts,
-    }))
-  )
-
-  function toFlatIdx(evIdx: number, frIdx: number): number {
-    return events.slice(0, evIdx).reduce((s, e) => s + e.frames.length, 0) + frIdx
-  }
-
-  function currentEventFromSlide(flatIdx: number): DetectionEvent | undefined {
-    let remaining = flatIdx
-    for (const ev of events) {
-      if (remaining < ev.frames.length) return ev
-      remaining -= ev.frames.length
-    }
-  }
+  const lbEv = events[lbEvIdx]
+  const lbSlides: EventSlide[] = lbEv
+    ? lbEv.frames.map((fr) => ({
+        src: fr.img,
+        title: t('gallery.lb_title', { site: lbEv.siteId, occasion: lbEv.occasion }),
+        description: fr.prob != null ? `${(fr.prob * 100).toFixed(0)}%  ·  ${fr.ts}` : fr.ts,
+        eventKey: lbEv.key,
+        repObsId: lbEv.repObsId,
+        siteId: lbEv.siteId,
+        occasion: lbEv.occasion,
+        prob: fr.prob ?? 0,
+        frameTs: fr.ts,
+      }))
+    : []
 
   function openLightbox(evIdx: number, frIdx: number) {
-    setLbIndex(toFlatIdx(evIdx, frIdx))
+    setLbEvIdx(evIdx)
+    setLbIndex(frIdx)
     setLbInverted(false)
     setLbOpen(true)
   }
@@ -160,15 +171,15 @@ export default function GalleryPage() {
 
   function decideInLb(d: 'confirmed' | 'rejected') {
     if (completed && locked) return
-    const ev = currentEventFromSlide(lbIndex)
+    const ev = events[lbEvIdx]
     if (!ev) return
     setDecisions((prev) => ({ ...prev, [ev.key]: d }))
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(ev.key); return s })
     if (!completed) {
-      const currentEvIdx = events.indexOf(ev)
-      for (let i = currentEvIdx + 1; i < events.length; i++) {
+      for (let i = lbEvIdx + 1; i < events.length; i++) {
         if (!decisionsRef.current[events[i].key]) {
-          setLbIndex(toFlatIdx(i, 0))
+          setLbEvIdx(i)
+          setLbIndex(0)
           return
         }
       }
@@ -241,7 +252,7 @@ export default function GalleryPage() {
     return acc
   }, {})
 
-  const lbCurrentEv = currentEventFromSlide(lbIndex)
+  const lbCurrentEv = events[lbEvIdx]
   const lbDecision  = lbCurrentEv ? decisions[lbCurrentEv.key] : undefined
   const lbReadOnly  = completed && locked
 
@@ -421,11 +432,13 @@ export default function GalleryPage() {
       }`}</style>
 
       <YARLightbox
+        key={lbEvIdx}
         open={lbOpen}
         close={() => { setLbOpen(false); resetLbFilters() }}
         index={lbIndex}
-        slides={slides}
+        slides={lbSlides}
         plugins={[Zoom, Captions]}
+        carousel={{ finite: true }}
         on={{ view: ({ index }) => { setLbIndex(index); resetLbFilters() } }}
         zoom={{ maxZoomPixelRatio: 8, scrollToZoom: true }}
         captions={{ showToggle: false, descriptionTextAlign: 'center' }}

@@ -85,6 +85,8 @@
     "label_end": "End date",
     "step3_title": "Sampling parameters",
     "step3_desc": "Adjust how images are grouped into <b>sampling periods</b> and how they are split into <b>sequences</b>.",
+    "section_sampling": "Sampling parameters",
+    "section_confirmation": "Confirmation parameters",
     "label_occasion_days": "Duration of each sampling period in days",
     "hint_occasion_days": "A sampling period groups images taken at a location within a window of N days.",
     "label_gap": "Gap between sequences (seconds)",
