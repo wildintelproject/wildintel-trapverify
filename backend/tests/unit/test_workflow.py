@@ -7,11 +7,13 @@ import pandas as pd
 import pytest
 
 from camtrap_workflow import (
+    DEEPFAUNE_LABEL_MAP,
     _occasion_windows,
     build_candidates,
     build_occupancy_inputs,
     build_review_effort,
     confirmed_keys_set,
+    deepfaune_to_camtrapdp,
     detect_site_col,
     export_verified_camtrapdp,
     get_events,
@@ -441,3 +443,274 @@ def test_build_review_effort_total_cells(candidates, decisions_dir, session_conf
     build_review_effort(candidates, decisions_dir, session_config, out)
     df = pd.read_csv(out / "review_effort.csv")
     assert int(df["candidate_cells"].iloc[0]) == 3
+
+
+# ─── DEEPFAUNE_LABEL_MAP ──────────────────────────────────────────────────────
+
+def test_label_map_is_lowercase():
+    assert all(k == k.lower() for k in DEEPFAUNE_LABEL_MAP)
+
+def test_label_map_values_are_scientific_names():
+    for sci in DEEPFAUNE_LABEL_MAP.values():
+        parts = sci.split()
+        assert len(parts) >= 1
+        assert parts[0][0].isupper(), f"Expected capitalised genus in '{sci}'"
+
+def test_label_map_contains_common_species():
+    assert "red deer" in DEEPFAUNE_LABEL_MAP
+    assert "wild boar" in DEEPFAUNE_LABEL_MAP
+    assert "fox" in DEEPFAUNE_LABEL_MAP
+    assert DEEPFAUNE_LABEL_MAP["red deer"] == "Cervus elaphus"
+    assert DEEPFAUNE_LABEL_MAP["wild boar"] == "Sus scrofa"
+
+
+# ─── deepfaune_to_camtrapdp ───────────────────────────────────────────────────
+
+def _minimal_deepfaune_df() -> pd.DataFrame:
+    return pd.DataFrame({
+        "filename": ["/imgs/SITE_A/frame1.jpg", "/imgs/SITE_A/frame2.jpg"],
+        "date":     ["2025-11-02 10:00:00",    "2025-11-02 10:00:30"],
+        "top1":     ["red deer",                "empty"],
+        "score":    ["0.92",                    "0.10"],
+        "site":     ["SITE_A",                  "SITE_A"],
+    })
+
+def test_deepfaune_creates_three_files(tmp_path):
+    out = deepfaune_to_camtrapdp(_minimal_deepfaune_df(), DEEPFAUNE_LABEL_MAP, tmp_path / "out")
+    assert (out / "deployments.csv").exists()
+    assert (out / "media.csv").exists()
+    assert (out / "observations.csv").exists()
+
+def test_deepfaune_maps_species_name(tmp_path):
+    out = deepfaune_to_camtrapdp(_minimal_deepfaune_df(), DEEPFAUNE_LABEL_MAP, tmp_path / "out")
+    obs = pd.read_csv(out / "observations.csv")
+    animal_row = obs[obs["observationType"] == "animal"]
+    assert animal_row.iloc[0]["scientificName"] == "Cervus elaphus"
+
+def test_deepfaune_non_animal_label_blank(tmp_path):
+    out = deepfaune_to_camtrapdp(_minimal_deepfaune_df(), DEEPFAUNE_LABEL_MAP, tmp_path / "out")
+    obs = pd.read_csv(out / "observations.csv")
+    blank_row = obs[obs["observationType"] == "blank"]
+    assert not blank_row.empty
+    assert pd.isna(blank_row.iloc[0]["scientificName"])
+
+def test_deepfaune_below_min_score_gets_null_name(tmp_path):
+    df = _minimal_deepfaune_df()
+    df.loc[0, "score"] = "0.3"
+    out = deepfaune_to_camtrapdp(df, DEEPFAUNE_LABEL_MAP, tmp_path / "out", min_score=0.5)
+    obs = pd.read_csv(out / "observations.csv")
+    animal_row = obs[obs["observationType"] == "animal"]
+    assert pd.isna(animal_row.iloc[0]["scientificName"])
+
+def test_deepfaune_above_min_score_keeps_name(tmp_path):
+    df = _minimal_deepfaune_df()
+    out = deepfaune_to_camtrapdp(df, DEEPFAUNE_LABEL_MAP, tmp_path / "out", min_score=0.5)
+    obs = pd.read_csv(out / "observations.csv")
+    animal_row = obs[obs["observationType"] == "animal"]
+    assert animal_row.iloc[0]["scientificName"] == "Cervus elaphus"
+
+def test_deepfaune_derives_site_from_path_when_no_site_col(tmp_path):
+    df = _minimal_deepfaune_df().drop(columns=["site"])
+    out = deepfaune_to_camtrapdp(df, DEEPFAUNE_LABEL_MAP, tmp_path / "out")
+    dep = pd.read_csv(out / "deployments.csv")
+    assert "SITE_A" in dep["deploymentID"].values
+
+def test_deepfaune_detects_predictionbase_format(tmp_path):
+    df = pd.DataFrame({
+        "filename":        ["/imgs/SITE_A/frame1.jpg"],
+        "date":            ["2025-11-02 10:00:00"],
+        "predictionbase":  ["roe deer"],
+        "scorebase":       ["0.88"],
+        "site":            ["SITE_A"],
+    })
+    # predictionbase is not in the default DEEPFAUNE_LABEL_MAP but converter
+    # should still run; "roe deer" maps to Capreolus capreolus
+    out = deepfaune_to_camtrapdp(
+        df.rename(columns={"predictionbase": "top1", "scorebase": "score"}),
+        DEEPFAUNE_LABEL_MAP,
+        tmp_path / "out",
+        label_col="top1",
+    )
+    obs = pd.read_csv(out / "observations.csv")
+    assert obs.iloc[0]["scientificName"] == "Capreolus capreolus"
+
+def test_deepfaune_image_base_dir_prepended(tmp_path):
+    df = pd.DataFrame({
+        "filename": ["relative/frame.jpg"],
+        "date":     ["2025-11-02 10:00:00"],
+        "top1":     ["fox"],
+        "score":    ["0.9"],
+        "site":     ["S1"],
+    })
+    base = Path("/data/images")
+    out = deepfaune_to_camtrapdp(df, DEEPFAUNE_LABEL_MAP, tmp_path / "out", image_base_dir=base)
+    med = pd.read_csv(out / "media.csv")
+    assert "relative/frame.jpg" in med.iloc[0]["filePath"] or "/data/images" in med.iloc[0]["filePath"]
+
+def test_deepfaune_row_count_matches_input(tmp_path):
+    out = deepfaune_to_camtrapdp(_minimal_deepfaune_df(), DEEPFAUNE_LABEL_MAP, tmp_path / "out")
+    obs = pd.read_csv(out / "observations.csv")
+    assert len(obs) == 2
+
+
+# ─── build_candidates: burst context ─────────────────────────────────────────
+
+def test_burst_context_is_context_column_present(candidates):
+    assert "is_context" in candidates.columns
+
+def test_burst_context_false_all_false(candidates):
+    assert (candidates["is_context"] == False).all()  # noqa: E712
+
+def test_burst_context_adds_context_rows(camtrap_dir_with_context):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    ctx = cands[cands["is_context"] == True]  # noqa: E712
+    assert not ctx.empty
+
+def test_burst_context_obs_id_prefixed_ctx(camtrap_dir_with_context):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    ctx = cands[cands["is_context"] == True]  # noqa: E712
+    assert all(str(oid).startswith("ctx_") for oid in ctx["observationID"])
+
+def test_burst_context_prob_is_null(camtrap_dir_with_context):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    ctx = cands[cands["is_context"] == True]  # noqa: E712
+    assert ctx["classificationProbability"].isna().all()
+
+def test_burst_context_non_context_rows_unchanged(camtrap_dir_with_context):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    non_ctx = cands[cands["is_context"] == False]  # noqa: E712
+    assert set(non_ctx["mediaID"]) == {"m001", "m002", "m003", "m004", "m005"}
+
+def test_burst_context_does_not_duplicate_candidates(camtrap_dir_with_context):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    non_ctx = cands[cands["is_context"] == False]  # noqa: E712
+    assert non_ctx["mediaID"].duplicated().sum() == 0
+
+
+# ─── get_events: context frames ───────────────────────────────────────────────
+
+def test_get_events_context_frame_is_context_true(camtrap_dir_with_context, tmp_path):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    decisions = tmp_path / "dec"
+    decisions.mkdir()
+    events = get_events(cands, decisions, set(), "Vulpes_vulpes", iteration=1)
+    ctx_frames = [
+        f for ev in events for f in ev["frames"] if f.get("isContext")
+    ]
+    assert len(ctx_frames) > 0
+
+def test_get_events_context_frame_prob_none(camtrap_dir_with_context, tmp_path):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    decisions = tmp_path / "dec"
+    decisions.mkdir()
+    events = get_events(cands, decisions, set(), "Vulpes_vulpes", iteration=1)
+    ctx_frames = [
+        f for ev in events for f in ev["frames"] if f.get("isContext")
+    ]
+    assert all(f["prob"] is None for f in ctx_frames)
+
+def test_get_events_rep_obs_id_not_context(camtrap_dir_with_context, tmp_path):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    decisions = tmp_path / "dec"
+    decisions.mkdir()
+    events = get_events(cands, decisions, set(), "Vulpes_vulpes", iteration=1)
+    for ev in events:
+        assert not str(ev["repObsId"]).startswith("ctx_")
+
+def test_get_events_max_prob_from_non_context(camtrap_dir_with_context, tmp_path):
+    dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
+    cands = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    decisions = tmp_path / "dec"
+    decisions.mkdir()
+    events = get_events(cands, decisions, set(), "Vulpes_vulpes", iteration=1)
+    for ev in events:
+        assert ev["maxProb"] > 0

@@ -11,6 +11,9 @@ class SetupRequest(BaseModel):
     total_iterations: int = 100000
     gap_seconds: int = 60
     min_score: float = 0.5
+    include_burst_context: bool = False
+    classified_by: str = "expert_review"
+    extended_confirmation: bool = False
 
 
 class DecisionsRequest(BaseModel):

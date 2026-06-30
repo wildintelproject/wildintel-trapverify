@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 285">
+  <rect width="400" height="285" fill="#18181b"/>
+
+  <!-- Ground -->
+  <line x1="30" y1="242" x2="370" y2="242" stroke="#27272a" stroke-width="1.5"/>
+
+  <!-- ===== FOX (left) ===== -->
+  <ellipse cx="52" cy="205" rx="15" ry="30" fill="#52525b" transform="rotate(-15 52 205)"/>
+  <ellipse cx="44" cy="185" rx="8" ry="12" fill="#3f3f46" transform="rotate(-15 44 185)"/>
+  <ellipse cx="88" cy="220" rx="33" ry="19" fill="#3f3f46"/>
+  <rect x="115" y="206" width="12" height="20" rx="5" fill="#3f3f46"/>
+  <ellipse cx="122" cy="201" rx="13" ry="11" fill="#3f3f46"/>
+  <polygon points="112,193 117,179 123,193" fill="#3f3f46"/>
+  <polygon points="121,193 126,179 132,193" fill="#3f3f46"/>
+  <ellipse cx="133" cy="205" rx="8" ry="5" fill="#52525b"/>
+  <circle cx="126" cy="198" r="2.5" fill="#71717a"/>
+  <rect x="70"  y="235" width="8" height="8" rx="3" fill="#3f3f46"/>
+  <rect x="82"  y="235" width="8" height="8" rx="3" fill="#3f3f46"/>
+  <rect x="97"  y="235" width="8" height="8" rx="3" fill="#3f3f46"/>
+  <rect x="109" y="235" width="8" height="8" rx="3" fill="#3f3f46"/>
+
+  <!-- ===== DEER (center) ===== -->
+  <ellipse cx="200" cy="206" rx="44" ry="26" fill="#3f3f46"/>
+  <ellipse cx="157" cy="202" rx="8" ry="10" fill="#52525b" transform="rotate(-15 157 202)"/>
+  <rect x="228" y="184" width="15" height="28" rx="6" fill="#3f3f46"/>
+  <ellipse cx="244" cy="179" rx="14" ry="11" fill="#3f3f46"/>
+  <ellipse cx="233" cy="170" rx="5" ry="8" fill="#52525b" transform="rotate(-20 233 170)"/>
+  <circle cx="250" cy="176" r="3" fill="#71717a"/>
+  <ellipse cx="256" cy="183" rx="4" ry="3" fill="#52525b"/>
+  <path d="M237 170 Q228 152 222 140 M228 152 Q222 144 217 140 M228 152 Q223 159 217 157"
+        stroke="#52525b" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M241 168 Q240 148 238 136 M240 148 Q246 141 251 136 M240 148 Q234 142 232 135"
+        stroke="#52525b" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="174" y="228" width="9" height="15" rx="4" fill="#3f3f46"/>
+  <rect x="187" y="228" width="9" height="15" rx="4" fill="#3f3f46"/>
+  <rect x="211" y="228" width="9" height="15" rx="4" fill="#3f3f46"/>
+  <rect x="224" y="228" width="9" height="15" rx="4" fill="#3f3f46"/>
+  <rect x="174" y="240" width="9" height="5" rx="2" fill="#27272a"/>
+  <rect x="187" y="240" width="9" height="5" rx="2" fill="#27272a"/>
+  <rect x="211" y="240" width="9" height="5" rx="2" fill="#27272a"/>
+  <rect x="224" y="240" width="9" height="5" rx="2" fill="#27272a"/>
+
+  <!-- ===== WILD BOAR (right) ===== -->
+  <path d="M261 210 Q252 203 256 196" stroke="#52525b" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <ellipse cx="298" cy="215" rx="38" ry="25" fill="#3f3f46"/>
+  <rect x="330" y="202" width="17" height="21" rx="6" fill="#3f3f46"/>
+  <ellipse cx="349" cy="200" rx="19" ry="13" fill="#3f3f46"/>
+  <ellipse cx="365" cy="206" rx="10" ry="8" fill="#52525b"/>
+  <circle cx="362" cy="206" r="2"   fill="#27272a"/>
+  <circle cx="368" cy="206" r="2"   fill="#27272a"/>
+  <polygon points="337,193 343,180 350,193" fill="#52525b"/>
+  <circle cx="353" cy="196" r="2.5" fill="#71717a"/>
+  <path d="M358 212 Q354 220 350 217" stroke="#71717a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M364 212 Q368 220 372 217" stroke="#71717a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <rect x="268" y="235" width="11" height="8" rx="3" fill="#3f3f46"/>
+  <rect x="283" y="235" width="11" height="8" rx="3" fill="#3f3f46"/>
+  <rect x="309" y="235" width="11" height="8" rx="3" fill="#3f3f46"/>
+  <rect x="324" y="235" width="11" height="8" rx="3" fill="#3f3f46"/>
+
+  <!-- TEXT -->
+  <text x="200" y="260" text-anchor="middle"
+        fill="#71717a" font-size="16" font-weight="600"
+        font-family="ui-sans-serif,system-ui,sans-serif">We&#x2019;re not around</text>
+  <text x="200" y="277" text-anchor="middle"
+        fill="#52525b" font-size="11"
+        font-family="ui-sans-serif,system-ui,sans-serif">Image unavailable</text>
+</svg>

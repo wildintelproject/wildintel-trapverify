@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#18181b"/>
+
+  <!-- Body -->
+  <ellipse cx="200" cy="174" rx="48" ry="30" fill="#3f3f46"/>
+  <!-- Neck -->
+  <rect x="227" y="150" width="17" height="30" rx="7" fill="#3f3f46"/>
+  <!-- Head -->
+  <ellipse cx="247" cy="144" rx="15" ry="12" fill="#3f3f46"/>
+  <!-- Ear -->
+  <ellipse cx="235" cy="134" rx="5" ry="9" fill="#52525b" transform="rotate(-20 235 134)"/>
+  <!-- Eye -->
+  <circle cx="252" cy="141" r="3" fill="#71717a"/>
+  <!-- Nose -->
+  <ellipse cx="259" cy="148" rx="4" ry="3" fill="#52525b"/>
+
+  <!-- Antler left -->
+  <path d="M238 134 Q228 116 222 104 M228 116 Q222 108 217 104 M228 116 Q224 122 218 120"
+        stroke="#52525b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Antler right -->
+  <path d="M242 132 Q240 112 238 100 M240 112 Q246 105 250 100 M240 112 Q234 106 232 99"
+        stroke="#52525b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Tail -->
+  <ellipse cx="153" cy="167" rx="9" ry="11" fill="#52525b" transform="rotate(-15 153 167)"/>
+
+  <!-- Legs front -->
+  <rect x="218" y="200" width="10" height="34" rx="5" fill="#3f3f46"/>
+  <rect x="232" y="200" width="10" height="34" rx="5" fill="#3f3f46"/>
+  <!-- Legs back -->
+  <rect x="172" y="200" width="10" height="34" rx="5" fill="#3f3f46"/>
+  <rect x="186" y="200" width="10" height="34" rx="5" fill="#3f3f46"/>
+
+  <!-- Hooves front -->
+  <rect x="218" y="230" width="10" height="7" rx="3" fill="#27272a"/>
+  <rect x="232" y="230" width="10" height="7" rx="3" fill="#27272a"/>
+  <!-- Hooves back -->
+  <rect x="172" y="230" width="10" height="7" rx="3" fill="#27272a"/>
+  <rect x="186" y="230" width="10" height="7" rx="3" fill="#27272a"/>
+
+  <!-- Ground line -->
+  <line x1="100" y1="238" x2="300" y2="238" stroke="#27272a" stroke-width="2"/>
+
+  <!-- Caption -->
+  <text x="200" y="270" text-anchor="middle"
+        fill="#52525b" font-size="12" font-family="ui-sans-serif,system-ui,sans-serif">
+    Imagen no disponible
+  </text>
+</svg>

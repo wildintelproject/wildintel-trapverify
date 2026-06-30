@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 
 interface DirEntry { name: string; path: string }
-interface BrowseResult { current: string; parent: string | null; dirs: DirEntry[] }
-interface Props { onSelect: (path: string) => void; onClose: () => void; initialPath?: string }
+interface BrowseResult { current: string; parent: string | null; dirs: DirEntry[]; files?: DirEntry[] }
+interface Props {
+  onSelect: (path: string) => void
+  onClose: () => void
+  initialPath?: string
+  showFiles?: boolean
+  fileExt?: string
+  title?: string
+}
 
 function Spinner({ sm }: { sm?: boolean }) {
   const sz = sm ? 'w-4 h-4 border' : 'w-5 h-5 border-2'
@@ -12,7 +19,7 @@ function Spinner({ sm }: { sm?: boolean }) {
 const btnOutline = 'px-3 py-1 text-sm border border-zinc-600 text-zinc-300 rounded hover:bg-zinc-700 transition-colors disabled:opacity-50'
 const btnPrimary = 'px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50'
 
-export default function DirectoryPicker({ onSelect, onClose, initialPath }: Props) {
+export default function DirectoryPicker({ onSelect, onClose, initialPath, showFiles = false, fileExt = '', title }: Props) {
   const [data, setData] = useState<BrowseResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +29,11 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath }: Prop
   async function browse(path?: string) {
     setLoading(true)
     setError(null)
-    const qs = path ? `?path=${encodeURIComponent(path)}` : ''
+    const params = new URLSearchParams()
+    if (path) params.set('path', path)
+    if (showFiles) params.set('show_files', 'true')
+    if (fileExt) params.set('ext', fileExt)
+    const qs = params.toString() ? `?${params}` : ''
     const url = `/api/fs/browse${qs}`
     try {
       const r = await fetch(url)
@@ -70,7 +81,7 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath }: Prop
       >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700">
-          <span className="font-semibold text-zinc-100">Seleccionar directorio</span>
+          <span className="font-semibold text-zinc-100">{title ?? 'Seleccionar directorio'}</span>
           <button
             className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-100 text-xl rounded transition-colors"
             onClick={onClose}
@@ -166,6 +177,18 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath }: Prop
                 >
                   <span className="text-amber-400">📁</span>
                   <span className="truncate">{dir.name}</span>
+                </li>
+              ))}
+
+              {(data.files ?? []).map((file) => (
+                <li
+                  key={file.path}
+                  className="flex items-center gap-2 py-1 px-2 text-sm text-zinc-300 hover:bg-zinc-800 rounded cursor-pointer font-mono"
+                  onClick={() => setManualPath(file.path)}
+                  onDoubleClick={() => { onSelect(file.path); onClose() }}
+                >
+                  <span className="text-sky-400">📄</span>
+                  <span className="truncate">{file.name}</span>
                 </li>
               ))}
             </ul>

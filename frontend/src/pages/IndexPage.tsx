@@ -10,7 +10,8 @@ function Spinner() {
 
 export default function IndexPage() {
   const navigate = useNavigate()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const imgError = i18n.language.startsWith('es') ? '/img-error-es.svg' : '/img-error-en.svg'
   const [species, setSpecies] = useState<SpeciesStats[]>([])
   const [sessionInfo, setSessionInfo] = useState<{
     start: string; end: string
@@ -95,6 +96,9 @@ export default function IndexPage() {
               ? `${t('index.see_results')} (${overallPct}%)`
               : t('index.see_results')}
           >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }}>
+              <path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
             {t('index.see_results')}
           </button>
         </div>
@@ -144,7 +148,13 @@ export default function IndexPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, height: 80 }}>
                   {sp.thumbnails.slice(0, 4).map((src, i) => (
                     <img key={i} src={src} alt="" loading="lazy"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null
+                        e.currentTarget.src = imgError
+                        e.currentTarget.style.objectFit = 'contain'
+                        e.currentTarget.style.background = '#18181b'
+                      }} />
                   ))}
                   {Array.from({ length: Math.max(0, 4 - sp.thumbnails.length) }).map((_, i) => (
                     <div key={`empty-${i}`} style={{ background: '#222' }} />

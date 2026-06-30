@@ -68,8 +68,12 @@ def fs_inspect(path: str) -> dict:
 
 
 @router.get("/browse")
-def fs_browse(path: str = "") -> dict:
-    """Return subdirectories of path for the filesystem picker."""
+def fs_browse(path: str = "", show_files: bool = False, ext: str = "") -> dict:
+    """Return subdirectories (and optionally files) of path for the filesystem picker.
+
+    When ``show_files=True``, files matching ``ext`` (e.g. ``'.csv'``) are also
+    returned in a ``files`` list alongside the usual ``dirs`` list.
+    """
     p = Path(path).resolve() if path else Path.home()
     while not p.exists() or not p.is_dir():
         parent = p.parent
@@ -78,15 +82,59 @@ def fs_browse(path: str = "") -> dict:
             break
         p = parent
     try:
+        all_items = list(p.iterdir())
         dirs = sorted(
-            (item for item in p.iterdir() if item.is_dir() and not item.name.startswith(".")),
+            (item for item in all_items if item.is_dir() and not item.name.startswith(".")),
             key=lambda x: x.name.lower(),
         )
+        files: list[dict] = []
+        if show_files:
+            matched = sorted(
+                (
+                    item for item in all_items
+                    if item.is_file()
+                    and not item.name.startswith(".")
+                    and (not ext or item.suffix.lower() == ext.lower())
+                ),
+                key=lambda x: x.name.lower(),
+            )
+            files = [{"name": f.name, "path": str(f)} for f in matched]
         return {
             "current": str(p),
             "parent": str(p.parent) if p.parent != p else None,
             "dirs": [{"name": d.name, "path": str(d)} for d in dirs],
+            "files": files,
         }
     except PermissionError:
         logger.warning("Permission denied browsing %s", p)
         raise HTTPException(403, "Sin permiso de acceso")
+
+
+@router.get("/csv-headers")
+def csv_headers(path: str) -> dict:
+    """Return column names of a CSV file."""
+    p = Path(path)
+    if not p.exists() or not p.is_file():
+        raise HTTPException(400, f"No se encontró el fichero: {path}")
+    try:
+        df = pd.read_csv(p, nrows=0, dtype=str)
+        return {"columns": list(df.columns)}
+    except Exception as exc:
+        raise HTTPException(400, f"Error al leer el CSV: {exc}") from exc
+
+
+@router.get("/csv-labels")
+def csv_labels(path: str, col: str) -> dict:
+    """Return unique (lowercased) values of a column, pre-filled with DeepFaune map matches."""
+    from camtrap_workflow import DEEPFAUNE_LABEL_MAP
+    p = Path(path)
+    if not p.exists() or not p.is_file():
+        raise HTTPException(400, f"No se encontró el fichero: {path}")
+    try:
+        df = pd.read_csv(p, dtype=str, usecols=[col])
+        raw = df[col].dropna().astype(str).str.lower().str.strip()
+        labels = sorted(raw.unique().tolist())
+        prefilled = {lbl: DEEPFAUNE_LABEL_MAP[lbl] for lbl in labels if lbl in DEEPFAUNE_LABEL_MAP}
+        return {"labels": labels, "prefilled": prefilled}
+    except Exception as exc:
+        raise HTTPException(400, f"Error al leer la columna '{col}': {exc}") from exc

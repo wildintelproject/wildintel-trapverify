@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import DirectoryPicker from '../components/DirectoryPicker'
+import CsvImportForm from '../components/CsvImportForm'
 import type { WorkflowConfig } from '../types'
 
 interface Props { onSetup: () => void; ready: boolean }
@@ -17,6 +18,9 @@ const DEFAULT: WorkflowConfig = {
   total_iterations: 100000,
   gap_seconds: 60,
   min_score: 0.5,
+  include_burst_context: false,
+  classified_by: 'expert_review',
+  extended_confirmation: false,
 }
 
 const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
@@ -58,7 +62,11 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [loadingClassProjects, setLoadingClassProjects] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
-  const [picker, setPicker] = useState<'camtrap_dir' | 'output_dir' | null>(null)
+  const [localFormat, setLocalFormat] = useState<'camtrapdp' | 'deepfaune' | 'csv' | null>(null)
+  const [deepfauneForm, setDeepfauneForm] = useState({ csvPath: '', imageBaseDir: '' })
+  const [converting, setConverting] = useState(false)
+  const [convertError, setConvertError] = useState<string | null>(null)
+  const [picker, setPicker] = useState<'camtrap_dir' | 'df_csv' | 'df_imgdir' | null>(null)
   const [inspecting, setInspecting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
@@ -75,8 +83,6 @@ export default function SetupPage({ onSetup, ready }: Props) {
         setForm(s.config)
         setSelectedSpecies(new Set(s.config.target_species))
         setAvailableSpecies(s.config.target_species)
-      } else if (s.default_output_dir) {
-        setForm((f) => ({ ...f, output_dir: s.default_output_dir! }))
       }
     }).catch(() => {})
   }, [])
@@ -111,9 +117,49 @@ export default function SetupPage({ onSetup, ready }: Props) {
         }
       } catch { /* usuario puede continuar manualmente */ }
       finally { setInspecting(false) }
-    } else {
-      set('output_dir', path)
+    } else if (picker === 'df_csv') {
+      setDeepfauneForm(f => ({ ...f, csvPath: path }))
       setPicker(null)
+    } else if (picker === 'df_imgdir') {
+      setDeepfauneForm(f => ({ ...f, imageBaseDir: path }))
+      setPicker(null)
+    }
+  }
+
+  async function afterConversion(camtrap_dir: string) {
+    set('camtrap_dir', camtrap_dir)
+    setInspecting(true)
+    try {
+      const info = await api.inspectDir(camtrap_dir)
+      if (info.species.length) {
+        setAvailableSpecies(info.species)
+        setSelectedSpecies(new Set(info.species))
+      }
+      if (info.study_start && info.study_end) {
+        set('study_start', info.study_start)
+        set('study_end', info.study_end)
+        setDataRange({ min: info.study_start, max: info.study_end })
+      }
+    } catch { /* continúa manualmente */ }
+    finally { setInspecting(false) }
+    setStepError(null)
+    setStep(1)
+  }
+
+  async function handleDeepfauneConvert() {
+    setConverting(true)
+    setConvertError(null)
+    try {
+      const { camtrap_dir } = await api.convertDeepfaune(
+        deepfauneForm.csvPath,
+        deepfauneForm.imageBaseDir || null,
+        form.min_score,
+      )
+      await afterConversion(camtrap_dir)
+    } catch (e) {
+      setConvertError(e instanceof Error ? e.message : t('setup.err_unknown'))
+    } finally {
+      setConverting(false)
     }
   }
 
@@ -161,8 +207,12 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
   function goBack() {
     setStepError(null)
-    if (step === 0 && sourceType !== null) {
+    if (step === 0 && sourceType === 'local' && localFormat !== null) {
+      setLocalFormat(null)
+      setConvertError(null)
+    } else if (step === 0 && sourceType !== null) {
       setSourceType(null)
+      setLocalFormat(null)
     } else {
       setStep((s) => s - 1)
     }
@@ -360,7 +410,6 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
     {sessionPickerOpen && (
       <DirectoryPicker
-        initialPath={form.output_dir || undefined}
         onSelect={handleLoadSession}
         onClose={() => { setSessionPickerOpen(false); setSessionError(null) }}
       />
@@ -609,8 +658,48 @@ export default function SetupPage({ onSetup, ready }: Props) {
         )
       })()}
 
-      {/* ── Step 0c: local filesystem ── */}
-      {step === 0 && sourceType === 'local' && (
+      {/* ── Step 0c: local format selector ── */}
+      {step === 0 && sourceType === 'local' && localFormat === null && (
+        <div>
+          <h4 className="text-lg font-semibold mb-1">{t('setup.local_format_title')}</h4>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t('setup.local_format_desc')}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <button
+              className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-center group"
+              onClick={() => setLocalFormat('camtrapdp')}
+            >
+              <span className="text-4xl">📁</span>
+              <strong className="text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                {t('setup.local_format_camtrapdp')}
+              </strong>
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.local_format_camtrapdp_desc')}</span>
+            </button>
+            <button
+              className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-center group"
+              onClick={() => setLocalFormat('deepfaune')}
+            >
+              <span className="text-4xl">🤖</span>
+              <strong className="text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                {t('setup.local_format_deepfaune')}
+              </strong>
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.local_format_deepfaune_desc')}</span>
+            </button>
+            <button
+              className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-center group"
+              onClick={() => setLocalFormat('csv')}
+            >
+              <span className="text-4xl">📊</span>
+              <strong className="text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                {t('setup.local_format_csv')}
+              </strong>
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.local_format_csv_desc')}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 0d: CamtrapDP directory ── */}
+      {step === 0 && sourceType === 'local' && localFormat === 'camtrapdp' && (
         <div>
           <h4 className="text-lg font-semibold mb-1">{t('setup.step0_title')}</h4>
           <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t('setup.step0_desc')}</p>
@@ -631,26 +720,77 @@ export default function SetupPage({ onSetup, ready }: Props) {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* ── Step 0e: DeepFaune CSV ── */}
+      {step === 0 && sourceType === 'local' && localFormat === 'deepfaune' && (
+        <div>
+          <h4 className="text-lg font-semibold mb-1">{t('setup.deepfaune_title')}</h4>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t('setup.deepfaune_desc')}</p>
+
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.deepfaune_csv_label')}</label>
+            <div className="flex">
+              <input
+                className={`${inputClass} rounded-r-none`}
+                placeholder={t('setup.deepfaune_csv_placeholder')}
+                value={deepfauneForm.csvPath}
+                onChange={(e) => setDeepfauneForm(f => ({ ...f, csvPath: e.target.value }))}
+              />
+              <button type="button" className={browseBtn}
+                onClick={() => setPicker('df_csv')}>
+                {t('setup.browse')}
+              </button>
+            </div>
+            <p className={hintClass}>{t('setup.deepfaune_csv_hint')}</p>
+          </div>
+
           <div className="mb-6">
             <label className={labelClass}>
-              {t('setup.label_output_dir')}{' '}
+              {t('setup.deepfaune_imgdir_label')}{' '}
               <span className="text-zinc-400 font-normal">{t('setup.label_output_optional')}</span>
             </label>
             <div className="flex">
               <input
                 className={`${inputClass} rounded-r-none`}
-                placeholder={t('setup.placeholder_output_dir')}
-                value={form.output_dir}
-                onChange={(e) => set('output_dir', e.target.value)}
+                placeholder={t('setup.deepfaune_imgdir_placeholder')}
+                value={deepfauneForm.imageBaseDir}
+                onChange={(e) => setDeepfauneForm(f => ({ ...f, imageBaseDir: e.target.value }))}
               />
               <button type="button" className={browseBtn}
-                onClick={() => setPicker('output_dir')}>
+                onClick={() => setPicker('df_imgdir')}>
                 {t('setup.browse')}
               </button>
             </div>
-            <p className={hintClass}>{t('setup.hint_output_dir')}</p>
+            <p className={hintClass}>{t('setup.deepfaune_imgdir_hint')}</p>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            <button
+              type="button"
+              disabled={!deepfauneForm.csvPath || converting}
+              onClick={handleDeepfauneConvert}
+              className={[
+                'px-5 py-2 text-sm rounded bg-emerald-600 text-white flex items-center gap-2 transition-opacity',
+                !deepfauneForm.csvPath || converting
+                  ? 'opacity-40 cursor-not-allowed'
+                  : 'hover:bg-emerald-700 cursor-pointer',
+              ].join(' ')}
+            >
+              {converting && <SmallSpinner />}
+              {t(converting ? 'setup.deepfaune_converting' : 'setup.deepfaune_convert')}
+            </button>
+            {convertError && (
+              <p className="text-sm text-red-600 dark:text-red-400 text-right">{convertError}</p>
+            )}
           </div>
         </div>
+      )}
+
+      {/* ── Step 0f: CSV personalizado ── */}
+      {step === 0 && sourceType === 'local' && localFormat === 'csv' && (
+        <CsvImportForm onConverted={afterConversion} />
       )}
 
       {/* ── Step 1 ── */}
@@ -760,6 +900,74 @@ export default function SetupPage({ onSetup, ready }: Props) {
             </div>
             <p className={hintClass}>{t('setup.hint_min_score')}</p>
           </div>
+
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_classified_by')}</label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="expert_review"
+              value={form.classified_by}
+              onChange={(e) => set('classified_by', e.target.value)}
+            />
+            <p className={hintClass}>{t('setup.hint_classified_by')}</p>
+          </div>
+
+          <div className="mb-4">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.extended_confirmation}
+              onClick={() => set('extended_confirmation', !form.extended_confirmation)}
+              className="flex items-start gap-3 w-full text-left group"
+            >
+              <span
+                className={`mt-0.5 relative flex-shrink-0 w-10 h-6 rounded-full transition-colors ${
+                  form.extended_confirmation ? 'bg-blue-600' : 'bg-zinc-600'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                    form.extended_confirmation ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
+                  {t('setup.label_extended_confirmation')}
+                </span>
+                <span className={hintClass}>{t('setup.hint_extended_confirmation')}</span>
+              </span>
+            </button>
+          </div>
+
+          <div className="mb-2">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.include_burst_context}
+              onClick={() => set('include_burst_context', !form.include_burst_context)}
+              className="flex items-start gap-3 w-full text-left group"
+            >
+              <span
+                className={`mt-0.5 relative flex-shrink-0 w-10 h-6 rounded-full transition-colors ${
+                  form.include_burst_context ? 'bg-blue-600' : 'bg-zinc-600'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                    form.include_burst_context ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
+                  {t('setup.label_burst_context')}
+                </span>
+                <span className={hintClass}>{t('setup.hint_burst_context')}</span>
+              </span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -768,7 +976,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         <button type="button" className={btnOutline} onClick={goBack}>
           {step === 0 && sourceType === null ? t('setup.back_welcome') : t('setup.back')}
         </button>
-        {step === 0 && sourceType !== 'local' ? (
+        {(step === 0 && sourceType === null) || (step === 0 && sourceType === 'local' && localFormat === null) || (step === 0 && sourceType === 'local' && localFormat === 'deepfaune') || (step === 0 && sourceType === 'local' && localFormat === 'csv') || (step === 0 && sourceType === 'trapper') ? (
           <div />
         ) : step < STEP_LABELS.length - 1 ? (
           <button type="button" className={btnPrimary} onClick={goNext}>
@@ -785,7 +993,19 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
       {picker && (
         <DirectoryPicker
-          initialPath={picker === 'camtrap_dir' ? form.camtrap_dir || undefined : form.output_dir || undefined}
+          initialPath={
+            picker === 'camtrap_dir' ? form.camtrap_dir || undefined
+            : picker === 'df_csv' ? deepfauneForm.csvPath || undefined
+            : picker === 'df_imgdir' ? deepfauneForm.imageBaseDir || undefined
+            : undefined
+          }
+          showFiles={picker === 'df_csv'}
+          fileExt={picker === 'df_csv' ? '.csv' : ''}
+          title={
+            picker === 'df_csv' ? t('setup.deepfaune_csv_picker_title')
+            : picker === 'df_imgdir' ? t('setup.deepfaune_imgdir_picker_title')
+            : undefined
+          }
           onSelect={handleDirSelected}
           onClose={() => setPicker(null)}
         />

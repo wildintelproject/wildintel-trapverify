@@ -36,6 +36,9 @@ def rebuild_outputs() -> None:
 
     export_verified_camtrapdp(
         Path(config["camtrap_dir"]), p["camtrap_out"], p["decisions"], rejected,
+        classified_by_label=config.get("classified_by", "expert_review"),
+        extended_confirmation=bool(config.get("extended_confirmation", False)),
+        candidates=candidates,
     )
     build_occupancy_inputs(candidates, p["decisions"], config, p["occupancy_out"])
     build_review_effort(candidates, p["decisions"], config, p["occupancy_out"])
@@ -62,6 +65,7 @@ def run_setup(req: SetupRequest) -> dict:
         occasion_days=req.occasion_days,
         total_iterations=req.total_iterations,
         gap_seconds=req.gap_seconds,
+        include_burst_context=req.include_burst_context,
     )
 
     base_out = Path(req.output_dir) if req.output_dir else session_service.DEFAULT_OUTPUT_DIR

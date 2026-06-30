@@ -15,6 +15,47 @@ from urllib.parse import quote
 import pandas as pd
 
 
+# ─── DeepFaune label map ──────────────────────────────────────────────────────
+
+DEEPFAUNE_LABEL_MAP: dict[str, str] = {
+    "red deer": "Cervus elaphus",
+    "fallow deer": "Dama dama",
+    "wild boar": "Sus scrofa",
+    "fox": "Vulpes vulpes",
+    "badger": "Meles meles",
+    "dog": "Canis familiaris",
+    "cat": "Felis catus",
+    "genet": "Genetta genetta",
+    "lynx": "Lynx pardinus",
+    "mongoose": "Herpestes ichneumon",
+    "lagomorph": "Lepus granatensis",
+    "micromammal": "Rodentia",
+    "mustelid": "Mustelidae",
+    "equid": "Equus",
+    "cow": "Bos taurus",
+    "bird": "Aves",
+    "squirrel": "Sciurus vulgaris",
+    "nutria": "Myocastor coypus",
+    "wolf": "Canis lupus",
+    "bear": "Ursus arctos",
+    "chamois": "Rupicapra rupicapra",
+    "ibex": "Capra pyrenaica",
+    "roe deer": "Capreolus capreolus",
+    "mouflon": "Ovis gmelini musimon",
+    "rabbit": "Oryctolagus cuniculus",
+    "hare": "Lepus europaeus",
+    "marten": "Martes martes",
+    "polecat": "Mustela putorius",
+    "otter": "Lutra lutra",
+    "mink": "Neovison vison",
+    "raccoon": "Procyon lotor",
+    "sheep": "Ovis aries",
+    "goat": "Capra hircus",
+    "pig": "Sus domesticus",
+    "deer": "Cervidae",
+}
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def sanitize(name: str) -> str:
@@ -173,6 +214,92 @@ def deepfaune_to_camtrapdp(
     return out_dir
 
 
+def generic_csv_to_camtrapdp(
+    df: pd.DataFrame,
+    out_dir: Path,
+    col_filename: str,
+    col_datetime: str,
+    col_label: str,
+    col_score: Optional[str] = None,
+    col_site: Optional[str] = None,
+    species_map: Optional[dict] = None,
+    image_base_dir: Optional[Path] = None,
+) -> Path:
+    """Convert any classifier CSV to CamtrapDP using user-defined column mapping."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if species_map is None:
+        species_map = {}
+
+    nonanimal = {
+        "empty": "blank", "vide": "blank", "blank": "blank",
+        "human": "human", "humain": "human", "person": "human",
+        "undefined": "unclassified", "unknown": "unclassified",
+    }
+
+    def abs_path(p: str) -> str:
+        p = p.replace("\\", "/")
+        if image_base_dir and not (p.startswith("/") or (len(p) > 1 and p[1] == ":")):
+            p = str(image_base_dir / p)
+        return str(Path(p).resolve())
+
+    def site_from_path(p: str) -> str:
+        return re.sub(r"^R\d+-", "", Path(p).parent.name)
+
+    paths = df[col_filename].astype(str).apply(abs_path)
+    sites = (
+        df[col_site].astype(str)
+        if col_site and col_site in df.columns
+        else paths.apply(site_from_path)
+    )
+    labels = df[col_label].astype(str).str.lower().str.strip()
+    scores = (
+        pd.to_numeric(df[col_score], errors="coerce")
+        if col_score and col_score in df.columns
+        else pd.Series([None] * len(df))
+    )
+    timestamps = df[col_datetime].astype(str).apply(normalise_ts)
+
+    n = len(df)
+    media_ids = [f"m{i:07d}" for i in range(1, n + 1)]
+    obs_ids   = [f"o{i:07d}" for i in range(1, n + 1)]
+
+    sci_names, obs_types = [], []
+    for label in labels:
+        if label in nonanimal:
+            sci_names.append(None)
+            obs_types.append(nonanimal[label])
+        else:
+            sn = species_map.get(label, label)
+            obs_types.append("animal")
+            sci_names.append(sn if sn else label)
+
+    unique_sites = sorted(set(sites))
+    pd.DataFrame({
+        "deploymentID": unique_sites,
+        "locationID":   unique_sites,
+        "locationName": unique_sites,
+    }).to_csv(out_dir / "deployments.csv", index=False)
+    pd.DataFrame({
+        "mediaID":      media_ids,
+        "deploymentID": list(sites),
+        "timestamp":    list(timestamps),
+        "filePath":     list(paths),
+    }).to_csv(out_dir / "media.csv", index=False)
+    pd.DataFrame({
+        "observationID":             obs_ids,
+        "deploymentID":              list(sites),
+        "mediaID":                   media_ids,
+        "observationLevel":          "media",
+        "observationType":           obs_types,
+        "scientificName":            sci_names,
+        "classificationProbability": list(scores),
+        "classificationMethod":      "machine",
+        "classifiedBy":              "custom",
+        "classificationTimestamp":   None,
+    }).to_csv(out_dir / "observations.csv", index=False)
+    return out_dir
+
+
 # ─── Build candidate manifest ─────────────────────────────────────────────────
 
 def build_candidates(
@@ -185,6 +312,7 @@ def build_candidates(
     occasion_days: int,
     total_iterations: int,
     gap_seconds: int = 60,
+    include_burst_context: bool = False,
 ) -> pd.DataFrame:
     """Build the verification candidate manifest from CamtrapDP tables.
 
@@ -193,6 +321,12 @@ def build_candidates(
     groups frames into sequences (bursts separated by more than ``gap_seconds``),
     and ranks bursts by maximum classification probability within each
     site × occasion × species cell (rank 1 = highest confidence).
+
+    When ``include_burst_context`` is True, neighbouring frames from ``media.csv``
+    (same deployment, within ``gap_seconds`` of each burst boundary) are appended
+    as context-only rows (``is_context=True``). Context frames share the
+    ``site_occasion_key``, ``burst_id`` and ``rank`` of their parent burst but
+    are never used as the representative observation for decisions.
 
     Args:
         dep: Deployments DataFrame (from ``load_camtrapdp``).
@@ -205,13 +339,15 @@ def build_candidates(
         total_iterations: Maximum number of bursts to keep per cell (caps rank).
         gap_seconds: Maximum gap in seconds between frames of the same burst.
             Defaults to 60.
+        include_burst_context: If True, adds neighbouring frames around each burst
+            as context (``is_context=True``). Defaults to False.
 
     Returns:
         DataFrame with one row per candidate frame, including columns
         ``site_occasion_key``, ``rank``, ``burst_id``, ``burst_seq``,
         ``observationID``, ``mediaID``, ``filePath``, ``classificationProbability``,
         ``scientificName``, ``siteID``, ``occasion``, ``species_safe``,
-        ``ts`` and ``timestamp_display``.
+        ``ts``, ``timestamp_display`` and ``is_context``.
         Returns an empty DataFrame if no candidates match the filters.
     """
     site_col = detect_site_col(dep)
@@ -313,12 +449,61 @@ def build_candidates(
 
     candidates = joined[joined["rank"] <= total_iterations].copy()
     candidates["timestamp_display"] = candidates["ts"].dt.strftime("%Y-%m-%d %H:%M")
+    candidates["is_context"] = False
+
+    if include_burst_context and not candidates.empty:
+        candidate_media_ids = set(candidates["mediaID"].astype(str))
+        context_rows: list[dict] = []
+
+        for (key, burst_id_val), burst in candidates.groupby(
+            ["site_occasion_key", "burst_id"], sort=False
+        ):
+            dep_id = str(burst["deploymentID"].iloc[0])
+            t0 = burst["ts"].min() - pd.Timedelta(seconds=gap_seconds)
+            t1 = burst["ts"].max() + pd.Timedelta(seconds=gap_seconds)
+
+            neighbors = med[
+                (med["deploymentID"].astype(str) == dep_id)
+                & med["ts"].notna()
+                & (med["ts"] >= t0)
+                & (med["ts"] <= t1)
+                & (~med["mediaID"].astype(str).isin(candidate_media_ids))
+            ]
+
+            for _, row in neighbors.iterrows():
+                ts_val: pd.Timestamp = row["ts"]
+                context_rows.append({
+                    "site_occasion_key":         key,
+                    "rank":                      int(burst["rank"].iloc[0]),
+                    "burst_id":                  int(burst_id_val),
+                    "burst_seq":                 None,
+                    "observationID":             f"ctx_{row['mediaID']}",
+                    "mediaID":                   str(row["mediaID"]),
+                    "filePath":                  str(row["filePath"]),
+                    "classificationProbability": None,
+                    "scientificName":            burst["scientificName"].iloc[0],
+                    "deploymentID":              dep_id,
+                    "siteID":                    str(burst["siteID"].iloc[0]),
+                    "occasion":                  int(burst["occasion"].iloc[0]),
+                    "species_safe":              burst["species_safe"].iloc[0],
+                    "ts":                        ts_val,
+                    "timestamp_display":         ts_val.strftime("%Y-%m-%d %H:%M") if pd.notna(ts_val) else "",
+                    "is_context":                True,
+                })
+
+        if context_rows:
+            ctx_df = pd.DataFrame(context_rows)
+            candidates = pd.concat([candidates, ctx_df], ignore_index=True)
+            candidates = candidates.sort_values(
+                ["site_occasion_key", "burst_id", "ts"]
+            ).reset_index(drop=True)
 
     return candidates[[
         "site_occasion_key", "rank", "burst_id", "burst_seq",
         "observationID", "mediaID", "filePath",
         "classificationProbability", "scientificName", "deploymentID",
         "siteID", "occasion", "species_safe", "ts", "timestamp_display",
+        "is_context",
     ]]
 
 
@@ -487,13 +672,20 @@ def get_events(
     total_seqs_by_key = all_sp.groupby("site_occasion_key")["rank"].max().to_dict()
 
     events = []
-    for key, group in sp_cands.sort_values(["burst_id", "burst_seq"]).groupby(
+    for key, group in sp_cands.sort_values(["burst_id", "ts"]).groupby(
         "site_occasion_key", sort=False
     ):
-        group = group.sort_values(["burst_id", "burst_seq"])
-        prob_col = pd.to_numeric(group["classificationProbability"], errors="coerce").fillna(0)
+        group = group.sort_values(["burst_id", "ts"])
+
+        # Context frames (is_context=True) are not used for repObsId / maxProb
+        is_ctx = group.get("is_context", pd.Series(False, index=group.index)).fillna(False)
+        decision_rows = group[~is_ctx]
+
+        prob_col = pd.to_numeric(
+            decision_rows["classificationProbability"], errors="coerce"
+        ).fillna(0)
         rep_idx = prob_col.idxmax()
-        rep_obs = group.loc[rep_idx, "observationID"]
+        rep_obs = decision_rows.loc[rep_idx, "observationID"]
         max_prob = float(prob_col.max())
 
         frames = []
@@ -504,23 +696,26 @@ def get_events(
                 if fp.startswith("http")
                 else f'/api/image/{row["mediaID"]}'
             )
+            row_is_ctx = bool(row.get("is_context", False))
+            row_prob = pd.to_numeric(row.get("classificationProbability"), errors="coerce")
             frames.append({
-                "obsId": row["observationID"],
-                "mediaId": str(row["mediaID"]),
-                "img": img_url,
-                "ts": row["timestamp_display"] if pd.notna(row.get("timestamp_display")) else "",
-                "prob": round(float(prob_col.loc[row.name]), 3),
+                "obsId":     row["observationID"],
+                "mediaId":   str(row["mediaID"]),
+                "img":       img_url,
+                "ts":        row["timestamp_display"] if pd.notna(row.get("timestamp_display")) else "",
+                "prob":      round(float(row_prob), 3) if pd.notna(row_prob) else None,
+                "isContext": row_is_ctx,
             })
 
         events.append({
-            "key": key,
-            "siteId": str(group["siteID"].iloc[0]),
-            "occasion": int(group["occasion"].iloc[0]),
-            "rank": int(group["rank"].iloc[0]),
+            "key":       key,
+            "siteId":    str(group["siteID"].iloc[0]),
+            "occasion":  int(group["occasion"].iloc[0]),
+            "rank":      int(group["rank"].iloc[0]),
             "totalSeqs": int(total_seqs_by_key.get(key, 1)),
-            "repObsId": rep_obs,
-            "maxProb": max_prob,
-            "frames": frames,
+            "repObsId":  rep_obs,
+            "maxProb":   max_prob,
+            "frames":    frames,
         })
 
     return events
@@ -553,13 +748,19 @@ def get_review_events(
     total_seqs_by_key = species_cands.groupby("site_occasion_key")["rank"].max().to_dict()
 
     events = []
-    for key, group in rank1.sort_values(["burst_id", "burst_seq"]).groupby(
+    for key, group in rank1.sort_values(["burst_id", "ts"]).groupby(
         "site_occasion_key", sort=False
     ):
-        group = group.sort_values(["burst_id", "burst_seq"])
-        prob_col = pd.to_numeric(group["classificationProbability"], errors="coerce").fillna(0)
+        group = group.sort_values(["burst_id", "ts"])
+
+        is_ctx = group.get("is_context", pd.Series(False, index=group.index)).fillna(False)
+        decision_rows = group[~is_ctx]
+
+        prob_col = pd.to_numeric(
+            decision_rows["classificationProbability"], errors="coerce"
+        ).fillna(0)
         rep_idx = prob_col.idxmax()
-        rep_obs = group.loc[rep_idx, "observationID"]
+        rep_obs = decision_rows.loc[rep_idx, "observationID"]
         max_prob = float(prob_col.max())
 
         frames = []
@@ -570,12 +771,15 @@ def get_review_events(
                 if fp.startswith("http")
                 else f'/api/image/{row["mediaID"]}'
             )
+            row_is_ctx = bool(row.get("is_context", False))
+            row_prob = pd.to_numeric(row.get("classificationProbability"), errors="coerce")
             frames.append({
-                "obsId": row["observationID"],
-                "mediaId": str(row["mediaID"]),
-                "img": img_url,
-                "ts": row["timestamp_display"] if pd.notna(row.get("timestamp_display")) else "",
-                "prob": round(float(prob_col.loc[row.name]), 3),
+                "obsId":     row["observationID"],
+                "mediaId":   str(row["mediaID"]),
+                "img":       img_url,
+                "ts":        row["timestamp_display"] if pd.notna(row.get("timestamp_display")) else "",
+                "prob":      round(float(row_prob), 3) if pd.notna(row_prob) else None,
+                "isContext": row_is_ctx,
             })
 
         events.append({
@@ -602,14 +806,18 @@ def export_verified_camtrapdp(
     decisions_dir: Path,
     rejected_media: set,
     classified_by_label: str = "expert_review",
+    extended_confirmation: bool = False,
+    candidates: Optional["pd.DataFrame"] = None,
 ) -> None:
     """Write ``camtrap_dp_verified/``, replicating R's ``update_metadata()`` + ``export_results()``.
 
     ``deployments.csv`` and ``media.csv`` are copied unchanged. In
-    ``observations.csv`` only the representative observation of each confirmed
+    ``observations.csv`` the representative observation of each confirmed
     sequence is updated: ``classificationMethod='human'``,
     ``classificationProbability=1.0``, ``classifiedBy``, and
-    ``classificationTimestamp`` (UTC). No ``verificationStatus`` column is added.
+    ``classificationTimestamp`` (UTC). When ``extended_confirmation=True`` all
+    observations that belong to the same burst as each confirmed representative
+    are updated too. No ``verificationStatus`` column is added.
 
     Args:
         camtrap_dir: Source CamtrapDP directory.
@@ -619,6 +827,11 @@ def export_verified_camtrapdp(
             for the export itself, kept for API symmetry).
         classified_by_label: Value written to ``classifiedBy`` on confirmed
             observations. Defaults to ``'expert_review'``.
+        extended_confirmation: When True, all observations in each confirmed
+            burst (not just the representative) are updated. Requires
+            ``candidates``.
+        candidates: Candidate manifest DataFrame (needed when
+            ``extended_confirmation=True``).
     """
     import shutil
     from datetime import datetime, timezone
@@ -641,6 +854,14 @@ def export_verified_camtrapdp(
             df = pd.read_csv(f, dtype=str)
             if "observationID" in df.columns:
                 confirmed_ids.update(df["observationID"].dropna().tolist())
+
+    # Modo extendido: expande al resto de observaciones del mismo burst
+    if extended_confirmation and candidates is not None and confirmed_ids:
+        real_cands = candidates[~candidates.get("is_context", pd.Series(False, index=candidates.index)).fillna(False)]
+        rep_rows = real_cands[real_cands["observationID"].isin(confirmed_ids)]
+        burst_keys = rep_rows[["site_occasion_key", "burst_id"]].drop_duplicates()
+        burst_mates = real_cands.merge(burst_keys, on=["site_occasion_key", "burst_id"])
+        confirmed_ids = set(burst_mates["observationID"].dropna().tolist())
 
     if confirmed_ids:
         now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")

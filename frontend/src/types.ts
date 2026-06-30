@@ -3,7 +3,8 @@ export interface Frame {
   mediaId: string
   img: string
   ts: string
-  prob: number
+  prob: number | null
+  isContext?: boolean
 }
 
 export interface DetectionEvent {
@@ -38,6 +39,9 @@ export interface WorkflowConfig {
   total_iterations: number
   gap_seconds: number
   min_score: number
+  include_burst_context: boolean
+  classified_by: string
+  extended_confirmation: boolean
 }
 
 export type Decision = 'confirmed' | 'rejected' | null

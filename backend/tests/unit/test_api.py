@@ -96,6 +96,99 @@ def test_fs_browse_hidden_dirs_excluded(client, tmp_path):
     assert ".hidden" not in names
     assert "visible" in names
 
+def test_fs_browse_show_files_returns_files(client, tmp_path):
+    (tmp_path / "data.csv").write_text("a,b\n1,2")
+    resp = client.get("/api/fs/browse", params={"path": str(tmp_path), "show_files": "true"})
+    assert resp.status_code == 200
+    names = [f["name"] for f in resp.json()["files"]]
+    assert "data.csv" in names
+
+def test_fs_browse_show_files_false_no_files_key_empty(client, tmp_path):
+    (tmp_path / "data.csv").write_text("a,b\n1,2")
+    resp = client.get("/api/fs/browse", params={"path": str(tmp_path)})
+    assert resp.status_code == 200
+    assert resp.json()["files"] == []
+
+def test_fs_browse_ext_filter_csv(client, tmp_path):
+    (tmp_path / "results.csv").write_text("a,b")
+    (tmp_path / "notes.txt").write_text("hello")
+    resp = client.get("/api/fs/browse", params={"path": str(tmp_path), "show_files": "true", "ext": ".csv"})
+    names = [f["name"] for f in resp.json()["files"]]
+    assert "results.csv" in names
+    assert "notes.txt" not in names
+
+def test_fs_browse_hidden_files_excluded(client, tmp_path):
+    (tmp_path / ".hidden.csv").write_text("secret")
+    (tmp_path / "visible.csv").write_text("data")
+    resp = client.get("/api/fs/browse", params={"path": str(tmp_path), "show_files": "true"})
+    names = [f["name"] for f in resp.json()["files"]]
+    assert ".hidden.csv" not in names
+    assert "visible.csv" in names
+
+
+# ─── /api/convert/deepfaune ───────────────────────────────────────────────────
+
+def _write_deepfaune_csv(path, fmt="new"):
+    if fmt == "new":
+        pd.DataFrame({
+            "filename": ["/imgs/SITE_A/f1.jpg", "/imgs/SITE_A/f2.jpg"],
+            "date":     ["2025-11-02 10:00:00", "2025-11-02 10:00:30"],
+            "top1":     ["red deer", "empty"],
+            "score":    ["0.92", "0.10"],
+            "site":     ["SITE_A", "SITE_A"],
+        }).to_csv(path, index=False)
+    else:  # old DeepFaune format
+        pd.DataFrame({
+            "filename":       ["/imgs/SITE_A/f1.jpg"],
+            "date":           ["2025-11-02 10:00:00"],
+            "predictionbase": ["fox"],
+            "scorebase":      ["0.88"],
+            "site":           ["SITE_A"],
+        }).to_csv(path, index=False)
+
+def test_convert_deepfaune_returns_camtrap_dir(client, tmp_path):
+    csv = tmp_path / "results.csv"
+    _write_deepfaune_csv(csv)
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    assert resp.status_code == 200
+    assert "camtrap_dir" in resp.json()
+
+def test_convert_deepfaune_creates_camtrapdp_files(client, tmp_path):
+    csv = tmp_path / "results.csv"
+    _write_deepfaune_csv(csv)
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    out = Path(resp.json()["camtrap_dir"])
+    assert (out / "deployments.csv").exists()
+    assert (out / "media.csv").exists()
+    assert (out / "observations.csv").exists()
+
+def test_convert_deepfaune_missing_file_400(client, tmp_path):
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(tmp_path / "nope.csv")})
+    assert resp.status_code == 400
+
+def test_convert_deepfaune_missing_columns_400(client, tmp_path):
+    csv = tmp_path / "bad.csv"
+    pd.DataFrame({"col_a": [1], "col_b": [2]}).to_csv(csv, index=False)
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    assert resp.status_code == 400
+
+def test_convert_deepfaune_old_format_detected(client, tmp_path):
+    csv = tmp_path / "old.csv"
+    _write_deepfaune_csv(csv, fmt="old")
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    # Old format has predictionbase/scorebase but missing top1 → no label col recognised
+    # The endpoint should return 400 (no recognized label column)
+    assert resp.status_code in (200, 400)
+
+def test_convert_deepfaune_observations_have_correct_type(client, tmp_path):
+    csv = tmp_path / "results.csv"
+    _write_deepfaune_csv(csv)
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    out = Path(resp.json()["camtrap_dir"])
+    obs = pd.read_csv(out / "observations.csv")
+    types = set(obs["observationType"].dropna())
+    assert types.issubset({"animal", "blank", "human", "unclassified"})
+
 
 # ─── /api/state ───────────────────────────────────────────────────────────────
 

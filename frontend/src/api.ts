@@ -107,6 +107,32 @@ export const api = {
       `/api/trapper/generate/${taskId}`,
     ),
 
+  convertDeepfaune: (csvPath: string, imageBaseDir: string | null, minScore: number) =>
+    post<{ camtrap_dir: string }>('/api/convert/deepfaune', {
+      csv_path: csvPath,
+      image_base_dir: imageBaseDir || null,
+      min_score: minScore,
+    }),
+
+  csvHeaders: (path: string) =>
+    req<{ columns: string[] }>(`/api/fs/csv-headers?path=${encodeURIComponent(path)}`),
+
+  csvLabels: (path: string, col: string) =>
+    req<{ labels: string[]; prefilled: Record<string, string> }>(
+      `/api/fs/csv-labels?path=${encodeURIComponent(path)}&col=${encodeURIComponent(col)}`,
+    ),
+
+  convertCsv: (body: {
+    csv_path: string
+    col_filename: string
+    col_datetime: string
+    col_label: string
+    col_score?: string | null
+    col_site?: string | null
+    species_map: Record<string, string>
+    image_base_dir?: string | null
+  }) => post<{ camtrap_dir: string }>('/api/convert/csv', body),
+
   openFolder: () =>
     req<{ ok: boolean; path: string }>('/api/open-folder', { method: 'POST' }),
 

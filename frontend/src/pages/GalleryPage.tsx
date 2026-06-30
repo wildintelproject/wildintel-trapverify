@@ -121,12 +121,14 @@ export default function GalleryPage() {
     ev.frames.map((fr) => ({
       src: fr.img,
       title: t('gallery.lb_title', { site: ev.siteId, occasion: ev.occasion }),
-      description: `${(fr.prob * 100).toFixed(0)}%  ·  ${fr.ts}`,
+      description: fr.prob != null
+        ? `${(fr.prob * 100).toFixed(0)}%  ·  ${fr.ts}`
+        : fr.ts,
       eventKey: ev.key,
       repObsId: ev.repObsId,
       siteId: ev.siteId,
       occasion: ev.occasion,
-      prob: fr.prob,
+      prob: fr.prob ?? 0,
       frameTs: fr.ts,
     }))
   )

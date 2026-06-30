@@ -25,7 +25,8 @@ export default function EventCard({
   eventIdx,
   readOnly = false,
 }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const imgError = i18n.language.startsWith('es') ? '/img-error-es.svg' : '/img-error-en.svg'
 
   const borderClass = decision === 'confirmed'
     ? 'border-2 border-emerald-500'
@@ -46,14 +47,30 @@ export default function EventCard({
           style={{ width: '100%', height: '100%' }}
         >
           {event.frames.map((frame, i) => (
-            <SwiperSlide key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <SwiperSlide key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
               <img
                 src={frame.img}
                 alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer' }}
+                style={{
+                  width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer',
+                  opacity: frame.isContext ? 0.6 : 1,
+                }}
                 onClick={() => onOpenLightbox(eventIdx, i)}
                 loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.onerror = null
+                  e.currentTarget.src = imgError
+                  e.currentTarget.style.objectFit = 'contain'
+                }}
               />
+              {frame.isContext && (
+                <span
+                  className="absolute top-1.5 left-1.5 bg-zinc-800/80 text-zinc-300 text-xs px-1.5 py-0.5 rounded"
+                  style={{ zIndex: 15, pointerEvents: 'none' }}
+                >
+                  {t('gallery.context_frame')}
+                </span>
+              )}
               <div
                 className="absolute bottom-0 left-0 right-0 flex justify-between px-2 py-1"
                 style={{
@@ -64,7 +81,9 @@ export default function EventCard({
                 }}
               >
                 <span>{frame.ts}</span>
-                <span className="bg-black/50 px-1.5 py-0.5 rounded text-xs">{frame.prob.toFixed(2)}</span>
+                {!frame.isContext && frame.prob != null && (
+                  <span className="bg-black/50 px-1.5 py-0.5 rounded text-xs">{frame.prob.toFixed(2)}</span>
+                )}
               </div>
             </SwiperSlide>
           ))}

@@ -104,6 +104,28 @@ def decisions_dir(tmp_path: Path, candidates: pd.DataFrame) -> Path:
 
 
 @pytest.fixture
+def camtrap_dir_with_context(camtrap_dir: Path) -> Path:
+    """Extend the minimal CamtrapDP fixture with one media-only entry.
+
+    m006 (DEP1, 2025-11-02 09:59:30) has no observation, so it is not a
+    candidate for Vulpes vulpes.  It falls within 60 s of burst-0
+    (m001 at 10:00:00, m002 at 10:00:30), so with include_burst_context=True
+    it should appear as a context frame.
+    """
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    extra = pd.DataFrame({
+        "mediaID":      ["m006"],
+        "deploymentID": ["DEP1"],
+        "timestamp":    ["2025-11-02 09:59:30"],
+        "filePath":     ["img/frame_ctx.jpg"],
+    })
+    pd.concat([med, extra], ignore_index=True).to_csv(
+        camtrap_dir / "media.csv", index=False
+    )
+    return camtrap_dir
+
+
+@pytest.fixture
 def session_config(camtrap_dir: Path, tmp_path: Path) -> dict:
     """Minimal session config dict compatible with build_occupancy_inputs."""
     return {
