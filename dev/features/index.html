@@ -746,6 +746,8 @@
 <h2 id="data-ingestion">Data ingestion</h2>
 <ul>
 <li><strong>CamtrapDP v1.0</strong> — loads any directory with <code>deployments.csv</code>, <code>media.csv</code>, and <code>observations.csv</code> produced by an AI classifier or citizen-science platform. No conversion required.</li>
+<li><strong>DeepFaune CSV importer</strong> — converts DeepFaune classification exports directly to CamtrapDP format; species labels are mapped automatically to scientific names via a built-in lookup table.</li>
+<li><strong>Generic CSV importer</strong> — accepts any classifier CSV with configurable column mapping (image path, datetime, species label, confidence score, site). An interactive species-name editor allows mapping custom labels to scientific names; non-animal labels (<code>empty</code>, <code>human</code>, <code>blank</code>, etc.) are handled automatically.</li>
 <li><strong>Flexible timestamp parsing</strong> — accepts ISO 8601 and EXIF-style (<code>YYYY:MM:DD HH:MM:SS</code>) timestamps transparently.</li>
 <li><strong>Automatic metadata detection</strong> — infers available species and the study date range directly from <code>observations.csv</code> on load.</li>
 <li><strong>Site resolution</strong> — uses <code>locationID</code> when present; falls back to <code>deploymentID</code>, so both survey designs are supported.</li>
@@ -764,8 +766,10 @@
 <li><strong>One card per cell</strong> — each site × period combination is shown as a single card; the expert makes one decision per card per round.</li>
 <li><strong>Frame navigation</strong> — arrows step through the individual frames of a sequence; the progress badge shows "Frame N / M".</li>
 <li><strong>Sequence counter</strong> — the badge "Sequence N / M" shows which ranked sequence is currently displayed and how many are available.</li>
+<li><strong>Burst context mode</strong> — when enabled, all frames of the physical burst are shown (not only those labelled as the target species), so the expert can see the animal entering and leaving the scene. Context frames are visually dimmed and do not affect the decision.</li>
 <li><strong>Lightbox</strong> — click any image to open it full-screen with:<ul>
 <li>Mouse-wheel zoom and drag-to-pan</li>
+<li>Brightness and contrast controls</li>
 <li>Tonal inversion (useful for night-vision / near-infrared images)</li>
 <li>Left / right arrows to move between periods without closing</li>
 </ul>
@@ -804,7 +808,7 @@
 </tr>
 <tr>
 <td><code>classifiedBy</code></td>
-<td><code>"expert_review"</code></td>
+<td>configurable (default <code>"expert_review"</code>)</td>
 </tr>
 <tr>
 <td><code>classificationTimestamp</code></td>
@@ -813,6 +817,10 @@
 </tbody>
 </table>
 </li>
+<li>
+<p><strong>Configurable <code>classifiedBy</code> label</strong> — the value written to <code>classifiedBy</code> can be set per session (e.g. <code>"expert_review"</code>, <code>"ornithologist_A"</code>).</p>
+</li>
+<li><strong>Extended confirmation</strong> — when enabled, all observations in the confirmed burst (not just the highest-confidence representative frame) are marked as human-verified in the output.</li>
 <li>
 <p><strong><code>occupancy_inputs/</code></strong> — ready-to-use files for single-species occupancy models:</p>
 <table>
@@ -828,11 +836,11 @@
 <td>Active days per site × period</td>
 </tr>
 <tr>
-<td><code>dethist_naive_&lt;sp&gt;.csv</code></td>
+<td><code>dethist_naive_{sp}.csv</code></td>
 <td>Detection history from the classifier (1 / 0 / NA)</td>
 </tr>
 <tr>
-<td><code>dethist_verified_&lt;sp&gt;.csv</code></td>
+<td><code>dethist_verified_{sp}.csv</code></td>
 <td>Detection history after human verification</td>
 </tr>
 <tr>
