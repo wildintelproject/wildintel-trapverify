@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 - Optional **Images directory** field in the CamtrapDP setup flow: when provided, relative `filePath` values in `media.csv` are resolved against this directory instead of the parent of the data directory.
 - **Download results** button on the Results page: generates a ZIP file of the full session directory (`wildintel-camtrap-verify-{session_id}.zip`) and triggers a browser download.
+- macOS DMG package (`camtrap-verify-X.Y.Z-macos-x86_64.dmg`) added to the release workflow; runs on Apple Silicon via Rosetta 2.
 - `CHANGELOG.md` with release history following the Keep a Changelog format.
 - Release notes section in the developer manual describing the full release process.
 

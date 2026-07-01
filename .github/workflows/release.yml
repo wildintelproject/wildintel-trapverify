@@ -175,9 +175,89 @@ jobs:
           name: windows-packages
           path: dist/*.exe
 
+  build-macos:
+    name: macOS package (.dmg)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Frontend ──────────────────────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      # ── Backend (PyInstaller) ─────────────────────────────────────────────────
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Write version file
+        run: echo '__version__ = "${{ steps.ver.outputs.version }}"' > backend/src/_version.py
+
+      - name: Build macOS executable
+        working-directory: backend
+        run: |
+          uv run pyinstaller src/app_entry.py \
+            --onefile \
+            --name camtrap-verify \
+            --copy-metadata camtrap-verify \
+            --add-data "src/camtrap_workflow.py:." \
+            --add-data "src/settings.py:." \
+            --add-data "../frontend/dist:static" \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import anyio._backends._asyncio \
+            --hidden-import pandas \
+            --hidden-import httpx \
+            --hidden-import platformdirs \
+            --hidden-import pydantic_settings \
+            --collect-submodules fastapi \
+            --collect-submodules starlette
+
+      # ── Stage artifacts ───────────────────────────────────────────────────────
+      - name: Build DMG
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          mkdir -p dist dmg_staging
+          cp backend/dist/camtrap-verify dmg_staging/camtrap-verify
+          hdiutil create \
+            -volname "CamTrap Verify ${VERSION}" \
+            -srcfolder dmg_staging \
+            -ov -format UDZO \
+            "dist/camtrap-verify-${VERSION}-macos-x86_64.dmg"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: dist/*.dmg
+
   release:
     name: Create GitHub Release
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/development'
     permissions:
@@ -211,6 +291,18 @@ jobs:
           git tag -f dev
           git push origin dev --force
 
+      - name: Build dev release notes
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/development'
+        run: |
+          {
+            echo "Development build — not for production use."
+            echo "Built from commit \`${{ github.sha }}\` on branch \`${{ github.ref_name }}\`."
+            echo ""
+            echo "---"
+            echo ""
+            awk '/^## Upcoming release/{found=1; next} found && /^## /{exit} found{print}' CHANGELOG.md
+          } > dev_release_notes.txt
+
       - name: Create dev pre-release
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/development'
         uses: softprops/action-gh-release@v2
@@ -220,6 +312,4 @@ jobs:
           prerelease: true
           make_latest: false
           files: release-assets/*
-          body: |
-            Development build — not for production use.
-            Built from commit ${{ github.sha }} on branch `${{ github.ref_name }}`.
+          body_path: dev_release_notes.txt
