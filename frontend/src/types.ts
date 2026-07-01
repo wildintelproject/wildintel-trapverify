@@ -31,6 +31,7 @@ export interface SpeciesStats {
 
 export interface WorkflowConfig {
   camtrap_dir: string
+  image_base_dir: string
   output_dir: string
   target_species: string[]
   study_start: string

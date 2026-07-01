@@ -10,6 +10,7 @@ interface Props { onSetup: () => void; ready: boolean }
 
 const DEFAULT: WorkflowConfig = {
   camtrap_dir: '',
+  image_base_dir: '',
   output_dir: '',
   target_species: [],
   study_start: '',
@@ -66,7 +67,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [deepfauneForm, setDeepfauneForm] = useState({ csvPath: '', imageBaseDir: '' })
   const [converting, setConverting] = useState(false)
   const [convertError, setConvertError] = useState<string | null>(null)
-  const [picker, setPicker] = useState<'camtrap_dir' | 'df_csv' | 'df_imgdir' | null>(null)
+  const [picker, setPicker] = useState<'camtrap_dir' | 'img_base_dir' | 'df_csv' | 'df_imgdir' | null>(null)
   const [inspecting, setInspecting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
@@ -117,6 +118,9 @@ export default function SetupPage({ onSetup, ready }: Props) {
         }
       } catch { /* usuario puede continuar manualmente */ }
       finally { setInspecting(false) }
+    } else if (picker === 'img_base_dir') {
+      set('image_base_dir', path)
+      setPicker(null)
     } else if (picker === 'df_csv') {
       setDeepfauneForm(f => ({ ...f, csvPath: path }))
       setPicker(null)
@@ -720,6 +724,26 @@ export default function SetupPage({ onSetup, ready }: Props) {
             </div>
           </div>
 
+          <div className="mb-6">
+            <label className={labelClass}>
+              {t('setup.label_image_base_dir')}{' '}
+              <span className="text-zinc-400 font-normal">{t('setup.label_output_optional')}</span>
+            </label>
+            <div className="flex">
+              <input
+                className={`${inputClass} rounded-r-none`}
+                placeholder={t('setup.placeholder_image_base_dir')}
+                value={form.image_base_dir}
+                onChange={(e) => set('image_base_dir', e.target.value)}
+              />
+              <button type="button" className={browseBtn}
+                onClick={() => setPicker('img_base_dir')}>
+                {t('setup.browse')}
+              </button>
+            </div>
+            <p className={hintClass}>{t('setup.hint_image_base_dir')}</p>
+          </div>
+
         </div>
       )}
 
@@ -1014,6 +1038,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         <DirectoryPicker
           initialPath={
             picker === 'camtrap_dir' ? form.camtrap_dir || undefined
+            : picker === 'img_base_dir' ? form.image_base_dir || undefined
             : picker === 'df_csv' ? deepfauneForm.csvPath || undefined
             : picker === 'df_imgdir' ? deepfauneForm.imageBaseDir || undefined
             : undefined
@@ -1021,7 +1046,8 @@ export default function SetupPage({ onSetup, ready }: Props) {
           showFiles={picker === 'df_csv'}
           fileExt={picker === 'df_csv' ? '.csv' : ''}
           title={
-            picker === 'df_csv' ? t('setup.deepfaune_csv_picker_title')
+            picker === 'img_base_dir' ? t('setup.img_base_dir_picker_title')
+            : picker === 'df_csv' ? t('setup.deepfaune_csv_picker_title')
             : picker === 'df_imgdir' ? t('setup.deepfaune_imgdir_picker_title')
             : undefined
           }

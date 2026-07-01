@@ -24,8 +24,8 @@ def serve_image(media_id: str) -> FileResponse:
     file_path = Path(str(row.iloc[0]["filePath"]))
     if not file_path.is_absolute():
         config = session_service.get_config()
-        # relative paths are stored relative to the camtrap_dir parent (package root)
-        file_path = (Path(config["camtrap_dir"]).parent / file_path).resolve()
+        base = Path(config["image_base_dir"]) if config.get("image_base_dir") else Path(config["camtrap_dir"]).parent
+        file_path = (base / file_path).resolve()
     if not file_path.exists():
         logger.warning("Image file missing on disk: %s", file_path)
         raise HTTPException(404, f"File not found: {file_path}")

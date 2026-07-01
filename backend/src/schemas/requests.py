@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class SetupRequest(BaseModel):
     camtrap_dir: str
+    image_base_dir: str = ""
     output_dir: str = ""
     target_species: list[str]
     study_start: str
