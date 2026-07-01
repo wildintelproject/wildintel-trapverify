@@ -250,6 +250,7 @@
     "copy": "Kopiuj",
     "copied": "✓ Skopiowano",
     "open_folder": "📂 Otwórz folder",
+    "download": "Pobierz wyniki",
     "output_hint": "Folder sesji zawiera dwa podkatalogi: <code>camtrap_dp_verified/</code> z oryginalnym CamtrapDP zmodyfikowanym — potwierdzone obserwacje mają <code>classificationMethod='human'</code>, <code>classificationProbability=1.0</code> i <code>classifiedBy='expert_review'</code>; oraz <code>occupancy_inputs/</code> z naiwną i zweryfikowaną historią wykryć według gatunku (<code>dethist_naive_*.csv</code>, <code>dethist_verified_*.csv</code>), macierzą operacji kamer, podsumowaniem weryfikacji i raportem wysiłku przeglądania.",
     "confirmed": "Potwierdzone wykrycie",
     "rejected": "Brak wykrycia (przejrzano)",

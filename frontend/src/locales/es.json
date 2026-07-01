@@ -250,6 +250,7 @@
     "copy": "Copiar",
     "copied": "✓ Copiado",
     "open_folder": "📂 Abrir carpeta",
+    "download": "Descargar resultados",
     "output_hint": "La carpeta de sesión contiene dos subdirectorios: <code>camtrap_dp_verified/</code> con el CamtrapDP original modificado — las observaciones confirmadas quedan con <code>classificationMethod='human'</code>, <code>classificationProbability=1.0</code> y <code>classifiedBy='expert_review'</code>; y <code>occupancy_inputs/</code> con los historiales de detección naive y verificado por especie (<code>dethist_naive_*.csv</code>, <code>dethist_verified_*.csv</code>), la matriz de operación de cámara, un resumen de verificación y el esfuerzo de revisión.",
     "confirmed": "Con detección confirmada",
     "rejected": "Sin detección (revisado)",

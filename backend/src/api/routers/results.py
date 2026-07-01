@@ -1,8 +1,11 @@
+import io
 import logging
 import subprocess
+import zipfile
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from occupancy_model import fit_naive_vs_verified
 from services import results_service, session_service
@@ -40,6 +43,28 @@ def get_occupancy() -> list[dict]:
     if not results:
         raise HTTPException(404, "No se encontraron historiales de detección. Ejecuta primero una sesión completa.")
     return results
+
+
+@router.get("/results/download")
+def download_results() -> StreamingResponse:
+    """Stream the session output directory as a ZIP file."""
+    sd = session_service.session_dir()
+    if sd is None:
+        raise HTTPException(400, "No hay sesión activa.")
+
+    zip_name = f"wildintel-camtrap-verify-{sd.name}"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sd.rglob("*"):
+            if f.is_file():
+                zf.write(f, f.relative_to(sd))
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}.zip"'},
+    )
 
 
 @router.post("/open-folder")

@@ -250,6 +250,7 @@
     "copy": "Kopieren",
     "copied": "✓ Kopiert",
     "open_folder": "📂 Ordner öffnen",
+    "download": "Ergebnisse herunterladen",
     "output_hint": "Der Sitzungsordner enthält zwei Unterverzeichnisse: <code>camtrap_dp_verified/</code> mit dem modifizierten Original-CamtrapDP — bestätigte Beobachtungen haben <code>classificationMethod='human'</code>, <code>classificationProbability=1.0</code> und <code>classifiedBy='expert_review'</code>; und <code>occupancy_inputs/</code> mit artenspezifischen naiven und verifizierten Detektionshistorien (<code>dethist_naive_*.csv</code>, <code>dethist_verified_*.csv</code>), einer Kameraoperationsmatrix, einer Verifizierungszusammenfassung und einem Überprüfungsaufwand-Bericht.",
     "confirmed": "Bestätigte Detektion",
     "rejected": "Keine Detektion (überprüft)",

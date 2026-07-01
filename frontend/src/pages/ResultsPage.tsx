@@ -32,6 +32,7 @@ export default function ResultsPage() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [opening, setOpening] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     api.getResults().then((r) => setResults(r as Results)).catch((e: Error) => setError(e.message))
@@ -41,6 +42,28 @@ export default function ResultsPage() {
     setOpening(true)
     try { await api.openFolder() } catch { /* ignora si no hay explorador */ }
     finally { setOpening(false) }
+  }
+
+  async function handleDownload() {
+    setDownloading(true)
+    try {
+      const res = await fetch('/api/results/download')
+      if (!res.ok) throw new Error(await res.text())
+      const blob = await res.blob()
+      const cd = res.headers.get('content-disposition') ?? ''
+      const match = cd.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : 'results.zip'
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Download failed', e)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   function handleCopy(text: string) {
@@ -138,14 +161,14 @@ export default function ResultsPage() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-semibold mb-0">{t('results.title')}</h2>
         <button
-          className="px-4 py-1.5 text-sm rounded transition-colors bg-zinc-700 text-white hover:bg-zinc-600 flex items-center gap-1.5"
-          onClick={() => navigate('/species')}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          {t('gallery.back')}
-        </button>
+            className="px-4 py-1.5 text-sm rounded transition-colors bg-zinc-700 text-white hover:bg-zinc-600 flex items-center gap-1.5"
+            onClick={() => navigate('/species')}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {t('gallery.back')}
+          </button>
       </div>
       <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm"
         dangerouslySetInnerHTML={{ __html: t('results.subtitle') }} />
@@ -178,6 +201,21 @@ export default function ResultsPage() {
           </div>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1"
             dangerouslySetInnerHTML={{ __html: t('results.output_hint') }} />
+          <div className="flex justify-center mt-4">
+            <button
+              className="px-5 py-2 text-sm rounded transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              onClick={handleDownload}
+              disabled={downloading}
+            >
+              {downloading
+                ? <div className="w-4 h-4 border border-blue-300 border-t-white rounded-full animate-spin" />
+                : <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M8 2v8m0 0L5 7m3 3l3-3M2 12h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+              }
+              {t('results.download')}
+            </button>
+          </div>
         </div>
       </div>
 
