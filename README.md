@@ -76,6 +76,8 @@ The browser will open at `http://localhost:5173`. See the [user manual](https://
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+To report a bug or request a new feature, please open an [issue](https://github.com/wildintelproject/wildintel-trapverify/issues).
+
 ## 📝 License
 
 This project is licensed under the GNU General Public License v3.0 or later - see the [LICENSE](LICENSE) file for details.
