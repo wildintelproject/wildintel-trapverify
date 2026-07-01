@@ -459,8 +459,10 @@ def build_candidates(
             ["site_occasion_key", "burst_id"], sort=False
         ):
             dep_id = str(burst["deploymentID"].iloc[0])
-            t0 = burst["ts"].min() - pd.Timedelta(seconds=gap_seconds)
-            t1 = burst["ts"].max() + pd.Timedelta(seconds=gap_seconds)
+            # Use the burst's own boundaries so only frames that fall within the
+            # detected event are included, not frames from adjacent visits.
+            t0 = burst["ts"].min()
+            t1 = burst["ts"].max()
 
             neighbors = med[
                 (med["deploymentID"].astype(str) == dep_id)

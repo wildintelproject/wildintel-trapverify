@@ -17,6 +17,7 @@ This document covers the project architecture, development setup, configuration,
 9. [Backend API Reference](#9-backend-api-reference)
 10. [Frontend Architecture](#10-frontend-architecture)
 11. [Contributing](#11-contributing)
+12. [Releasing a New Version](#12-releasing-a-new-version)
 
 ---
 
@@ -355,3 +356,70 @@ feat: add brightness control to lightbox
 fix: correct auto-advance index after decision
 docs: update configuration table
 ```
+
+---
+
+## 12. Releasing a New Version
+
+### 1. Update `CHANGELOG.md`
+
+Open `CHANGELOG.md` and move all entries from **Upcoming release** into a new versioned section:
+
+```markdown
+## [X.Y.Z](https://github.com/wildintelproject/wildintel-trapverify/compare/vX.Y.Z-1...vX.Y.Z) - YYYY-MM-DD
+
+### Added
+- ...
+
+### Changed
+- ...
+
+### Fixed
+- ...
+
+**Full Changelog:** [`vX.Y.Z-1...vX.Y.Z`](https://github.com/wildintelproject/wildintel-trapverify/compare/vX.Y.Z-1...vX.Y.Z)
+```
+
+Then restore the **Upcoming release** section as empty, ready for the next cycle:
+
+```markdown
+## Upcoming release
+
+### Added
+### Changed
+### Fixed
+```
+
+### 2. Commit the changelog
+
+```bash
+git add CHANGELOG.md
+git commit -m "chore: release vX.Y.Z"
+```
+
+### 3. Merge to `main`
+
+Make sure all changes intended for this release are merged into `main`:
+
+```bash
+git checkout main
+git merge development
+git push origin main
+```
+
+### 4. Tag and push
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+Pushing a `v*` tag triggers the `release.yml` workflow automatically. It will:
+
+- Build the Linux packages (`.deb`, `.rpm`, `.AppImage`) via Docker.
+- Build the Windows packages (portable `.exe` + Inno Setup installer) via PyInstaller.
+- Extract the release notes for `vX.Y.Z` from `CHANGELOG.md` and publish a GitHub Release with all artefacts attached.
+
+### 5. Update the GitHub Release notes for past releases *(first time only)*
+
+If you need to backfill release notes for releases published before the `CHANGELOG.md` workflow was set up, edit each release manually on GitHub and paste the corresponding section from `CHANGELOG.md`.

@@ -12,7 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Upcoming release
 
-Details about the upcoming release will be added here.
+### Added
+- Optional **Images directory** field in the CamtrapDP setup flow: when provided, relative `filePath` values in `media.csv` are resolved against this directory instead of the parent of the data directory.
+- `CHANGELOG.md` with release history following the Keep a Changelog format.
+- Release notes section in the developer manual describing the full release process.
+
+### Changed
+- **Show all event frames** (formerly *Show event context images*): reworked logic so that only frames captured between the first and last detection of the target species are included, preventing frames from adjacent animal visits from appearing in the carousel.
 
 ## Released 
 

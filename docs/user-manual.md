@@ -182,11 +182,12 @@ Select the folder on your machine that contains the CamtrapDP files (`deployment
 *Local directory selection. The Browse button opens a folder picker.*
 
 - **Data directory** — path to your CamtrapDP folder. Use the **📁 Browse** button or type the path manually.
+- **Images directory** *(optional)* — base directory used to resolve relative `filePath` values in `media.csv`. Leave empty to use the parent of the data directory (default behaviour).
 
 After selecting the folder, the application reads species and date ranges automatically. Click **Next →** to proceed.
 
 > **Image paths:** three formats are supported in the `filePath` column of `media.csv`:
-> - **Relative paths** — resolved relative to the CamtrapDP directory you selected.
+> - **Relative paths** — resolved relative to the **Images directory** if provided, otherwise relative to the parent of the CamtrapDP directory.
 > - **Absolute paths** — used as-is.
 > - **HTTP/HTTPS URLs** — fetched through the application's built-in proxy, so no CORS configuration is needed.
 
@@ -300,7 +301,7 @@ These control what is recorded in the output when an expert confirms a sequence.
 |---|---|---|
 | **Classified by** | `expert_review` | Value written to the `classifiedBy` field in the verified CamtrapDP for every confirmed observation. Change this to identify the reviewer (e.g. `ornithologist_A`). |
 | **Extended confirmation** | Off | When enabled, all observations in the confirmed burst — not just the highest-confidence frame — are marked as human-verified in the output. |
-| **Show event context images** | Off | When enabled, all frames of the physical burst are shown in the carousel, including those not labelled as the target species. Context frames are shown dimmed and do not affect the decision. |
+| **Show all event frames** | Off | When enabled, all frames from the same deployment captured between the first and last detection of the target species are shown in the carousel, even if they are not labelled as that species. This lets you see the full context of the animal's visit. Context frames appear dimmed and do not affect the decision. |
 
 Click **✓ Start verification** to process the data and begin the review.
 
@@ -365,7 +366,7 @@ Each **sampling period card** shows:
 - A carousel of the images in the current sequence, with left/right arrows to browse frames.
 - Two decision buttons: **✓ Confirmed** and **✗ Rejected**.
 
-If **Show event context images** is enabled, frames from the same burst that are not labelled as the target species appear dimmed in the carousel. They provide visual context (e.g. the animal entering the scene) but are not counted in the decision.
+If **Show all event frames** is enabled, all frames from the same deployment captured between the first and last detection of the target species are shown in the carousel, including those not labelled as that species. These frames appear dimmed and do not affect the decision.
 
 Click any image to open the [Fullscreen Lightbox](#fullscreen-lightbox).
 

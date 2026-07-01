@@ -30,7 +30,7 @@ Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP pac
 **Review workflow**
 - Iterative review by rounds: for each site × sampling-period × species cell, the highest-confidence detection sequence is always shown first
 - Confirming a sequence closes the cell; rejecting it queues the next-best sequence in the following round, minimising total expert effort
-- Optional burst-context mode: shows all frames of the physical burst (not only those labelled as the target species) so the expert can see the animal entering and leaving
+- Optional full-event mode: shows all frames from the same deployment captured between the first and last detection of the target species, including frames not labelled as that species
 - Optional extended confirmation: marks all observations in the confirmed burst — not just the highest-confidence frame — as human-verified in the output
 
 **Image viewer**
