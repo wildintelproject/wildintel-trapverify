@@ -1411,11 +1411,12 @@
 <em>Local directory selection. The Browse button opens a folder picker.</em></p>
 <ul>
 <li><strong>Data directory</strong> — path to your CamtrapDP folder. Use the <strong>📁 Browse</strong> button or type the path manually.</li>
+<li><strong>Images directory</strong> <em>(optional)</em> — base directory used to resolve relative <code>filePath</code> values in <code>media.csv</code>. Leave empty to use the parent of the data directory (default behaviour).</li>
 </ul>
 <p>After selecting the folder, the application reads species and date ranges automatically. Click <strong>Next →</strong> to proceed.</p>
 <blockquote>
 <p><strong>Image paths:</strong> three formats are supported in the <code>filePath</code> column of <code>media.csv</code>:
-- <strong>Relative paths</strong> — resolved relative to the CamtrapDP directory you selected.
+- <strong>Relative paths</strong> — resolved relative to the <strong>Images directory</strong> if provided, otherwise relative to the parent of the CamtrapDP directory.
 - <strong>Absolute paths</strong> — used as-is.
 - <strong>HTTP/HTTPS URLs</strong> — fetched through the application's built-in proxy, so no CORS configuration is needed.</p>
 </blockquote>
@@ -1564,9 +1565,9 @@
 <td>When enabled, all observations in the confirmed burst — not just the highest-confidence frame — are marked as human-verified in the output.</td>
 </tr>
 <tr>
-<td><strong>Show event context images</strong></td>
+<td><strong>Show all event frames</strong></td>
 <td>Off</td>
-<td>When enabled, all frames of the physical burst are shown in the carousel, including those not labelled as the target species. Context frames are shown dimmed and do not affect the decision.</td>
+<td>When enabled, all frames from the same deployment captured between the first and last detection of the target species are shown in the carousel, even if they are not labelled as that species. This lets you see the full context of the animal's visit. Context frames appear dimmed and do not affect the decision.</td>
 </tr>
 </tbody>
 </table>
@@ -1617,7 +1618,7 @@
 <li>A carousel of the images in the current sequence, with left/right arrows to browse frames.</li>
 <li>Two decision buttons: <strong>✓ Confirmed</strong> and <strong>✗ Rejected</strong>.</li>
 </ul>
-<p>If <strong>Show event context images</strong> is enabled, frames from the same burst that are not labelled as the target species appear dimmed in the carousel. They provide visual context (e.g. the animal entering the scene) but are not counted in the decision.</p>
+<p>If <strong>Show all event frames</strong> is enabled, all frames from the same deployment captured between the first and last detection of the target species are shown in the carousel, including those not labelled as that species. These frames appear dimmed and do not affect the decision.</p>
 <p>Click any image to open the <a href="#fullscreen-lightbox">Fullscreen Lightbox</a>.</p>
 <h3 id="fullscreen-lightbox">Fullscreen Lightbox</h3>
 <p>Click any image thumbnail to open the lightbox for a closer look.</p>
