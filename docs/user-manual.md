@@ -124,6 +124,23 @@ Two options are available:
 
 Once launched, the application opens automatically in your default browser.
 
+### macOS
+
+Download `camtrap-verify-X.Y.Z-macos-x86_64.dmg` from the [releases page](https://github.com/wildintelproject/wildintel-trapverify/releases), open it and drag `camtrap-verify` to wherever you want to keep it (e.g. `/Applications`). Then run it from the terminal:
+
+```bash
+/Applications/camtrap-verify
+```
+
+> **Gatekeeper warning:** Because the binary is not signed with an Apple Developer certificate, macOS may show a *"cannot be opened because the developer cannot be verified"* message. To allow it:
+>
+> 1. Open **System Settings → Privacy & Security**.
+> 2. Scroll down to the *Security* section and click **Open Anyway** next to the camtrap-verify entry.
+>
+> Alternatively, from the terminal: `xattr -d com.apple.quarantine /Applications/camtrap-verify`
+
+The build targets Intel (x86_64) and runs on Apple Silicon Macs via Rosetta 2.
+
 ---
 
 ## 3. Getting Started

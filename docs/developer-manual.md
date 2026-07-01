@@ -263,8 +263,9 @@ Triggers on `v*` tags or manual dispatch.
 
 | Job | Runner | Output |
 |---|---|---|
-| `build-linux` | `ubuntu-latest` | `.deb` and `.rpm` via Docker |
+| `build-linux` | `ubuntu-latest` | `.deb`, `.rpm`, `.AppImage` via Docker |
 | `build-windows` | `windows-latest` | portable `.exe` + Inno Setup installer |
+| `build-macos` | `macos-13` | `.dmg` (Intel x86_64, runs on Apple Silicon via Rosetta 2) |
 | `release` | `ubuntu-latest` | GitHub Release with all artefacts |
 
 To publish a release:

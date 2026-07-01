@@ -1,5 +1,8 @@
 site_name: CamTrap Verify — Documentation
 site_description: User and developer documentation for CamTrap Verify
+site_url: https://wildintelproject.github.io/wildintel-trapverify/
+repo_url: https://github.com/wildintelproject/wildintel-trapverify
+repo_name: wildintelproject/wildintel-trapverify
 copyright: Copyright &copy; 2026 <a href="https://wildintel.eu/">WildINTEL</a>
 
 docs_dir: docs
