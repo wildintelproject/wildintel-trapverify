@@ -1,5 +1,7 @@
 """Integration tests for the FastAPI endpoints in main.py."""
+import io
 import json
+import zipfile
 from datetime import date
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -576,3 +578,84 @@ def test_load_session_nonexistent_dir(client):
 def test_load_session_invalid_dir(client, tmp_path):
     resp = client.post("/api/session/load", json={"session_dir": str(tmp_path)})
     assert resp.status_code == 400
+
+
+# ─── /api/results/download ────────────────────────────────────────────────────
+
+def test_download_no_session(client):
+    resp = client.get("/api/results/download")
+    assert resp.status_code == 400
+
+def test_download_returns_zip(client, setup_session):
+    resp = client.get("/api/results/download")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/zip"
+
+def test_download_content_disposition_has_prefix(client, setup_session):
+    resp = client.get("/api/results/download")
+    cd = resp.headers.get("content-disposition", "")
+    assert "wildintel-camtrap-verify-" in cd
+
+def test_download_zip_contains_config(client, setup_session):
+    resp = client.get("/api/results/download")
+    assert resp.status_code == 200
+    zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    names = zf.namelist()
+    assert any(n == "config.json" or n.endswith("/config.json") for n in names)
+
+def test_download_zip_contains_candidates(client, setup_session):
+    resp = client.get("/api/results/download")
+    zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    names = zf.namelist()
+    assert any("candidate_manifest.csv" in n for n in names)
+
+
+# ─── /api/image (image_base_dir) ─────────────────────────────────────────────
+
+@pytest.fixture
+def setup_session_with_image_base_dir(client, camtrap_dir, tmp_path):
+    """Setup session where media.csv uses relative paths and image_base_dir is set."""
+    imgs = tmp_path / "images"
+    img_sub = imgs / "img"
+    img_sub.mkdir(parents=True)
+    # Write a tiny placeholder image matching the fixture's relative filePath (img/frameN.jpg)
+    for i in range(5):
+        (img_sub / f"frame{i}.jpg").write_bytes(b"\xff\xd8\xff\xe0")  # JPEG magic bytes
+
+    out = tmp_path / "out"
+    resp = client.post("/api/setup", json={
+        "camtrap_dir":      str(camtrap_dir),
+        "output_dir":       str(out),
+        "target_species":   ["Vulpes vulpes"],
+        "study_start":      "2025-11-01",
+        "study_end":        "2025-11-10",
+        "occasion_days":    5,
+        "total_iterations": 100_000,
+        "gap_seconds":      60,
+        "min_score":        0.5,
+        "image_base_dir":   str(imgs),
+    })
+    assert resp.status_code == 200
+    return imgs
+
+def test_setup_stores_image_base_dir_in_config(client, setup_session_with_image_base_dir):
+    state = client.get("/api/state").json()
+    assert state["config"]["image_base_dir"] != ""
+
+def test_serve_image_uses_image_base_dir(client, setup_session_with_image_base_dir):
+    """When image_base_dir is set, serve_image resolves the relative filePath against it."""
+    resp = client.get("/api/image/m001")
+    assert resp.status_code == 200
+
+def test_serve_image_fallback_to_camtrap_parent(client, setup_session, camtrap_dir):
+    """When image_base_dir is empty, relative paths resolve against camtrap_dir.parent."""
+    imgs = camtrap_dir.parent / "img"
+    imgs.mkdir(exist_ok=True)
+    (imgs / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    resp = client.get("/api/image/m001")
+    assert resp.status_code == 200
+
+def test_serve_image_unknown_media_id_returns_404(client, setup_session):
+    """Unknown mediaID returns 404."""
+    resp = client.get("/api/image/nonexistent_id")
+    assert resp.status_code == 404

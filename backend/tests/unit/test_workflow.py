@@ -789,3 +789,33 @@ def test_get_events_max_prob_from_non_context(camtrap_dir_with_context, tmp_path
     events = get_events(cands, decisions, set(), "Vulpes_vulpes", iteration=1)
     for ev in events:
         assert ev["maxProb"] > 0
+
+
+# ─── build_candidates: burst context boundary ─────────────────────────────────
+
+def test_burst_context_excludes_frames_outside_burst(camtrap_dir: Path):
+    """Frames outside [t_min, t_max] of the burst must NOT appear as context."""
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    # Add a frame 30 s BEFORE the burst's first detection (10:00:00)
+    extra = pd.DataFrame({
+        "mediaID":      ["m_before"],
+        "deploymentID": ["DEP1"],
+        "timestamp":    ["2025-11-02 09:59:30"],
+        "filePath":     ["img/before.jpg"],
+    })
+    pd.concat([med, extra], ignore_index=True).to_csv(
+        camtrap_dir / "media.csv", index=False
+    )
+    dep, med2, obs = load_camtrapdp(camtrap_dir)
+    cands = build_candidates(
+        dep, med2, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    ctx_ids = set(cands[cands["is_context"] == True]["mediaID"])  # noqa: E712
+    assert "m_before" not in ctx_ids

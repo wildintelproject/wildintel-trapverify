@@ -107,16 +107,17 @@ def decisions_dir(tmp_path: Path, candidates: pd.DataFrame) -> Path:
 def camtrap_dir_with_context(camtrap_dir: Path) -> Path:
     """Extend the minimal CamtrapDP fixture with one media-only entry.
 
-    m006 (DEP1, 2025-11-02 09:59:30) has no observation, so it is not a
-    candidate for Vulpes vulpes.  It falls within 60 s of burst-0
-    (m001 at 10:00:00, m002 at 10:00:30), so with include_burst_context=True
-    it should appear as a context frame.
+    m006 (DEP1, 2025-11-02 10:00:15) has no observation, so it is not a
+    candidate for Vulpes vulpes.  It falls between the two detections of
+    burst-0 (m001 at 10:00:00, m002 at 10:00:30), so with
+    include_burst_context=True it should appear as a context frame showing
+    all frames of the event regardless of species label.
     """
     med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
     extra = pd.DataFrame({
         "mediaID":      ["m006"],
         "deploymentID": ["DEP1"],
-        "timestamp":    ["2025-11-02 09:59:30"],
+        "timestamp":    ["2025-11-02 10:00:15"],
         "filePath":     ["img/frame_ctx.jpg"],
     })
     pd.concat([med, extra], ignore_index=True).to_csv(
