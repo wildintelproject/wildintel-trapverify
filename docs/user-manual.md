@@ -126,7 +126,7 @@ Once launched, the application opens automatically in your default browser.
 
 ### macOS
 
-Download `camtrap-verify-X.Y.Z-macos-x86_64.dmg` from the [releases page](https://github.com/wildintelproject/wildintel-trapverify/releases), open it and drag `camtrap-verify` to wherever you want to keep it (e.g. `/Applications`). Then run it from the terminal:
+Download `camtrap-verify-X.Y.Z-macos-arm64.dmg` from the [releases page](https://github.com/wildintelproject/wildintel-trapverify/releases), open it and drag `camtrap-verify` to wherever you want to keep it (e.g. `/Applications`). Then run it from the terminal:
 
 ```bash
 /Applications/camtrap-verify
