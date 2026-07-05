@@ -1,17 +1,26 @@
-import io
 import logging
 import subprocess
+import sys
+import tempfile
 import zipfile
+from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from occupancy_model import fit_naive_vs_verified
 from services import results_service, session_service
 
 router = APIRouter(prefix="/api", tags=["results"])
 logger = logging.getLogger(__name__)
+
+_OPEN_FOLDER_CMD = {
+    "linux": "xdg-open",
+    "darwin": "open",
+    "win32": "explorer",
+}
 
 
 @router.get("/results")
@@ -46,36 +55,51 @@ def get_occupancy() -> list[dict]:
 
 
 @router.get("/results/download")
-def download_results() -> StreamingResponse:
-    """Stream the session output directory as a ZIP file."""
+def download_results() -> FileResponse:
+    """Stream the session output directory as a ZIP file.
+
+    The archive is built on disk (not in memory) so RAM use stays bounded
+    regardless of dataset size; the temp file is deleted once the response
+    has been fully sent.
+    """
     sd = session_service.session_dir()
     if sd is None:
         raise HTTPException(400, "No hay sesión activa.")
 
     zip_name = f"wildintel-camtrap-verify-{sd.name}"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in sd.rglob("*"):
-            if f.is_file():
-                zf.write(f, f.relative_to(sd))
-    buf.seek(0)
+    tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in sd.rglob("*"):
+                if f.is_file():
+                    zf.write(f, f.relative_to(sd))
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
-    return StreamingResponse(
-        buf,
+    return FileResponse(
+        tmp_path,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{zip_name}.zip"'},
+        filename=f"{zip_name}.zip",
+        background=BackgroundTask(tmp_path.unlink, missing_ok=True),
     )
 
 
 @router.post("/open-folder")
 def open_folder() -> dict:
     """Open the session directory in the OS file manager."""
-    folder = str(session_service.session_dir())
+    sd = session_service.session_dir()
+    if sd is None:
+        raise HTTPException(400, "No hay sesión activa.")
+
+    folder = str(sd)
     logger.info("Opening session folder: %s", folder)
-    for cmd in (["xdg-open"], ["open"], ["explorer"]):
-        try:
-            subprocess.Popen(cmd + [folder])
-            break
-        except FileNotFoundError:
-            continue
+    cmd = _OPEN_FOLDER_CMD.get(sys.platform, "xdg-open")
+    try:
+        subprocess.Popen([cmd, folder])
+    except FileNotFoundError:
+        logger.warning("No se encontró el gestor de archivos '%s' para abrir %s", cmd, folder)
+        return {"ok": False, "path": folder}
     return {"ok": True, "path": folder}

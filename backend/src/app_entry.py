@@ -7,9 +7,9 @@ from pathlib import Path
 
 import uvicorn
 from main import app  # import directo: funciona con módulos congelados por PyInstaller
+from settings import settings
 
-START_PORT = 8765
-MAX_PORT = 8864
+PORT_SCAN_SPAN = 100  # nº de puertos a probar a partir de settings.port si está ocupado
 
 
 def _find_free_port(start: int, end: int) -> int:
@@ -30,7 +30,7 @@ def _open_browser(port: int) -> None:
 
 
 if __name__ == "__main__":
-    port = _find_free_port(START_PORT, MAX_PORT)
+    port = _find_free_port(settings.port, settings.port + PORT_SCAN_SPAN - 1)
     print(f"Directorio de trabajo: {Path.cwd()}", flush=True)
     print(f"Servidor en http://127.0.0.1:{port}", flush=True)
     threading.Thread(target=_open_browser, args=(port,), daemon=True).start()

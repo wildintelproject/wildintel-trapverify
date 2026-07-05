@@ -609,6 +609,39 @@ def test_download_zip_contains_candidates(client, setup_session):
     names = zf.namelist()
     assert any("candidate_manifest.csv" in n for n in names)
 
+def test_download_cleans_up_temp_file(client, setup_session):
+    """The zip is staged on disk (not in memory) and removed after the response is sent."""
+    import tempfile
+    before = set(Path(tempfile.gettempdir()).glob("*.zip"))
+    resp = client.get("/api/results/download")
+    assert resp.status_code == 200
+    after = set(Path(tempfile.gettempdir()).glob("*.zip"))
+    assert after == before
+
+
+# ─── /api/open-folder ─────────────────────────────────────────────────────────
+
+def test_open_folder_no_session(client):
+    resp = client.post("/api/open-folder")
+    assert resp.status_code == 400
+
+def test_open_folder_uses_platform_command(client, setup_session):
+    import api.routers.results as results_router
+    with patch.object(results_router.sys, "platform", "darwin"), \
+         patch.object(results_router.subprocess, "Popen") as mock_popen:
+        resp = client.post("/api/open-folder")
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    args, _ = mock_popen.call_args
+    assert args[0][0] == "open"
+
+def test_open_folder_missing_binary_returns_ok_false(client, setup_session):
+    import api.routers.results as results_router
+    with patch.object(results_router.subprocess, "Popen", side_effect=FileNotFoundError):
+        resp = client.post("/api/open-folder")
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is False
+
 
 # ─── /api/image (image_base_dir) ─────────────────────────────────────────────
 
