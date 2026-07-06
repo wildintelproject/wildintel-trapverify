@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 - **Show all event frames** (formerly *Show event context images*): reworked logic so that only frames captured between the first and last detection of the target species are included, preventing frames from adjacent animal visits from appearing in the carousel.
+- **Gallery review cards** now open on the sequence frame with the highest detection confidence instead of the chronologically first one; the zoom button opens the lightbox at that same frame instead of always the first.
 
 ## Released 
 

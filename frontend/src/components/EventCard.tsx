@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, Pagination } from 'swiper/modules'
 import { useTranslation } from 'react-i18next'
@@ -5,6 +6,14 @@ import 'swiper/css'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 import type { DetectionEvent } from '../types'
+
+function bestFrameIndex(frames: DetectionEvent['frames']): number {
+  let best = 0
+  for (let i = 1; i < frames.length; i++) {
+    if ((frames[i].prob ?? -1) > (frames[best].prob ?? -1)) best = i
+  }
+  return best
+}
 
 interface Props {
   event: DetectionEvent
@@ -27,6 +36,7 @@ export default function EventCard({
 }: Props) {
   const { t, i18n } = useTranslation()
   const imgError = i18n.language.startsWith('es') ? '/img-error-es.svg' : '/img-error-en.svg'
+  const [activeIndex, setActiveIndex] = useState(() => bestFrameIndex(event.frames))
 
   const borderClass = decision === 'confirmed'
     ? 'border-2 border-emerald-500'
@@ -44,6 +54,8 @@ export default function EventCard({
           navigation={event.frames.length > 1}
           pagination={event.frames.length > 1 ? { clickable: true } : false}
           slidesPerView={1}
+          initialSlide={activeIndex}
+          onSlideChange={(swiper) => setActiveIndex(swiper.activeIndex)}
           style={{ width: '100%', height: '100%' }}
         >
           {event.frames.map((frame, i) => (
@@ -101,7 +113,7 @@ export default function EventCard({
           className="absolute top-0 left-0 m-1 bg-black/50 text-white text-sm px-1.5 py-0.5 rounded opacity-70 hover:opacity-100 transition-opacity"
           style={{ zIndex: 20 }}
           title={t('gallery.zoom')}
-          onClick={() => onOpenLightbox(eventIdx, 0)}
+          onClick={() => onOpenLightbox(eventIdx, activeIndex)}
         >
           ⊕
         </button>

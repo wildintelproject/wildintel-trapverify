@@ -88,6 +88,29 @@ describe('EventCard', () => {
     expect(screen.getByRole('button', { name: /no confirmada/i })).toBeDisabled()
   })
 
+  it('opens the lightbox at the highest-confidence frame via the zoom button', async () => {
+    const onOpenLightbox = vi.fn()
+    render(
+      <EventCard
+        event={makeEvent({
+          frames: [
+            { obsId: 'obs-1', mediaId: 'media-1', img: '/img1.jpg', ts: '10:00', prob: 0.4 },
+            { obsId: 'obs-2', mediaId: 'media-2', img: '/img2.jpg', ts: '10:01', prob: 0.95 },
+            { obsId: 'obs-3', mediaId: 'media-3', img: '/img3.jpg', ts: '10:02', prob: 0.7 },
+          ],
+        })}
+        decision={null}
+        needsDecision={false}
+        onDecide={vi.fn()}
+        onOpenLightbox={onOpenLightbox}
+        eventIdx={2}
+      />,
+    )
+
+    await userEvent.click(screen.getByTitle('Abrir en pantalla completa'))
+    expect(onOpenLightbox).toHaveBeenCalledWith(2, 1)
+  })
+
   it('shows the context-frame badge only on context frames', () => {
     render(
       <EventCard
