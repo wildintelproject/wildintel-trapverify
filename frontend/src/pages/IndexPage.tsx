@@ -104,24 +104,18 @@ export default function IndexPage() {
         </div>
       </div>
 
-      <p className="text-zinc-500 dark:text-zinc-400 mb-2 text-sm">{t('index.subtitle')}</p>
       {sessionInfo && (
-        <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 text-sm mb-3">
-          <svg className="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M7.5 1C3.91 1 1 3.91 1 7.5S3.91 14 7.5 14 14 11.09 14 7.5 11.09 1 7.5 1zm.75 10.5h-1.5V7h1.5v4.5zm0-6h-1.5V4h1.5v1.5z" fill="currentColor"/>
-          </svg>
-          <span className="flex flex-wrap gap-x-3 gap-y-0.5">
-            <span>{t('index.date_range', { start: sessionInfo.start, end: sessionInfo.end })}</span>
-            <span className="text-blue-400 dark:text-blue-600">·</span>
-            <span>{t('index.param_occasion', { n: sessionInfo.occasion_days })}</span>
-            <span className="text-blue-400 dark:text-blue-600">·</span>
-            <span>{t('index.param_gap', { n: sessionInfo.gap_seconds })}</span>
-            <span className="text-blue-400 dark:text-blue-600">·</span>
-            <span>{t('index.param_score', { n: sessionInfo.min_score })}</span>
-          </span>
-        </div>
+        <p
+          className="text-zinc-500 dark:text-zinc-400 mb-2 text-sm"
+          dangerouslySetInnerHTML={{
+            __html: t('index.subtitle', {
+              start: sessionInfo.start,
+              end: sessionInfo.end,
+              days: sessionInfo.occasion_days,
+            }),
+          }}
+        />
       )}
-
       <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full mb-4" style={{ height: 8 }}>
         <div
           className="bg-emerald-500 rounded-full h-full transition-all"

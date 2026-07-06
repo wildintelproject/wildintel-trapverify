@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import YARLightbox, { type SlideImage } from 'yet-another-react-lightbox'
+import YARLightbox, { type ControllerRef, type SlideImage } from 'yet-another-react-lightbox'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import Captions from 'yet-another-react-lightbox/plugins/captions'
 import 'yet-another-react-lightbox/styles.css'
@@ -30,7 +30,8 @@ export default function GalleryPage() {
   const { t } = useTranslation()
 
   const [events, setEvents] = useState<DetectionEvent[]>([])
-  const [spStats, setSpStats] = useState<{ n_total_combos: number; n_confirmed_combos: number; n_resolved: number } | null>(null)
+  const [spStats, setSpStats] = useState<{ species_name: string; n_total_combos: number; n_confirmed_combos: number; n_resolved: number } | null>(null)
+  const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; min_score: number } | null>(null)
   const [iteration, setIteration] = useState(1)
   const [totalIterations, setTotalIterations] = useState(1)
   const [decisions, setDecisions] = useState<Record<string, 'confirmed' | 'rejected'>>({})
@@ -51,6 +52,7 @@ export default function GalleryPage() {
   const decisionsRef = useRef(decisions)
   decisionsRef.current = decisions
   const decideInLbRef = useRef<(d: 'confirmed' | 'rejected') => void>(() => {})
+  const lbControllerRef = useRef<ControllerRef>(null)
 
   function iterationColor(iter: number, total: number): string {
     const ratio = total > 1 ? (iter - 1) / (total - 1) : 0
@@ -77,6 +79,7 @@ export default function GalleryPage() {
       const sp = allStats.find((s) => s.species_safe === species)
       if (sp) setSpStats(sp)
       if (state.config?.total_iterations) setTotalIterations(state.config.total_iterations)
+      if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, min_score: state.config.min_score })
 
       if (sp && sp.n_resolved >= sp.n_total_combos) {
         setCompleted(true)
@@ -142,10 +145,15 @@ export default function GalleryPage() {
 
   const lbEv = events[lbEvIdx]
   const lbSlides: EventSlide[] = lbEv
-    ? lbEv.frames.map((fr) => ({
+    ? lbEv.frames.map((fr, i) => ({
         src: fr.img,
-        title: t('gallery.lb_title', { site: lbEv.siteId, occasion: lbEv.occasion }),
-        description: fr.prob != null ? `${(fr.prob * 100).toFixed(0)}%  ·  ${fr.ts}` : fr.ts,
+        title: t('gallery.lb_title', {
+          site: lbEv.siteId,
+          occasion: lbEv.occasion,
+          idx: i + 1,
+          total: lbEv.frames.length,
+          meta: fr.prob != null ? `${(fr.prob * 100).toFixed(0)}%  ·  ${fr.ts}` : fr.ts,
+        }),
         eventKey: lbEv.key,
         repObsId: lbEv.repObsId,
         siteId: lbEv.siteId,
@@ -295,6 +303,20 @@ export default function GalleryPage() {
           </button>
         </div>
 
+        {!completed && reviewParams && (
+          <p
+            className="text-zinc-500 dark:text-zinc-400 text-sm mb-3"
+            dangerouslySetInnerHTML={{
+              __html: t('gallery.intro_hint', {
+                gap: reviewParams.gap_seconds,
+                days: reviewParams.occasion_days,
+                minScore: reviewParams.min_score,
+                species: spStats?.species_name ?? species?.replace(/_/g, ' '),
+              }),
+            }}
+          />
+        )}
+
         {spStats && (() => {
           const pct = spStats.n_total_combos > 0
             ? Math.round(spStats.n_resolved / spStats.n_total_combos * 100) : 0
@@ -429,6 +451,10 @@ export default function GalleryPage() {
       <style>{`.yarl__slide_image {
         filter: brightness(${lbBrightness}%) contrast(${lbContrast}%)${lbInverted ? ' invert(1)' : ''} !important;
         ${lbRotation !== 0 ? `transform: rotate(${lbRotation}deg) !important; ${lbRotation % 180 !== 0 ? 'max-width: 80vh !important; max-height: 80vw !important;' : ''}` : ''}
+      }
+      .yarl__slide_title {
+        white-space: normal !important;
+        overflow: visible !important;
       }`}</style>
 
       <YARLightbox
@@ -439,9 +465,65 @@ export default function GalleryPage() {
         slides={lbSlides}
         plugins={[Zoom, Captions]}
         carousel={{ finite: true }}
+        controller={{ ref: lbControllerRef }}
         on={{ view: ({ index }) => { setLbIndex(index); resetLbFilters() } }}
         zoom={{ maxZoomPixelRatio: 8, scrollToZoom: true }}
-        captions={{ showToggle: false, descriptionTextAlign: 'center' }}
+        captions={{ showToggle: false }}
+        render={{
+          controls: () => lbCurrentEv && (
+            <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center gap-3 px-4 pb-6" style={{ zIndex: 10000 }}>
+              {lbCurrentEv.frames.length > 1 && (
+                <div className="flex gap-1">
+                  {lbCurrentEv.frames.map((_, i) => (
+                    <button
+                      key={i}
+                      aria-label={`${i + 1}/${lbCurrentEv.frames.length}`}
+                      onClick={() => {
+                        const delta = i - lbIndex
+                        if (delta === 0) return
+                        if (delta > 0) lbControllerRef.current?.next({ count: delta })
+                        else lbControllerRef.current?.prev({ count: -delta })
+                      }}
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        padding: 0,
+                        border: 'none',
+                        cursor: 'pointer',
+                        background: i === lbIndex ? '#007aff' : 'rgba(255,255,255,.3)',
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-3 w-full" style={{ maxWidth: 420 }}>
+                <button
+                  className={`flex-1 py-2.5 text-base rounded font-medium transition-colors disabled:opacity-50 ${
+                    lbDecision === 'confirmed'
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      : 'border border-emerald-600 bg-black/40 text-emerald-400 hover:bg-emerald-600 hover:text-white'
+                  }`}
+                  onClick={() => decideInLb('confirmed')}
+                  disabled={lbReadOnly}
+                >
+                  {t('gallery.confirmed_btn')} <span className="opacity-60">(Y)</span>
+                </button>
+                <button
+                  className={`flex-1 py-2.5 text-base rounded font-medium transition-colors disabled:opacity-50 ${
+                    lbDecision === 'rejected'
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'border border-red-600 bg-black/40 text-red-400 hover:bg-red-600 hover:text-white'
+                  }`}
+                  onClick={() => decideInLb('rejected')}
+                  disabled={lbReadOnly}
+                >
+                  {t('gallery.rejected_btn')} <span className="opacity-60">(N)</span>
+                </button>
+              </div>
+            </div>
+          ),
+        }}
         toolbar={{
           buttons: [
             <label
@@ -501,35 +583,6 @@ export default function GalleryPage() {
               style={{ color: lbInverted ? '#fbbf24' : undefined }}
             >
               ⊙
-            </button>,
-            <span key="sep" style={{ width: 1, background: '#444', margin: '8px 4px' }} />,
-            <button
-              key="confirm"
-              title={`${t('gallery.confirmed_btn')} (Y)`}
-              className="yarl__button"
-              style={{
-                color: lbDecision === 'confirmed' ? '#10b981' : '#aaa',
-                fontWeight: 'bold',
-                opacity: lbReadOnly ? 0.3 : 1,
-              }}
-              onClick={() => decideInLb('confirmed')}
-              disabled={lbReadOnly}
-            >
-              ✓
-            </button>,
-            <button
-              key="reject"
-              title={`${t('gallery.rejected_btn')} (N)`}
-              className="yarl__button"
-              style={{
-                color: lbDecision === 'rejected' ? '#ef4444' : '#aaa',
-                fontWeight: 'bold',
-                opacity: lbReadOnly ? 0.3 : 1,
-              }}
-              onClick={() => decideInLb('rejected')}
-              disabled={lbReadOnly}
-            >
-              ✗
             </button>,
             'close',
           ],

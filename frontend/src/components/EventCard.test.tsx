@@ -52,7 +52,7 @@ describe('EventCard', () => {
       />,
     )
     expect(container.firstChild).toHaveClass('border-emerald-500')
-    expect(screen.getByRole('button', { name: /confirmada/i })).toHaveClass('bg-emerald-600')
+    expect(screen.getByRole('button', { name: /^✓/ })).toHaveClass('bg-emerald-600')
   })
 
   it('calls onDecide with the event key and repObsId when confirming', async () => {
@@ -68,7 +68,7 @@ describe('EventCard', () => {
       />,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: /confirmada/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^✓/ }))
     expect(onDecide).toHaveBeenCalledWith('site1|1', 'obs-1', 'confirmed')
   })
 
@@ -84,8 +84,8 @@ describe('EventCard', () => {
         readOnly
       />,
     )
-    expect(screen.getByRole('button', { name: /confirmada/i })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /rechazada/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^✓/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /no confirmada/i })).toBeDisabled()
   })
 
   it('shows the context-frame badge only on context frames', () => {

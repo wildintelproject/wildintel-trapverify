@@ -165,14 +165,10 @@
     "err_unknown": "Unbekannter Fehler"
   },
   "index": {
-    "title": "Bildüberprüfung",
+    "title": "Erkennungsüberprüfung",
     "periods_reviewed": "{{resolved}} / {{total}} Stichprobenperioden überprüft",
     "confirmed": "{{n}} bestätigt",
-    "subtitle": "Wählen Sie die Art aus, deren Stichprobenperioden Sie überprüfen möchten.",
-    "date_range": "Bilder von {{start}} bis {{end}}",
-    "param_occasion": "Periode: {{n}} Tage",
-    "param_gap": "Pause: {{n}} s",
-    "param_score": "Min. Score: {{n}}",
+    "subtitle": "Wählen Sie die Art aus, deren Vorkommen an Standorten und Zeiträumen Sie überprüfen möchten. Die Zeiträume erstrecken sich von <strong style='color:#10b981'>{{start}}</strong> bis <strong style='color:#10b981'>{{end}}</strong> und umfassen jeweils <strong style='color:#10b981'>{{days}} Tage</strong>.",
     "see_results": "Ergebnisse anzeigen",
     "confirmed_periods": "{{n}} Stichprobenperioden mit bestätigter Detektion",
     "reviewed_periods": "{{resolved}} von {{total}} Stichprobenperioden überprüft ({{pct}}%)",
@@ -181,10 +177,11 @@
     "no_species": "Keine Arten mit Kandidaten. Überprüfen Sie Ihre Konfiguration."
   },
   "gallery": {
-    "title": "Bildüberprüfung",
+    "title": "Erkennungsüberprüfung",
     "round": "Runde {{n}}",
     "confirmed_periods": "{{n}} Stichprobenperioden mit bestätigter Detektion",
     "reviewed": "{{resolved}} von {{total}} überprüft",
+    "intro_hint": "Im Folgenden werden Sequenzen gezeigt, die durch <strong style='color:#10b981'>{{gap}} Sekunden</strong> getrennt sind und an verschiedenen Standorten und Zeiträumen von <strong style='color:#10b981'>{{days}} Tagen</strong> aufgenommen wurden, entsprechend Beobachtungen mit einer Erkennungskonfidenz von <strong style='color:#10b981'>{{minScore}}</strong> oder höher. Bestätigen Sie für jede von ihnen, ob die Sequenz ein oder mehrere Exemplare der Art <strong style='color:#10b981'>{{species}}</strong> enthält. Wenn Sie das Vorhandensein der Art in einer Sequenz bestätigen, gilt ihr Vorkommen an diesem Standort während des entsprechenden Zeitraums als verifiziert, und es müssen keine weiteren Sequenzen desselben Zeitraums überprüft werden. Wenn Sie das Vorhandensein nicht bestätigen können, wird eine neue Sequenz vom selben Standort und Zeitraum angezeigt, um die Überprüfung fortzusetzen.",
     "round_hint": "In Runde {{n}} wird jede Stichprobenperiode durch die Sequenz mit der höchsten Erkennungskonfidenz unter den noch nicht überprüften repräsentiert.",
     "back": "Zurück",
     "confirm_all": "Alle bestätigen",
@@ -199,7 +196,7 @@
     "confirmed_btn": "✓ Bestätigt",
     "rejected_btn": "✗ Abgelehnt",
     "zoom": "Vollbild öffnen",
-    "lb_title": "Standort: {{site}} — Stichprobenperiode {{occasion}}",
+    "lb_title": "Standort: {{site}} — Stichprobenperiode {{occasion}} — Bild {{idx}}/{{total}} ({{meta}})",
     "toast_done": "Art abgeschlossen. Zurück zum Index…",
     "toast_saved": "Gespeichert. Runde {{n}}: {{remaining}} Stichprobenperioden verbleibend.",
     "toast_error": "Fehler beim Speichern",
@@ -271,5 +268,10 @@
     "col_p_naive": "p naiv",
     "col_p_verified": "p verifiziert",
     "degenerate": "Entartet"
+  },
+  "footer": {
+    "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Alle Rechte vorbehalten.",
+    "website": "WildINTEL-Website",
+    "github": "GitHub-Repository"
   }
 }

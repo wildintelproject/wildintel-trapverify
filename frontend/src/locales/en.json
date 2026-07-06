@@ -165,14 +165,10 @@
     "err_unknown": "Unknown error"
   },
   "index": {
-    "title": "Image verification",
+    "title": "Detection verification",
     "periods_reviewed": "{{resolved}} / {{total}} sampling periods reviewed",
     "confirmed": "{{n}} confirmed",
-    "subtitle": "Select the species whose sampling periods you want to verify.",
-    "date_range": "Images from {{start}} to {{end}}",
-    "param_occasion": "Period: {{n}} days",
-    "param_gap": "Gap: {{n}} s",
-    "param_score": "Min. score: {{n}}",
+    "subtitle": "Select the species whose presence at locations and time periods you want to verify. The time periods run from <strong style='color:#10b981'>{{start}}</strong> to <strong style='color:#10b981'>{{end}}</strong>, in periods of <strong style='color:#10b981'>{{days}} days</strong>.",
     "see_results": "See results",
     "confirmed_periods": "{{n}} sampling periods with confirmed detection",
     "reviewed_periods": "Reviewed {{resolved}} of {{total}} sampling periods ({{pct}}%)",
@@ -181,10 +177,11 @@
     "no_species": "No species with candidates. Check your configuration."
   },
   "gallery": {
-    "title": "Image verification",
+    "title": "Detection verification",
     "round": "Round {{n}}",
     "confirmed_periods": "{{n}} sampling periods with confirmed detection",
     "reviewed": "Reviewed {{resolved}} of {{total}}",
+    "intro_hint": "The sequences shown below are separated by <strong style='color:#10b981'>{{gap}} seconds</strong>, captured at different locations and time periods of <strong style='color:#10b981'>{{days}} days</strong>, corresponding to observations with a detection confidence of <strong style='color:#10b981'>{{minScore}}</strong> or higher. For each one, confirm whether the sequence contains one or more individuals of the species <strong style='color:#10b981'>{{species}}</strong>. If you confirm the species' presence in a sequence, its presence will be considered verified for that location during the corresponding time period, and no further sequences from that same period will need to be reviewed. If you cannot confirm its presence, a new sequence captured at the same location and during the same time period will be shown to continue the verification.",
     "round_hint": "In round {{n}}, each sampling period is represented by the sequence with the highest detection confidence among those not yet reviewed.",
     "back": "Back",
     "confirm_all": "Confirm all",
@@ -199,7 +196,7 @@
     "confirmed_btn": "✓ Confirmed",
     "rejected_btn": "✗ Rejected",
     "zoom": "Open fullscreen",
-    "lb_title": "Location: {{site}} — Sampling period {{occasion}}",
+    "lb_title": "Location: {{site}} — Sampling period {{occasion}} — Image {{idx}}/{{total}} ({{meta}})",
     "toast_done": "Species complete. Returning to index…",
     "toast_saved": "Saved. Round {{n}}: {{remaining}} sampling periods remaining.",
     "toast_error": "Error saving",
@@ -271,5 +268,10 @@
     "col_p_naive": "p naive",
     "col_p_verified": "p verified",
     "degenerate": "Degenerate"
+  },
+  "footer": {
+    "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. All rights reserved.",
+    "website": "WildINTEL website",
+    "github": "GitHub repository"
   }
 }

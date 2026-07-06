@@ -165,14 +165,10 @@
     "err_unknown": "Error desconocido"
   },
   "index": {
-    "title": "Verificación de imágenes",
+    "title": "Verificación de detecciones",
     "periods_reviewed": "{{resolved}} / {{total}} períodos de muestreo revisados",
     "confirmed": "{{n}} confirmadas",
-    "subtitle": "Seleccione la especie cuyos períodos de muestreo desea validar.",
-    "date_range": "Imágenes del {{start}} al {{end}}",
-    "param_occasion": "Período: {{n}} días",
-    "param_gap": "Gap: {{n}} s",
-    "param_score": "Score mínimo: {{n}}",
+    "subtitle": "Seleccione la especie cuya presencia en una determinada localización y periodo de tiempo desea verificar. Los periodos de tiempo están comprendidos entre <strong style='color:#10b981'>{{start}}</strong> y <strong style='color:#10b981'>{{end}}</strong>, y son periodos de <strong style='color:#10b981'>{{days}} días</strong>.",
     "see_results": "Ver resultados",
     "confirmed_periods": "{{n}} períodos de muestreo con detección confirmada",
     "reviewed_periods": "Revisado {{resolved}} de {{total}} períodos de muestreo ({{pct}}%)",
@@ -181,10 +177,11 @@
     "no_species": "No hay especies con candidatos. Comprueba la configuración."
   },
   "gallery": {
-    "title": "Verificación de imágenes",
+    "title": "Verificación de detecciones",
     "round": "Ronda {{n}}",
     "confirmed_periods": "{{n}} períodos de muestreo con detección confirmada",
     "reviewed": "Revisadas {{resolved}} de {{total}}",
+    "intro_hint": "A continuación se mostrarán secuencias separadas por <strong style='color:#10b981'>{{gap}} segundos</strong> capturadas en distintas localizaciones y periodos de tiempo de <strong style='color:#10b981'>{{days}} días</strong>, correspondientes a observaciones con una confianza de detección igual o superior a <strong style='color:#10b981'>{{minScore}}</strong>. Para cada una de ellas, confirme si la secuencia contiene uno o más ejemplares de la especie <strong style='color:#10b981'>{{species}}</strong>. Si confirma la presencia de la especie en una secuencia, se considerará verificada su presencia en esa localización durante el periodo de tiempo correspondiente y no será necesario revisar más secuencias de ese mismo periodo. Si no puede confirmar la presencia, se mostrará una nueva secuencia capturada en la misma localización y durante el mismo periodo de tiempo para continuar con la verificación.",
     "round_hint": "En la ronda {{n}} cada período de muestreo se representa por la secuencia con mayor confianza de detección entre las aún no revisadas.",
     "back": "Volver",
     "confirm_all": "Confirmar todas",
@@ -197,9 +194,9 @@
     "sequence": "Secuencia {{rank}}/{{total}}",
     "occasion_label": "Período de muestreo {{n}}",
     "confirmed_btn": "✓ Confirmada",
-    "rejected_btn": "✗ Rechazada",
+    "rejected_btn": "✗ No confirmada",
     "zoom": "Abrir en pantalla completa",
-    "lb_title": "Localización: {{site}} — Período de muestreo {{occasion}}",
+    "lb_title": "Localización: {{site}} — Período de muestreo {{occasion}} — Imagen {{idx}}/{{total}} ({{meta}})",
     "toast_done": "Especie completada. Volviendo al índice…",
     "toast_saved": "Guardado. Ronda {{n}}: {{remaining}} períodos de muestreo restantes.",
     "toast_error": "Error al guardar",
@@ -271,5 +268,10 @@
     "col_p_naive": "p naive",
     "col_p_verified": "p verificado",
     "degenerate": "Degenerado"
+  },
+  "footer": {
+    "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Todos los derechos reservados.",
+    "website": "Web de WildINTEL",
+    "github": "Repositorio en GitHub"
   }
 }

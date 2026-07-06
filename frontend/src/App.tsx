@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 import UpdateBanner from './components/UpdateBanner'
 import GalleryPage from './pages/GalleryPage'
 import IndexPage from './pages/IndexPage'
@@ -40,7 +41,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+      <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
         <Navbar ready={ready} version={currentVersion} />
         {update && !updateDismissed && (
           <UpdateBanner
@@ -49,23 +50,26 @@ export default function App() {
             onDismiss={() => setUpdateDismissed(true)}
           />
         )}
-        <Routes>
-          <Route path="/" element={
-            <SetupPage onSetup={() => setReady(true)} ready={ready} />
-          } />
-          <Route path="/setup" element={
-            <SetupPage onSetup={() => setReady(true)} ready={ready} />
-          } />
-          <Route path="/species"
-            element={ready ? <IndexPage /> : <Navigate to="/" replace />}
-          />
-          <Route path="/gallery/:species"
-            element={ready ? <GalleryPage /> : <Navigate to="/" replace />}
-          />
-          <Route path="/results"
-            element={ready ? <ResultsPage /> : <Navigate to="/" replace />}
-          />
-        </Routes>
+        <main className="flex-1">
+          <Routes>
+            <Route path="/" element={
+              <SetupPage onSetup={() => setReady(true)} ready={ready} />
+            } />
+            <Route path="/setup" element={
+              <SetupPage onSetup={() => setReady(true)} ready={ready} />
+            } />
+            <Route path="/species"
+              element={ready ? <IndexPage /> : <Navigate to="/" replace />}
+            />
+            <Route path="/gallery/:species"
+              element={ready ? <GalleryPage /> : <Navigate to="/" replace />}
+            />
+            <Route path="/results"
+              element={ready ? <ResultsPage /> : <Navigate to="/" replace />}
+            />
+          </Routes>
+        </main>
+        <Footer />
       </div>
     </BrowserRouter>
   )

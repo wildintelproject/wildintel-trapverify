@@ -165,14 +165,10 @@
     "err_unknown": "Nieznany błąd"
   },
   "index": {
-    "title": "Weryfikacja zdjęć",
+    "title": "Weryfikacja wykryć",
     "periods_reviewed": "{{resolved}} / {{total}} okresów próbkowania przejrzanych",
     "confirmed": "{{n}} potwierdzone",
-    "subtitle": "Wybierz gatunek, którego okresy próbkowania chcesz zweryfikować.",
-    "date_range": "Zdjęcia od {{start}} do {{end}}",
-    "param_occasion": "Okres: {{n}} dni",
-    "param_gap": "Przerwa: {{n}} s",
-    "param_score": "Min. wynik: {{n}}",
+    "subtitle": "Wybierz gatunek, którego obecność w lokalizacjach i okresach czasu chcesz zweryfikować. Okresy czasu obejmują zakres od <strong style='color:#10b981'>{{start}}</strong> do <strong style='color:#10b981'>{{end}}</strong> i trwają <strong style='color:#10b981'>{{days}} dni</strong>.",
     "see_results": "Zobacz wyniki",
     "confirmed_periods": "{{n}} okresów próbkowania z potwierdzonym wykryciem",
     "reviewed_periods": "Przejrzano {{resolved}} z {{total}} okresów próbkowania ({{pct}}%)",
@@ -181,10 +177,11 @@
     "no_species": "Brak gatunków z kandydatami. Sprawdź konfigurację."
   },
   "gallery": {
-    "title": "Weryfikacja zdjęć",
+    "title": "Weryfikacja wykryć",
     "round": "Runda {{n}}",
     "confirmed_periods": "{{n}} okresów próbkowania z potwierdzonym wykryciem",
     "reviewed": "Przejrzano {{resolved}} z {{total}}",
+    "intro_hint": "Poniżej pokazane zostaną sekwencje oddzielone <strong style='color:#10b981'>{{gap}} sekundami</strong>, zarejestrowane w różnych lokalizacjach i okresach czasu wynoszących <strong style='color:#10b981'>{{days}} dni</strong>, odpowiadające obserwacjom o pewności wykrycia równej co najmniej <strong style='color:#10b981'>{{minScore}}</strong>. Dla każdej z nich potwierdź, czy sekwencja zawiera jeden lub więcej osobników gatunku <strong style='color:#10b981'>{{species}}</strong>. Jeśli potwierdzisz obecność gatunku w sekwencji, jego obecność w tej lokalizacji w danym okresie zostanie uznana za zweryfikowaną i nie trzeba będzie przeglądać kolejnych sekwencji z tego samego okresu. Jeśli nie możesz potwierdzić obecności, zostanie pokazana nowa sekwencja zarejestrowana w tej samej lokalizacji i w tym samym okresie, aby kontynuować weryfikację.",
     "round_hint": "W rundzie {{n}} każdy okres próbkowania jest reprezentowany przez sekwencję z najwyższą ufnością wykrycia spośród jeszcze nieprzejrzanych.",
     "back": "Wstecz",
     "confirm_all": "Potwierdź wszystkie",
@@ -199,7 +196,7 @@
     "confirmed_btn": "✓ Potwierdzone",
     "rejected_btn": "✗ Odrzucone",
     "zoom": "Otwórz pełny ekran",
-    "lb_title": "Lokalizacja: {{site}} — Okres próbkowania {{occasion}}",
+    "lb_title": "Lokalizacja: {{site}} — Okres próbkowania {{occasion}} — Zdjęcie {{idx}}/{{total}} ({{meta}})",
     "toast_done": "Gatunek ukończony. Powrót do indeksu…",
     "toast_saved": "Zapisano. Runda {{n}}: pozostało {{remaining}} okresów próbkowania.",
     "toast_error": "Błąd podczas zapisywania",
@@ -271,5 +268,10 @@
     "col_p_naive": "p naiwne",
     "col_p_verified": "p zweryfikowane",
     "degenerate": "Zdegenerowane"
+  },
+  "footer": {
+    "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Wszelkie prawa zastrzeżone.",
+    "website": "Strona WildINTEL",
+    "github": "Repozytorium na GitHub"
   }
 }
