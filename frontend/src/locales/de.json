@@ -25,7 +25,9 @@
     "open_session": "Bestimmte Sitzung öffnen…",
     "open_session_loading": "Sitzung wird geladen…",
     "new_session": "Neue Sitzung",
-    "start": "Überprüfung starten →"
+    "start": "Überprüfung starten →",
+    "recent_sessions": "Letzte Sitzungen",
+    "recent_untitled": "Sitzung ohne Arten"
   },
   "setup": {
     "steps": ["Quelle", "Arten", "Zeitraum", "Parameter"],
@@ -261,6 +263,13 @@
     "col_confirmed": "Bestätigt",
     "col_rejected": "Abgelehnt",
     "col_unverified": "Nicht überprüft",
-    "col_total": "Gesamt"
+    "col_total": "Gesamt",
+    "occupancy_title": "Belegungsschätzung (naiv vs. verifiziert)",
+    "occupancy_hint": "Vergleich der geschätzten Belegungswahrscheinlichkeit (ψ) und Entdeckungswahrscheinlichkeit (p) zwischen den ungeprüften und den manuell verifizierten Detektionen. Die Intervalle sind 95%-Konfidenzintervalle.",
+    "col_psi_naive": "ψ naiv",
+    "col_psi_verified": "ψ verifiziert",
+    "col_p_naive": "p naiv",
+    "col_p_verified": "p verifiziert",
+    "degenerate": "Entartet"
   }
 }

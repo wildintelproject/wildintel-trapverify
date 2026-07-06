@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import DirectoryPicker from '../components/DirectoryPicker'
 import CsvImportForm from '../components/CsvImportForm'
-import type { WorkflowConfig } from '../types'
+import type { RecentSession, WorkflowConfig } from '../types'
 
 interface Props { onSetup: () => void; ready: boolean }
 
@@ -77,6 +77,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [sessionSummary, setSessionSummary] = useState<{
     speciesCount: number; resolved: number; total: number; pct: number
   } | null>(null)
+  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
 
   useEffect(() => {
     api.getState().then((s) => {
@@ -86,6 +87,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         setAvailableSpecies(s.config.target_species)
       }
     }).catch(() => {})
+    api.getRecentSessions().then(setRecentSessions).catch(() => setRecentSessions([]))
   }, [])
 
   useEffect(() => {
@@ -409,6 +411,37 @@ export default function SetupPage({ onSetup, ready }: Props) {
             </p>
           )}
         </div>
+
+        {recentSessions.length > 0 && (
+          <div className="mt-8 w-full text-left mx-auto" style={{ maxWidth: 460 }}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500 mb-2">
+              {t('welcome.recent_sessions')}
+            </p>
+            <ul className="list-none p-0 m-0 space-y-1.5">
+              {recentSessions.map((s) => (
+                <li key={s.session_dir}>
+                  <button
+                    className="w-full text-left px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                    onClick={() => handleLoadSession(s.session_dir)}
+                    disabled={loadingSession}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                        {s.target_species.join(', ') || t('welcome.recent_untitled')}
+                      </span>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500 flex-shrink-0">
+                        {new Date(s.last_opened).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate font-mono mt-0.5">
+                      {s.session_dir}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
 

@@ -25,7 +25,9 @@
     "open_session": "Open a specific session…",
     "open_session_loading": "Loading session…",
     "new_session": "New session",
-    "start": "Start verifying →"
+    "start": "Start verifying →",
+    "recent_sessions": "Recent sessions",
+    "recent_untitled": "Session without species"
   },
   "setup": {
     "steps": ["Source", "Species", "Period", "Parameters"],
@@ -261,6 +263,13 @@
     "col_confirmed": "Confirmed",
     "col_rejected": "Rejected",
     "col_unverified": "Unverified",
-    "col_total": "Total"
+    "col_total": "Total",
+    "occupancy_title": "Occupancy estimate (naive vs. verified)",
+    "occupancy_hint": "Comparison of occupancy (ψ) and detection (p) probabilities estimated from the unreviewed detections versus the manually verified ones. Intervals are 95% confidence intervals.",
+    "col_psi_naive": "ψ naive",
+    "col_psi_verified": "ψ verified",
+    "col_p_naive": "p naive",
+    "col_p_verified": "p verified",
+    "degenerate": "Degenerate"
   }
 }

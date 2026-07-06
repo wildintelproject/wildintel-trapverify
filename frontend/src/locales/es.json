@@ -25,7 +25,9 @@
     "open_session": "Abrir sesión concreta…",
     "open_session_loading": "Cargando sesión…",
     "new_session": "Nueva sesión",
-    "start": "Comenzar a validar →"
+    "start": "Comenzar a validar →",
+    "recent_sessions": "Sesiones recientes",
+    "recent_untitled": "Sesión sin especies"
   },
   "setup": {
     "steps": ["Origen", "Especies", "Período", "Parámetros"],
@@ -261,6 +263,13 @@
     "col_confirmed": "Confirmados",
     "col_rejected": "Rechazados",
     "col_unverified": "Sin revisar",
-    "col_total": "Total"
+    "col_total": "Total",
+    "occupancy_title": "Estimación de ocupación (naive vs. verificado)",
+    "occupancy_hint": "Comparación de la probabilidad de ocupación (ψ) y de detección (p) estimadas a partir de las detecciones sin revisar frente a las verificadas manualmente. Los intervalos son de confianza al 95%.",
+    "col_psi_naive": "ψ naive",
+    "col_psi_verified": "ψ verificado",
+    "col_p_naive": "p naive",
+    "col_p_verified": "p verificado",
+    "degenerate": "Degenerado"
   }
 }

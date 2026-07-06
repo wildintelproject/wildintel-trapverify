@@ -1,4 +1,4 @@
-import type { DetectionEvent, SpeciesStats, WorkflowConfig } from './types'
+import type { DetectionEvent, OccupancyRow, RecentSession, SpeciesStats, WorkflowConfig } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch(url, options)
@@ -81,8 +81,14 @@ export const api = {
       by_species: { species: string; confirmed: number; rejected: number; unverified: number }[]
     }>('/api/results'),
 
+  getOccupancy: () =>
+    req<OccupancyRow[]>('/api/results/occupancy'),
+
   loadSession: (session_dir: string) =>
     post<{ ok: boolean; session_dir: string; config: unknown }>('/api/session/load', { session_dir }),
+
+  getRecentSessions: () =>
+    req<RecentSession[]>('/api/session/recent'),
 
   trapperLogin: (url: string, username: string, password: string) =>
     post<{ ok: boolean; base_url: string; research_projects_count: number }>(

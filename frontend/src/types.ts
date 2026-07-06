@@ -46,3 +46,25 @@ export interface WorkflowConfig {
 }
 
 export type Decision = 'confirmed' | 'rejected' | null
+
+export interface OccupancyRow {
+  species: string
+  psi_naive: number | null
+  psi_naive_lo: number | null
+  psi_naive_hi: number | null
+  p_naive: number | null
+  degenerate_naive: boolean
+  psi_verified: number | null
+  psi_verified_lo: number | null
+  psi_verified_hi: number | null
+  p_verified: number | null
+  degenerate_verified: boolean
+}
+
+export interface RecentSession {
+  session_dir: string
+  last_opened: string
+  target_species: string[]
+  study_start: string | null
+  study_end: string | null
+}

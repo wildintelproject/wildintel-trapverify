@@ -25,7 +25,9 @@
     "open_session": "Otwórz konkretną sesję…",
     "open_session_loading": "Ładowanie sesji…",
     "new_session": "Nowa sesja",
-    "start": "Rozpocznij weryfikację →"
+    "start": "Rozpocznij weryfikację →",
+    "recent_sessions": "Ostatnie sesje",
+    "recent_untitled": "Sesja bez gatunków"
   },
   "setup": {
     "steps": ["Źródło", "Gatunki", "Okres", "Parametry"],
@@ -261,6 +263,13 @@
     "col_confirmed": "Potwierdzone",
     "col_rejected": "Odrzucone",
     "col_unverified": "Nieprzejrzane",
-    "col_total": "Łącznie"
+    "col_total": "Łącznie",
+    "occupancy_title": "Oszacowanie zajętości (naiwne vs. zweryfikowane)",
+    "occupancy_hint": "Porównanie prawdopodobieństwa zajętości (ψ) i wykrycia (p) oszacowanego na podstawie nieprzejrzanych wykryć w porównaniu z ręcznie zweryfikowanymi. Przedziały to 95% przedziały ufności.",
+    "col_psi_naive": "ψ naiwne",
+    "col_psi_verified": "ψ zweryfikowane",
+    "col_p_naive": "p naiwne",
+    "col_p_verified": "p zweryfikowane",
+    "degenerate": "Zdegenerowane"
   }
 }

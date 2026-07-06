@@ -27,6 +27,12 @@ def get_state() -> dict:
     }
 
 
+@router.get("/session/recent")
+def recent_sessions() -> list[dict]:
+    """List recently opened sessions still present on disk, most recent first."""
+    return session_service.list_recent_sessions()
+
+
 @router.post("/session/load")
 def load_session(req: LoadSessionRequest) -> dict:
     """Load an existing session directory into memory."""

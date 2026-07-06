@@ -17,6 +17,7 @@ def reset_state(monkeypatch, tmp_path):
     import services.session_service as session_service
     monkeypatch.setattr(session_service, "_state", {})
     monkeypatch.setattr(session_service, "SESSION_FILE", tmp_path / "last_session.json")
+    monkeypatch.setattr(session_service, "RECENT_SESSIONS_FILE", tmp_path / "recent_sessions.json")
     monkeypatch.setattr(session_service, "APP_DIR", tmp_path)
 
 
@@ -578,6 +579,54 @@ def test_load_session_nonexistent_dir(client):
 def test_load_session_invalid_dir(client, tmp_path):
     resp = client.post("/api/session/load", json={"session_dir": str(tmp_path)})
     assert resp.status_code == 400
+
+
+# ─── /api/session/recent ───────────────────────────────────────────────────────
+
+def test_recent_sessions_empty_initially(client):
+    resp = client.get("/api/session/recent")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+def test_recent_sessions_includes_new_session(client, setup_session):
+    resp = client.get("/api/session/recent")
+    entries = resp.json()
+    assert len(entries) == 1
+    assert entries[0]["session_dir"] == setup_session["session_dir"]
+    assert entries[0]["target_species"] == ["Vulpes vulpes"]
+
+def test_recent_sessions_most_recent_first(client, camtrap_dir, tmp_path):
+    def do_setup(out_subdir: str) -> str:
+        resp = client.post("/api/setup", json={
+            "camtrap_dir":      str(camtrap_dir),
+            "output_dir":       str(tmp_path / out_subdir),
+            "target_species":   ["Vulpes vulpes"],
+            "study_start":      "2025-11-01",
+            "study_end":        "2025-11-10",
+            "occasion_days":    5,
+            "total_iterations": 100_000,
+            "gap_seconds":      60,
+            "min_score":        0.5,
+        })
+        assert resp.status_code == 200
+        return resp.json()["session_dir"]
+
+    first = do_setup("out1")
+    second = do_setup("out2")
+
+    entries = client.get("/api/session/recent").json()
+    assert [e["session_dir"] for e in entries] == [second, first]
+
+def test_recent_sessions_reload_moves_to_front_without_duplicating(client, setup_session):
+    client.post("/api/session/load", json={"session_dir": setup_session["session_dir"]})
+    entries = client.get("/api/session/recent").json()
+    assert len(entries) == 1
+    assert entries[0]["session_dir"] == setup_session["session_dir"]
+
+def test_recent_sessions_prunes_deleted_sessions(client, setup_session):
+    (Path(setup_session["session_dir"]) / "config.json").unlink()
+    entries = client.get("/api/session/recent").json()
+    assert entries == []
 
 
 # ─── /api/results/download ────────────────────────────────────────────────────

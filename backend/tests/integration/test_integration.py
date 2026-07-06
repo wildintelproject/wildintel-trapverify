@@ -35,6 +35,7 @@ class _ServerThread(threading.Thread):
         _tmp = Path(tempfile.mkdtemp())
         _session._state.clear()
         _session.SESSION_FILE = _tmp / "last_session.json"
+        _session.RECENT_SESSIONS_FILE = _tmp / "recent_sessions.json"
         _session.APP_DIR = _tmp
 
         cfg = uvicorn.Config(

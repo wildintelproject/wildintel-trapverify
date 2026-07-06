@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api'
+import type { OccupancyRow } from '../types'
+import { formatP, formatPsi } from '../utils/occupancy'
 
 interface SpeciesRow {
   species: string
@@ -29,6 +31,7 @@ export default function ResultsPage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [results, setResults] = useState<Results | null>(null)
+  const [occupancy, setOccupancy] = useState<OccupancyRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [opening, setOpening] = useState(false)
@@ -36,6 +39,9 @@ export default function ResultsPage() {
 
   useEffect(() => {
     api.getResults().then((r) => setResults(r as Results)).catch((e: Error) => setError(e.message))
+    // El ajuste de ocupación es un extra opcional: si no hay historiales de
+    // detección suficientes, se omite la sección en vez de romper la página.
+    api.getOccupancy().then(setOccupancy).catch(() => setOccupancy([]))
   }, [])
 
   async function handleOpenFolder() {
@@ -118,6 +124,39 @@ export default function ResultsPage() {
           <div className="bg-zinc-400 transition-all"    style={{ width: `${pU}%` }} />
         </div>
       </>
+    )
+  }
+
+  function OccupancyTable({ rows }: { rows: OccupancyRow[] }) {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-200 dark:border-zinc-700">
+              <th className="text-left py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_species')}</th>
+              <th className="text-right py-2 px-3 font-semibold text-zinc-500">{t('results.col_psi_naive')}</th>
+              <th className="text-right py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{t('results.col_psi_verified')}</th>
+              <th className="text-right py-2 px-3 font-semibold text-zinc-500">{t('results.col_p_naive')}</th>
+              <th className="text-right py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{t('results.col_p_verified')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.species} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+                <td className="py-2 px-3 font-mono text-zinc-900 dark:text-zinc-100">{row.species}</td>
+                <td className="py-2 px-3 text-right text-zinc-500">
+                  {row.degenerate_naive ? t('results.degenerate') : formatPsi(row.psi_naive, row.psi_naive_lo, row.psi_naive_hi, false)}
+                </td>
+                <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">
+                  {row.degenerate_verified ? t('results.degenerate') : formatPsi(row.psi_verified, row.psi_verified_lo, row.psi_verified_hi, false)}
+                </td>
+                <td className="py-2 px-3 text-right text-zinc-500">{formatP(row.p_naive)}</td>
+                <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">{formatP(row.p_verified)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     )
   }
 
@@ -243,10 +282,22 @@ export default function ResultsPage() {
         total={results.seq_total}
       />
       {results.by_species_seqs.length > 0 && (
-        <div className={`${cardClass} mb-4`}>
+        <div className={`${cardClass} mb-10`}>
           <div className={cardHeader}>{t('results.by_species')}</div>
           <BreakdownTable rows={results.by_species_seqs} />
         </div>
+      )}
+
+      {/* Occupancy */}
+      {occupancy.length > 0 && (
+        <>
+          <h5 className="text-base font-semibold mb-3">{t('results.occupancy_title')}</h5>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm">{t('results.occupancy_hint')}</p>
+          <div className={`${cardClass} mb-4`}>
+            <div className={cardHeader}>{t('results.by_species')}</div>
+            <OccupancyTable rows={occupancy} />
+          </div>
+        </>
       )}
     </div>
   )
