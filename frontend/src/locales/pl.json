@@ -11,7 +11,7 @@
   },
   "welcome": {
     "title": "Witaj w CamTrap Verify",
-    "subtitle": "To narzędzie umożliwia przeglądanie i weryfikację obserwacji zawartych w pliku CamtrapDP oraz tworzenie nowego CamtrapDP z potwierdzonymi obserwacjami oznaczonymi jako zweryfikowane przez człowieka. Dodatkowo generuje naiwne i zweryfikowane historyki wykryć gotowe do modeli zajętości.",
+    "subtitle": "To narzędzie pozwala zweryfikować obecność gatunku w określonych lokalizacjach i okresach czasu, potwierdzając lub odrzucając automatyczne wykrycia. Po zakończeniu otrzymasz CamtrapDP z potwierdzonymi obserwacjami oznaczonymi jako zweryfikowane przez człowieka, a także naiwne i zweryfikowane historie wykryć gotowe do modeli zajętości.",
     "feat_dir": "Katalog CamtrapDP",
     "feat_dir_desc": "załaduj dane terenowe",
     "feat_species": "Gatunki docelowe",

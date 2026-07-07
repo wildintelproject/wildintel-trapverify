@@ -11,7 +11,7 @@
   },
   "welcome": {
     "title": "Willkommen bei CamTrap Verify",
-    "subtitle": "Dieses Tool ermöglicht die Überprüfung und Validierung von Beobachtungen aus einer CamtrapDP-Datei und erzeugt ein neues CamtrapDP mit bestätigten Beobachtungen als menschlich geprüft. Zusätzlich werden naive vs. verifizierte Detektionshistorien für Besetzungsmodelle generiert.",
+    "subtitle": "Mit diesem Tool können Sie das Vorkommen einer Art an bestimmten Standorten und Zeiträumen überprüfen, indem Sie die automatischen Erkennungen bestätigen oder verwerfen. Am Ende erhalten Sie ein CamtrapDP mit den bestätigten Beobachtungen, die als menschlich geprüft markiert sind, sowie naive vs. verifizierte Detektionshistorien für Belegungsmodelle.",
     "feat_dir": "CamtrapDP-Verzeichnis",
     "feat_dir_desc": "Felddaten laden",
     "feat_species": "Zielarten",

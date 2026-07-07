@@ -11,7 +11,7 @@
   },
   "welcome": {
     "title": "Welcome to CamTrap Verify",
-    "subtitle": "This tool lets you review and validate the observations contained in a CamtrapDP file and obtain a new CamtrapDP with confirmed observations marked as human review. Additionally, it generates naive vs. verified detection histories ready for occupancy models.",
+    "subtitle": "This tool lets you verify the presence of a species at specific locations and time periods, confirming or discarding the automatic detections. When you're done, you'll get a CamtrapDP with the confirmed observations marked as human-reviewed, along with naive vs. verified detection histories ready for occupancy models.",
     "feat_dir": "CamtrapDP directory",
     "feat_dir_desc": "load your field data",
     "feat_species": "Target species",
