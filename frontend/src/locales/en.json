@@ -4,6 +4,9 @@
     "download": "Download",
     "dismiss": "Dismiss"
   },
+  "connection": {
+    "lost": "Connection to the server was lost. Retrying…"
+  },
   "nav": {
     "brand": "CamTrap Verify",
     "theme_dark": "Switch to dark theme",

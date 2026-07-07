@@ -149,4 +149,13 @@ export const api = {
 
   checkVersion: () =>
     req<{ current: string; latest: string | null; update_available: boolean; release_url: string | null }>('/api/version'),
+
+  checkHealth: async (): Promise<boolean> => {
+    try {
+      const r = await fetch('/api/health')
+      return r.ok
+    } catch {
+      return false
+    }
+  },
 }

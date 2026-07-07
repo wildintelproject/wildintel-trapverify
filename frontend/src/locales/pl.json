@@ -4,6 +4,9 @@
     "download": "Pobierz",
     "dismiss": "Zamknij"
   },
+  "connection": {
+    "lost": "Utracono połączenie z serwerem. Ponawianie próby…"
+  },
   "nav": {
     "brand": "CamTrap Verify",
     "theme_dark": "Przełącz na ciemny motyw",

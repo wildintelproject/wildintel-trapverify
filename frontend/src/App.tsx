@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import UpdateBanner from './components/UpdateBanner'
+import ConnectionBanner from './components/ConnectionBanner'
 import GalleryPage from './pages/GalleryPage'
 import IndexPage from './pages/IndexPage'
 import ResultsPage from './pages/ResultsPage'
@@ -16,11 +17,23 @@ export default function App() {
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
   const [updateDismissed, setUpdateDismissed] = useState(false)
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
+  const [backendDown, setBackendDown] = useState(false)
 
   useEffect(() => {
     api.getState()
       .then((s) => setReady(s.ready))
       .catch(() => setReady(false))
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function ping() {
+      const ok = await api.checkHealth()
+      if (!cancelled) setBackendDown(!ok)
+    }
+    ping()
+    const interval = setInterval(ping, 10_000)
+    return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
   useEffect(() => {
@@ -43,6 +56,7 @@ export default function App() {
     <BrowserRouter>
       <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
         <Navbar ready={ready} version={currentVersion} />
+        {backendDown && <ConnectionBanner />}
         {update && !updateDismissed && (
           <UpdateBanner
             latest={update.latest}
