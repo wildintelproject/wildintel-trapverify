@@ -71,6 +71,8 @@
     "label_image_base_dir": "Directorio de imágenes",
     "placeholder_image_base_dir": "/ruta/a/imágenes",
     "hint_image_base_dir": "Directorio al que se resuelven las rutas relativas de filePath en media.csv. Déjalo vacío para usar el directorio padre del directorio de datos.",
+    "checking_images": "Comprobando que las imágenes se pueden leer…",
+    "images_missing_warning": "{{missing}} de {{total}} imágenes no se han encontrado en esta ruta. Revisa el directorio de imágenes.",
     "img_base_dir_picker_title": "Seleccionar directorio de imágenes",
     "label_output_dir": "Directorio de salida",
     "label_output_optional": "(opcional)",

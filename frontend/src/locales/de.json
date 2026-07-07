@@ -71,6 +71,8 @@
     "label_image_base_dir": "Bildverzeichnis",
     "placeholder_image_base_dir": "/Pfad/zu/Bildern",
     "hint_image_base_dir": "Verzeichnis zur Auflösung relativer filePath-Werte in media.csv. Leer lassen, um das übergeordnete Verzeichnis des Datenverzeichnisses zu verwenden.",
+    "checking_images": "Es wird geprüft, ob die Bilder gelesen werden können…",
+    "images_missing_warning": "{{missing}} von {{total}} Bildern wurden unter diesem Pfad nicht gefunden. Überprüfen Sie das Bildverzeichnis.",
     "img_base_dir_picker_title": "Bildverzeichnis auswählen",
     "label_output_dir": "Ausgabeverzeichnis",
     "label_output_optional": "(optional)",

@@ -67,6 +67,45 @@ def fs_inspect(path: str) -> dict:
     return {"species": species, "study_start": start_date, "study_end": end_date}
 
 
+@router.get("/check-images")
+def check_images(camtrap_dir: str, image_base_dir: str = "") -> dict:
+    """Check how many media.csv filePath entries resolve to an existing local file.
+
+    Remote (http/https) filePath values are skipped since those are fetched
+    on demand via the image proxy and are not expected to exist locally.
+    Mirrors the path-resolution rule used when actually serving images:
+    relative paths resolve against image_base_dir if given, otherwise
+    against the parent of camtrap_dir.
+    """
+    p = Path(camtrap_dir)
+    med_path = _find_csv(p, "media")
+    if med_path is None:
+        raise HTTPException(400, f"No se encontró media.csv en {camtrap_dir}")
+
+    med = _read_csv(med_path)
+    base = Path(image_base_dir) if image_base_dir else p.parent
+
+    total = 0
+    missing = 0
+    examples: list[str] = []
+    for raw_fp in med.get("filePath", pd.Series(dtype=str)).dropna():
+        fp = str(raw_fp)
+        if fp.startswith("http://") or fp.startswith("https://"):
+            continue
+        total += 1
+        file_path = Path(fp)
+        if not file_path.is_absolute():
+            file_path = (base / file_path).resolve()
+        if not file_path.exists():
+            missing += 1
+            if len(examples) < 5:
+                examples.append(str(file_path))
+
+    if missing:
+        logger.warning("Image check: %d/%d media files missing under base=%s", missing, total, base)
+    return {"total": total, "missing": missing, "examples": examples}
+
+
 @router.get("/browse")
 def fs_browse(path: str = "", show_files: bool = False, ext: str = "") -> dict:
     """Return subdirectories (and optionally files) of path for the filesystem picker.

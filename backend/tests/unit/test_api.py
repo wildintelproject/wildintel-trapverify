@@ -74,6 +74,59 @@ def test_fs_inspect_date_range_order(client, camtrap_dir):
     assert data["study_start"] <= data["study_end"]
 
 
+# ─── /api/fs/check-images ─────────────────────────────────────────────────────
+
+def test_check_images_all_missing_by_default(client, camtrap_dir):
+    """Without image_base_dir, relative filePaths resolve against camtrap_dir's parent — none exist."""
+    resp = client.get("/api/fs/check-images", params={"camtrap_dir": str(camtrap_dir)})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 5
+    assert data["missing"] == 5
+    assert len(data["examples"]) == 5
+
+def test_check_images_found_with_image_base_dir(client, camtrap_dir):
+    img_dir = camtrap_dir / "img"
+    img_dir.mkdir()
+    for i in range(5):
+        (img_dir / f"frame{i}.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(camtrap_dir),
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 5
+    assert data["missing"] == 0
+    assert data["examples"] == []
+
+def test_check_images_partial_missing(client, camtrap_dir):
+    img_dir = camtrap_dir / "img"
+    img_dir.mkdir()
+    (img_dir / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    (img_dir / "frame1.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(camtrap_dir),
+    })
+    data = resp.json()
+    assert data["total"] == 5
+    assert data["missing"] == 3
+
+def test_check_images_missing_media_csv(client, tmp_path):
+    resp = client.get("/api/fs/check-images", params={"camtrap_dir": str(tmp_path)})
+    assert resp.status_code == 400
+
+def test_check_images_skips_remote_urls(client, camtrap_dir):
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    med.loc[len(med)] = {
+        "mediaID": "m006", "deploymentID": "DEP1",
+        "timestamp": "2025-11-02 13:00:00", "filePath": "https://example.com/frame.jpg",
+    }
+    med.to_csv(camtrap_dir / "media.csv", index=False)
+    resp = client.get("/api/fs/check-images", params={"camtrap_dir": str(camtrap_dir)})
+    data = resp.json()
+    assert data["total"] == 5
+
+
 # ─── /api/fs/browse ───────────────────────────────────────────────────────────
 
 def test_fs_browse_home(client):

@@ -71,6 +71,8 @@
     "label_image_base_dir": "Katalog obrazów",
     "placeholder_image_base_dir": "/ścieżka/do/obrazów",
     "hint_image_base_dir": "Katalog używany do rozwiązywania względnych ścieżek filePath w media.csv. Pozostaw puste, aby użyć katalogu nadrzędnego katalogu danych.",
+    "checking_images": "Sprawdzanie, czy obrazy można odczytać…",
+    "images_missing_warning": "{{missing}} z {{total}} obrazów nie zostało znalezionych pod tą ścieżką. Sprawdź katalog obrazów.",
     "img_base_dir_picker_title": "Wybierz katalog obrazów",
     "label_output_dir": "Katalog wyjściowy",
     "label_output_optional": "(opcjonalnie)",

@@ -78,6 +78,8 @@ export default function SetupPage({ onSetup, ready }: Props) {
     speciesCount: number; resolved: number; total: number; pct: number
   } | null>(null)
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
+  const [imageCheck, setImageCheck] = useState<{ total: number; missing: number } | null>(null)
+  const [checkingImages, setCheckingImages] = useState(false)
 
   useEffect(() => {
     api.getState().then((s) => {
@@ -99,6 +101,23 @@ export default function SetupPage({ onSetup, ready }: Props) {
       setSessionSummary({ speciesCount: sp.length, resolved, total, pct })
     }).catch(() => {})
   }, [ready])
+
+  useEffect(() => {
+    if (!(step === 0 && sourceType === 'local' && localFormat === 'camtrapdp' && form.camtrap_dir.trim())) {
+      setImageCheck(null)
+      setCheckingImages(false)
+      return
+    }
+    let cancelled = false
+    setCheckingImages(true)
+    const handle = setTimeout(() => {
+      api.checkImages(form.camtrap_dir, form.image_base_dir)
+        .then((r) => { if (!cancelled) setImageCheck(r) })
+        .catch(() => { if (!cancelled) setImageCheck(null) })
+        .finally(() => { if (!cancelled) setCheckingImages(false) })
+    }, 500)
+    return () => { cancelled = true; clearTimeout(handle) }
+  }, [step, sourceType, localFormat, form.camtrap_dir, form.image_base_dir])
 
   function set<K extends keyof WorkflowConfig>(key: K, value: WorkflowConfig[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -775,6 +794,17 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </button>
             </div>
             <p className={hintClass}>{t('setup.hint_image_base_dir')}</p>
+            {checkingImages && (
+              <p className={hintClass}>{t('setup.checking_images')}</p>
+            )}
+            {!checkingImages && imageCheck && imageCheck.missing > 0 && (
+              <div className="flex items-start gap-2 px-3 py-2 mt-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 text-sm">
+                <svg className="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M7.5 1C3.91 1 1 3.91 1 7.5S3.91 14 7.5 14 14 11.09 14 7.5 11.09 1 7.5 1zm.75 10.5h-1.5V7h1.5v4.5zm0-6h-1.5V4h1.5v1.5z" fill="currentColor"/>
+                </svg>
+                <span>{t('setup.images_missing_warning', { missing: imageCheck.missing, total: imageCheck.total })}</span>
+              </div>
+            )}
           </div>
 
         </div>

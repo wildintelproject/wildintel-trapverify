@@ -70,6 +70,11 @@ export const api = {
       `/api/fs/inspect?path=${encodeURIComponent(path)}`,
     ),
 
+  checkImages: (camtrapDir: string, imageBaseDir: string) =>
+    req<{ total: number; missing: number; examples: string[] }>(
+      `/api/fs/check-images?camtrap_dir=${encodeURIComponent(camtrapDir)}&image_base_dir=${encodeURIComponent(imageBaseDir)}`,
+    ),
+
   getResults: () =>
     req<{
       session_dir: string

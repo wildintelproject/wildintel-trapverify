@@ -71,6 +71,8 @@
     "label_image_base_dir": "Images directory",
     "placeholder_image_base_dir": "/path/to/images",
     "hint_image_base_dir": "Directory used to resolve relative filePath values in media.csv. Leave empty to use the parent of the data directory.",
+    "checking_images": "Checking that images can be read…",
+    "images_missing_warning": "{{missing}} of {{total}} images could not be found at this path. Check the images directory.",
     "img_base_dir_picker_title": "Select images directory",
     "label_output_dir": "Output directory",
     "label_output_optional": "(optional)",
