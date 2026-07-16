@@ -939,21 +939,27 @@ def build_occupancy_inputs(
     occasion_days  = int(config["occasion_days"])
     target_species = config["target_species"]
 
-    sites     = sorted(candidates["siteID"].astype(str).unique())
-    n_sites   = len(sites)
     windows   = _occasion_windows(study_start, study_end, occasion_days)
     n_occ     = len(windows)
     occ_cols  = [f"occ{j + 1}" for j in range(n_occ)]
 
-    # ── Camera operation matrix (días activos por sitio × ocasión) ──────────
-    op = np.zeros((n_sites, n_occ), dtype=int)
-
-    # Intentar usar deploymentStart/End de deployments.csv
+    # Universo de sitios: todo despliegue CLASIFICADO (presente en deployments.csv),
+    # incluyendo cámaras sin ninguna detección del target (ceros verdaderos). Usar
+    # solo los siteID de candidates infla psi_obs porque excluye esas cámaras.
     dep_path = Path(config["camtrap_dir"]) / "deployments.csv"
-    activity: dict[str, list[tuple[date, date]]] = {}
     if dep_path.exists():
         dep = pd.read_csv(dep_path, dtype=str)
         site_col = detect_site_col(dep)
+        sites = sorted(dep[site_col].astype(str).unique())
+    else:
+        sites = sorted(candidates["siteID"].astype(str).unique())
+    n_sites   = len(sites)
+
+    # ── Camera operation matrix (días activos por sitio × ocasión) ──────────
+    op = np.zeros((n_sites, n_occ), dtype=int)
+
+    activity: dict[str, list[tuple[date, date]]] = {}
+    if dep_path.exists():
         if "deploymentStart" in dep.columns and "deploymentEnd" in dep.columns:
             for _, row in dep.iterrows():
                 s = str(row[site_col])

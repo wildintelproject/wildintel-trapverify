@@ -499,6 +499,35 @@ def test_build_occupancy_inputs_verified_only_confirmed(candidates, decisions_di
     total_confirmed = (verified[occ_cols] == 1).sum().sum()
     assert total_confirmed == 1
 
+def test_build_occupancy_inputs_includes_classified_site_with_no_detections(
+    candidates, decisions_dir, session_config, camtrap_dir, tmp_path,
+):
+    """A camera that was classified but never detected the target is a true
+    zero, not an exclusion. Adding SITE_C (no observations at all) to
+    deployments.csv must not drop it from the site universe."""
+    dep = pd.read_csv(camtrap_dir / "deployments.csv", dtype=str)
+    dep = pd.concat([dep, pd.DataFrame({
+        "deploymentID":    ["DEP3"],
+        "locationID":      ["SITE_C"],
+        "locationName":    ["Site C"],
+        "deploymentStart": ["2025-11-01"],
+        "deploymentEnd":   ["2025-11-10"],
+    })], ignore_index=True)
+    dep.to_csv(camtrap_dir / "deployments.csv", index=False)
+
+    out = tmp_path / "occ"
+    build_occupancy_inputs(candidates, decisions_dir, session_config, out)
+
+    op = pd.read_csv(out / "camera_operation.csv")
+    assert "SITE_C" in set(op["siteID"])
+    occ_cols = [c for c in op.columns if c.startswith("occ")]
+    site_c_op = op.loc[op["siteID"] == "SITE_C", occ_cols].iloc[0]
+    assert (site_c_op > 0).all()  # active the whole period, per deploymentStart/End
+
+    naive = pd.read_csv(out / "dethist_naive_Vulpes_vulpes.csv")
+    site_c_row = naive.loc[naive["siteID"] == "SITE_C", occ_cols].iloc[0]
+    assert (site_c_row == 0).all()  # classified, active, no detections -> true zero
+
 
 # ─── build_review_effort ──────────────────────────────────────────────────────
 
