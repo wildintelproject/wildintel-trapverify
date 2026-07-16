@@ -144,6 +144,32 @@ def test_build_candidates_occasion_assignment(candidates):
     occ = candidates[candidates["mediaID"] == "m003"]["occasion"].iloc[0]
     assert occ == 2
 
+def test_build_candidates_collapses_duplicate_bounding_boxes(camtrap_dir):
+    """Two observation rows for the same (mediaID, scientificName) -- e.g. two
+    bounding boxes for the same species in one frame -- must collapse to a
+    single candidate keeping the highest-probability observationID."""
+    obs = pd.read_csv(camtrap_dir / "observations.csv", dtype=str)
+    dup = obs[obs["mediaID"] == "m001"].copy()
+    dup["observationID"] = "o001b"
+    dup["classificationProbability"] = "0.3"  # lower than o001's 0.9
+    pd.concat([obs, dup], ignore_index=True).to_csv(
+        camtrap_dir / "observations.csv", index=False
+    )
+
+    dep, med, obs2 = load_camtrapdp(camtrap_dir)
+    result = build_candidates(
+        dep, med, obs2,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+    )
+    m001_rows = result[result["mediaID"] == "m001"]
+    assert len(m001_rows) == 1
+    assert m001_rows.iloc[0]["observationID"] == "o001"  # the higher-probability one
+
 def test_build_candidates_no_match_returns_empty(camtrap_dir):
     dep, med, obs = load_camtrapdp(camtrap_dir)
     result = build_candidates(
@@ -461,6 +487,26 @@ def test_export_extended_true_without_candidates_fallback(camtrap_dir, tmp_path,
     )
     obs = pd.read_csv(out / "observations.csv", dtype=str)
     assert (obs["classificationMethod"] == "human").sum() == 1
+
+def test_export_confirms_duplicate_bounding_box_siblings(camtrap_dir, tmp_path, decisions_dir):
+    """A confirmed representative's sibling rows -- same (mediaID,
+    scientificName), a different observationID -- must also be marked
+    human-confirmed, even though build_candidates() only ever surfaces the
+    representative for review."""
+    obs = pd.read_csv(camtrap_dir / "observations.csv", dtype=str)
+    dup = obs[obs["observationID"] == "o001"].copy()  # confirmed rep's mediaID
+    dup["observationID"] = "o001b"
+    dup["classificationProbability"] = "0.3"
+    pd.concat([obs, dup], ignore_index=True).to_csv(
+        camtrap_dir / "observations.csv", index=False
+    )
+
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, decisions_dir, set())
+
+    result = pd.read_csv(out / "observations.csv", dtype=str)
+    sibling = result[result["observationID"] == "o001b"].iloc[0]
+    assert sibling["classificationMethod"] == "human"
 
 
 # ─── build_occupancy_inputs ───────────────────────────────────────────────────

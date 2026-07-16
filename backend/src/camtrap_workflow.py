@@ -363,6 +363,20 @@ def build_candidates(
         & (obs["scientificName"].isin(target_species))
     ].copy()
 
+    # Collapse multiple observation rows for the same (mediaID, scientificName)
+    # -- e.g. several bounding boxes for the same species in one frame -- to a
+    # single representative row (highest classificationProbability), mirroring
+    # R's prepare_camtrapdp_dir(). Otherwise the same photo would show up
+    # twice as separate candidates.
+    target_obs["_prob_sort"] = pd.to_numeric(
+        target_obs["classificationProbability"], errors="coerce"
+    ).fillna(-1)
+    target_obs = (
+        target_obs.sort_values("_prob_sort", ascending=False)
+        .drop_duplicates(subset=["mediaID", "scientificName"], keep="first")
+        .drop(columns="_prob_sort")
+    )
+
     joined = (
         target_obs
         .merge(med[["mediaID", "filePath", "ts"]], on="mediaID", how="left")
@@ -866,8 +880,17 @@ def export_verified_camtrapdp(
         confirmed_ids = set(burst_mates["observationID"].dropna().tolist())
 
     if confirmed_ids:
+        # build_candidates() collapses duplicate observation rows for the same
+        # (mediaID, scientificName) to one representative, so confirmed_ids
+        # only names that representative's observationID. Expand back to every
+        # sibling row sharing that (mediaID, scientificName) here, against the
+        # original observations.csv, so all of them get marked confirmed too.
+        conf_rows = obs[obs["observationID"].isin(confirmed_ids)]
+        conf_pairs = set(zip(conf_rows["mediaID"], conf_rows["scientificName"]))
+        pairs = pd.Series(list(zip(obs["mediaID"], obs["scientificName"])), index=obs.index)
+        mask = pairs.isin(conf_pairs)
+
         now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
-        mask = obs["observationID"].isin(confirmed_ids)
         obs.loc[mask, "classificationMethod"] = "human"
         obs.loc[mask, "classificationProbability"] = "1.0"
         obs.loc[mask, "classifiedBy"] = classified_by_label
