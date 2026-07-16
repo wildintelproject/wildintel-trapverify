@@ -16,11 +16,13 @@ from camtrap_workflow import (
     deepfaune_to_camtrapdp,
     detect_site_col,
     export_verified_camtrapdp,
+    find_flat_search_ambiguities,
     get_events,
     get_review_events,
     load_all_decisions,
     load_camtrapdp,
     normalise_ts,
+    resolve_media_path,
     sanitize,
     save_decisions,
     species_stats,
@@ -92,6 +94,143 @@ def test_load_camtrapdp_row_counts(camtrap_dir):
     assert len(dep) == 2
     assert len(med) == 5
     assert len(obs) == 5
+
+def test_load_camtrapdp_derives_filename_when_missing(camtrap_dir):
+    """The fixture's media.csv has no fileName column; it must be derived
+    from the basename of filePath."""
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    assert "fileName" in med.columns
+    row = med[med["mediaID"] == "m001"].iloc[0]
+    assert row["fileName"] == "frame0.jpg"
+
+def test_load_camtrapdp_keeps_existing_filename_column(camtrap_dir):
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    med["fileName"] = "custom_name.jpg"
+    med.to_csv(camtrap_dir / "media.csv", index=False)
+    dep, med2, obs = load_camtrapdp(camtrap_dir)
+    assert (med2["fileName"] == "custom_name.jpg").all()
+
+
+# ─── resolve_media_path ───────────────────────────────────────────────────────
+
+def test_resolve_media_path_structured_takes_precedence(tmp_path):
+    (tmp_path / "DEP1").mkdir()
+    (tmp_path / "DEP1" / "frame0.jpg").write_bytes(b"x")
+    result = resolve_media_path(
+        "/nonexistent/frame0.jpg", "DEP1", "frame0.jpg",
+        str(tmp_path), tmp_path,
+    )
+    assert result == tmp_path / "DEP1" / "frame0.jpg"
+
+def test_resolve_media_path_falls_back_when_structured_missing(tmp_path):
+    (tmp_path / "img").mkdir()
+    (tmp_path / "img" / "frame0.jpg").write_bytes(b"x")
+    result = resolve_media_path(
+        "img/frame0.jpg", "DEP1", "frame0.jpg",
+        str(tmp_path), tmp_path,
+    )
+    assert result == tmp_path / "img" / "frame0.jpg"
+
+def test_resolve_media_path_no_image_base_dir_uses_fallback_base(tmp_path):
+    fallback = tmp_path / "elsewhere"
+    fallback.mkdir()
+    result = resolve_media_path("img/frame0.jpg", "DEP1", "frame0.jpg", "", fallback)
+    assert result == (fallback / "img" / "frame0.jpg").resolve()
+
+def test_resolve_media_path_absolute_filepath_without_image_base_dir(tmp_path):
+    result = resolve_media_path("/abs/frame0.jpg", "DEP1", "frame0.jpg", "", tmp_path)
+    assert result == Path("/abs/frame0.jpg")
+
+def test_resolve_media_path_flat_search_disabled_by_default(tmp_path):
+    """Without flat_search, a loose file (no deploymentID subfolder) is not found."""
+    loose = tmp_path / "loose"
+    loose.mkdir()
+    (loose / "frame0.jpg").write_bytes(b"x")
+    result = resolve_media_path(
+        "img/frame0.jpg", "DEP1", "frame0.jpg", str(tmp_path), tmp_path,
+    )
+    assert result != loose / "frame0.jpg"
+    assert not result.exists()
+
+def test_resolve_media_path_flat_search_finds_loose_file(tmp_path):
+    loose = tmp_path / "loose"
+    loose.mkdir()
+    (loose / "frame0.jpg").write_bytes(b"x")
+    result = resolve_media_path(
+        "img/frame0.jpg", "DEP1", "frame0.jpg", str(tmp_path), tmp_path,
+        flat_search=True,
+    )
+    assert result == loose / "frame0.jpg"
+
+def test_resolve_media_path_flat_search_case_insensitive(tmp_path):
+    loose = tmp_path / "loose"
+    loose.mkdir()
+    (loose / "Frame0.JPG").write_bytes(b"x")
+    result = resolve_media_path(
+        "img/frame0.jpg", "DEP1", "frame0.jpg", str(tmp_path), tmp_path,
+        flat_search=True,
+    )
+    assert result == loose / "Frame0.JPG"
+
+def test_resolve_media_path_flat_search_disambiguates_by_deployment_id(tmp_path):
+    (tmp_path / "DEP1").mkdir()
+    (tmp_path / "DEP2").mkdir()
+    (tmp_path / "DEP1" / "frame0.jpg").write_bytes(b"x")
+    (tmp_path / "DEP2" / "frame0.jpg").write_bytes(b"x")
+    result = resolve_media_path(
+        "img/frame0.jpg", "DEP2", "frame0.jpg", str(tmp_path), tmp_path,
+        flat_search=True,
+    )
+    assert result == tmp_path / "DEP2" / "frame0.jpg"
+
+def test_resolve_media_path_flat_search_still_ambiguous_falls_through(tmp_path, caplog):
+    """Same fileName under two folders, neither matching deploymentID: ambiguous,
+    logged, and resolution falls through to the fallback rule instead of
+    picking one at random."""
+    (tmp_path / "OTHER1").mkdir()
+    (tmp_path / "OTHER2").mkdir()
+    (tmp_path / "OTHER1" / "frame0.jpg").write_bytes(b"x")
+    (tmp_path / "OTHER2" / "frame0.jpg").write_bytes(b"x")
+    result = resolve_media_path(
+        "img/frame0.jpg", "DEP1", "frame0.jpg", str(tmp_path), tmp_path,
+        flat_search=True,
+    )
+    assert result == (tmp_path / "img" / "frame0.jpg").resolve()
+    assert "Ambiguous" in caplog.text
+
+
+# ─── find_flat_search_ambiguities ─────────────────────────────────────────────
+
+def test_find_flat_search_ambiguities_no_image_base_dir_returns_empty():
+    med = pd.DataFrame({"mediaID": ["m1"], "deploymentID": ["DEP1"], "fileName": ["frame0.jpg"]})
+    assert find_flat_search_ambiguities(med, "") == []
+
+def test_find_flat_search_ambiguities_none_when_structured_resolves(tmp_path):
+    (tmp_path / "DEP1").mkdir()
+    (tmp_path / "DEP1" / "frame0.jpg").write_bytes(b"x")
+    med = pd.DataFrame({"mediaID": ["m1"], "deploymentID": ["DEP1"], "fileName": ["frame0.jpg"]})
+    assert find_flat_search_ambiguities(med, str(tmp_path)) == []
+
+def test_find_flat_search_ambiguities_none_when_deployment_disambiguates(tmp_path):
+    (tmp_path / "DEP1").mkdir()
+    (tmp_path / "DEP2").mkdir()
+    (tmp_path / "DEP1" / "frame0.jpg").write_bytes(b"x")
+    (tmp_path / "DEP2" / "frame0.jpg").write_bytes(b"x")
+    med = pd.DataFrame({"mediaID": ["m1"], "deploymentID": ["DEP2"], "fileName": ["frame0.jpg"]})
+    assert find_flat_search_ambiguities(med, str(tmp_path)) == []
+
+def test_find_flat_search_ambiguities_reports_true_ambiguity(tmp_path):
+    """Same fileName under two folders, neither matching deploymentID."""
+    (tmp_path / "OTHER1").mkdir()
+    (tmp_path / "OTHER2").mkdir()
+    (tmp_path / "OTHER1" / "frame0.jpg").write_bytes(b"x")
+    (tmp_path / "OTHER2" / "frame0.jpg").write_bytes(b"x")
+    med = pd.DataFrame({"mediaID": ["m1"], "deploymentID": ["DEP1"], "fileName": ["frame0.jpg"]})
+    result = find_flat_search_ambiguities(med, str(tmp_path))
+    assert len(result) == 1
+    assert result[0]["mediaID"] == "m1"
+    assert result[0]["fileName"] == "frame0.jpg"
+    assert len(result[0]["candidates"]) == 2
 
 
 # ─── build_candidates ─────────────────────────────────────────────────────────

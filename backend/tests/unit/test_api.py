@@ -126,6 +126,93 @@ def test_check_images_skips_remote_urls(client, camtrap_dir):
     data = resp.json()
     assert data["total"] == 5
 
+def test_check_images_structured_deployment_filename_layout(client, camtrap_dir, tmp_path):
+    """image_base_dir/deploymentID/fileName resolves even when filePath (img/frameN.jpg)
+    does not match that layout at all."""
+    img_root = tmp_path / "images"
+    (img_root / "DEP1").mkdir(parents=True)
+    (img_root / "DEP2").mkdir(parents=True)
+    for name in ("frame0.jpg", "frame1.jpg", "frame2.jpg", "frame4.jpg"):
+        (img_root / "DEP1" / name).write_bytes(b"\xff\xd8\xff\xe0")
+    (img_root / "DEP2" / "frame3.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(img_root),
+    })
+    data = resp.json()
+    assert data["total"] == 5
+    assert data["missing"] == 0
+
+def test_check_images_flat_search_disabled_by_default(client, camtrap_dir, tmp_path):
+    """Images loose in a folder (no deploymentID subfolder) stay missing unless flat_search=True."""
+    img_root = tmp_path / "images"
+    loose = img_root / "loose"
+    loose.mkdir(parents=True)
+    for name in ("frame0.jpg", "frame1.jpg", "frame2.jpg", "frame3.jpg", "frame4.jpg"):
+        (loose / name).write_bytes(b"\xff\xd8\xff\xe0")
+
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(img_root),
+    })
+    assert resp.json()["missing"] == 5
+
+def test_check_images_flat_search_finds_loose_files(client, camtrap_dir, tmp_path):
+    img_root = tmp_path / "images"
+    loose = img_root / "loose"
+    loose.mkdir(parents=True)
+    for name in ("frame0.jpg", "frame1.jpg", "frame2.jpg", "frame3.jpg", "frame4.jpg"):
+        (loose / name).write_bytes(b"\xff\xd8\xff\xe0")
+
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(img_root), "flat_search": True,
+    })
+    assert resp.json()["missing"] == 0
+
+def test_check_images_flat_search_reports_ambiguous(client, camtrap_dir, tmp_path):
+    """frame0.jpg loose under two unrelated folders (neither named DEP1) is ambiguous."""
+    img_root = tmp_path / "images"
+    (img_root / "OTHER1").mkdir(parents=True)
+    (img_root / "OTHER2").mkdir(parents=True)
+    (img_root / "OTHER1" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    (img_root / "OTHER2" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(img_root), "flat_search": True,
+    })
+    data = resp.json()
+    assert len(data["ambiguous"]) == 1
+    assert data["ambiguous"][0]["fileName"] == "frame0.jpg"
+
+def test_check_images_no_ambiguous_key_without_flat_search(client, camtrap_dir, tmp_path):
+    img_root = tmp_path / "images"
+    (img_root / "OTHER1").mkdir(parents=True)
+    (img_root / "OTHER2").mkdir(parents=True)
+    (img_root / "OTHER1" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    (img_root / "OTHER2" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(img_root),
+    })
+    assert resp.json()["ambiguous"] == []
+
+def test_check_images_structured_takes_precedence_over_wrong_absolute_filepath(client, camtrap_dir, tmp_path):
+    """A wrong absolute filePath must not stop the deploymentID/fileName lookup
+    from finding the real file under image_base_dir."""
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    med.loc[med["mediaID"] == "m001", "filePath"] = "/nonexistent/somewhere/frame0.jpg"
+    med.to_csv(camtrap_dir / "media.csv", index=False)
+
+    img_root = tmp_path / "images"
+    (img_root / "DEP1").mkdir(parents=True)
+    (img_root / "DEP1" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(img_root),
+    })
+    data = resp.json()
+    # m001 resolves via DEP1/frame0.jpg; the other 4 are still missing (not placed)
+    assert data["missing"] == 4
+
 
 # ─── /api/fs/browse ───────────────────────────────────────────────────────────
 
@@ -745,6 +832,37 @@ def test_open_folder_missing_binary_returns_ok_false(client, setup_session):
     assert resp.json()["ok"] is False
 
 
+# ─── /api/setup with flat_search ambiguity ───────────────────────────────────
+
+def test_setup_blocked_on_ambiguous_flat_search(client, camtrap_dir, tmp_path):
+    """Setup must abort (not silently proceed) when flat_search finds an
+    ambiguous match, mirroring R's resolve_media_files() abort condition."""
+    img_root = tmp_path / "images"
+    (img_root / "OTHER1").mkdir(parents=True)
+    (img_root / "OTHER2").mkdir(parents=True)
+    (img_root / "OTHER1" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+    (img_root / "OTHER2" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+    out = tmp_path / "out"
+    resp = client.post("/api/setup", json={
+        "camtrap_dir":      str(camtrap_dir),
+        "output_dir":       str(out),
+        "target_species":   ["Vulpes vulpes"],
+        "study_start":      "2025-11-01",
+        "study_end":        "2025-11-10",
+        "occasion_days":    5,
+        "total_iterations": 100_000,
+        "gap_seconds":      60,
+        "min_score":        0.5,
+        "image_base_dir":   str(img_root),
+        "flat_search":      True,
+    })
+    assert resp.status_code == 400
+    assert "frame0.jpg" in resp.json()["detail"]
+    # no session must have been created
+    assert client.get("/api/state").json()["ready"] is False
+
+
 # ─── /api/image (image_base_dir) ─────────────────────────────────────────────
 
 @pytest.fixture
@@ -794,3 +912,32 @@ def test_serve_image_unknown_media_id_returns_404(client, setup_session):
     """Unknown mediaID returns 404."""
     resp = client.get("/api/image/nonexistent_id")
     assert resp.status_code == 404
+
+def test_serve_image_structured_precedence_over_wrong_absolute_filepath(client, camtrap_dir, tmp_path):
+    """image_base_dir/deploymentID/fileName must win even when filePath is an
+    absolute path that does not exist on disk."""
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    med.loc[med["mediaID"] == "m001", "filePath"] = "/nonexistent/somewhere/frame0.jpg"
+    med.to_csv(camtrap_dir / "media.csv", index=False)
+
+    img_root = tmp_path / "images"
+    (img_root / "DEP1").mkdir(parents=True)
+    (img_root / "DEP1" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+    out = tmp_path / "out"
+    resp = client.post("/api/setup", json={
+        "camtrap_dir":      str(camtrap_dir),
+        "output_dir":       str(out),
+        "target_species":   ["Vulpes vulpes"],
+        "study_start":      "2025-11-01",
+        "study_end":        "2025-11-10",
+        "occasion_days":    5,
+        "total_iterations": 100_000,
+        "gap_seconds":      60,
+        "min_score":        0.5,
+        "image_base_dir":   str(img_root),
+    })
+    assert resp.status_code == 200
+
+    resp = client.get("/api/image/m001")
+    assert resp.status_code == 200

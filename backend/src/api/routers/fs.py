@@ -68,42 +68,67 @@ def fs_inspect(path: str) -> dict:
 
 
 @router.get("/check-images")
-def check_images(camtrap_dir: str, image_base_dir: str = "") -> dict:
-    """Check how many media.csv filePath entries resolve to an existing local file.
+def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool = False) -> dict:
+    """Check how many media.csv entries resolve to an existing local file.
 
-    Remote (http/https) filePath values are skipped since those are fetched
-    on demand via the image proxy and are not expected to exist locally.
-    Mirrors the path-resolution rule used when actually serving images:
-    relative paths resolve against image_base_dir if given, otherwise
-    against the parent of camtrap_dir.
+    When image_base_dir is given, it takes precedence over filePath: each
+    image is first looked up at image_base_dir/deploymentID/fileName, even
+    for remote (http/https) filePath values -- a common TRAPPER export has a
+    remote filePath but the files were downloaded locally under that layout.
+    If that misses and flat_search is enabled, fileName is looked up anywhere
+    under image_base_dir (see resolve_media_path). Falls back to the previous
+    rule (filePath resolved against image_base_dir if given, otherwise
+    against the parent of camtrap_dir) when nothing above matched, or when
+    image_base_dir is not set (in which case remote filePath values are
+    skipped, since those are fetched on demand via the image proxy and are
+    not expected to exist locally).
     """
+    from camtrap_workflow import find_flat_search_ambiguities, resolve_media_path
+
     p = Path(camtrap_dir)
     med_path = _find_csv(p, "media")
     if med_path is None:
         raise HTTPException(400, f"No se encontró media.csv en {camtrap_dir}")
 
     med = _read_csv(med_path)
-    base = Path(image_base_dir) if image_base_dir else p.parent
+    if "fileName" in med.columns:
+        med["fileName"] = med["fileName"].fillna("")
+    else:
+        med["fileName"] = med.get("filePath", pd.Series(dtype=str)).fillna("").apply(
+            lambda x: Path(x).name
+        )
+    file_names = med["fileName"]
+    dep_ids = med.get("deploymentID", pd.Series(dtype=str)).fillna("")
+    file_paths = med.get("filePath", pd.Series(dtype=str))
+    fallback_base = Path(image_base_dir) if image_base_dir else p.parent
 
     total = 0
     missing = 0
     examples: list[str] = []
-    for raw_fp in med.get("filePath", pd.Series(dtype=str)).dropna():
-        fp = str(raw_fp)
-        if fp.startswith("http://") or fp.startswith("https://"):
+    for fp_raw, dep_id, file_name in zip(file_paths, dep_ids, file_names):
+        if pd.isna(fp_raw) or str(fp_raw) == "":
+            continue
+        fp = str(fp_raw)
+        is_remote = fp.startswith("http://") or fp.startswith("https://")
+        if is_remote and not image_base_dir:
             continue
         total += 1
-        file_path = Path(fp)
-        if not file_path.is_absolute():
-            file_path = (base / file_path).resolve()
+        file_path = resolve_media_path(
+            fp, str(dep_id), str(file_name), image_base_dir, fallback_base,
+            flat_search=flat_search,
+        )
         if not file_path.exists():
             missing += 1
             if len(examples) < 5:
                 examples.append(str(file_path))
 
+    ambiguous = find_flat_search_ambiguities(med, image_base_dir) if flat_search else []
+
     if missing:
-        logger.warning("Image check: %d/%d media files missing under base=%s", missing, total, base)
-    return {"total": total, "missing": missing, "examples": examples}
+        logger.warning("Image check: %d/%d media files missing under base=%s", missing, total, fallback_base)
+    if ambiguous:
+        logger.warning("Image check: %d ambiguous flat-search match(es) under %s", len(ambiguous), image_base_dir)
+    return {"total": total, "missing": missing, "examples": examples, "ambiguous": ambiguous}
 
 
 @router.get("/browse")

@@ -18,8 +18,10 @@ from camtrap_workflow import (
     build_occupancy_inputs,
     build_review_effort,
     export_verified_camtrapdp,
+    find_flat_search_ambiguities,
     load_camtrapdp,
 )
+from fastapi import HTTPException
 from occupancy_model import fit_naive_vs_verified
 
 from schemas.requests import SetupRequest
@@ -57,6 +59,23 @@ def run_setup(req: SetupRequest) -> dict:
     logger.info("Starting setup: camtrap_dir=%s species=%s", req.camtrap_dir, req.target_species)
     camtrap_dir = Path(req.camtrap_dir)
     dep, med, obs = load_camtrapdp(camtrap_dir)
+
+    if req.flat_search and req.image_base_dir:
+        ambiguous = find_flat_search_ambiguities(med, req.image_base_dir)
+        if ambiguous:
+            examples = ", ".join(a["fileName"] for a in ambiguous[:5])
+            logger.warning(
+                "Setup aborted: %d ambiguous flat-search match(es) under %s",
+                len(ambiguous), req.image_base_dir,
+            )
+            raise HTTPException(
+                400,
+                f"{len(ambiguous)} imagen(es) con nombre ambiguo bajo {req.image_base_dir} "
+                f"(el mismo nombre de archivo aparece en varias carpetas y deploymentID no "
+                f"lo distingue): {examples}. Corrige la estructura de carpetas o desactiva "
+                "la búsqueda en subcarpetas antes de continuar.",
+            )
+
     candidates = build_candidates(
         dep, med, obs,
         target_species=req.target_species,

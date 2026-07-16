@@ -11,6 +11,7 @@ interface Props { onSetup: () => void; ready: boolean }
 const DEFAULT: WorkflowConfig = {
   camtrap_dir: '',
   image_base_dir: '',
+  flat_search: false,
   output_dir: '',
   target_species: [],
   study_start: '',
@@ -78,7 +79,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
     speciesCount: number; resolved: number; total: number; pct: number
   } | null>(null)
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
-  const [imageCheck, setImageCheck] = useState<{ total: number; missing: number } | null>(null)
+  const [imageCheck, setImageCheck] = useState<{ total: number; missing: number; ambiguous: { fileName: string }[] } | null>(null)
   const [checkingImages, setCheckingImages] = useState(false)
 
   useEffect(() => {
@@ -111,13 +112,13 @@ export default function SetupPage({ onSetup, ready }: Props) {
     let cancelled = false
     setCheckingImages(true)
     const handle = setTimeout(() => {
-      api.checkImages(form.camtrap_dir, form.image_base_dir)
+      api.checkImages(form.camtrap_dir, form.image_base_dir, form.flat_search)
         .then((r) => { if (!cancelled) setImageCheck(r) })
         .catch(() => { if (!cancelled) setImageCheck(null) })
         .finally(() => { if (!cancelled) setCheckingImages(false) })
     }, 500)
     return () => { cancelled = true; clearTimeout(handle) }
-  }, [step, sourceType, localFormat, form.camtrap_dir, form.image_base_dir])
+  }, [step, sourceType, localFormat, form.camtrap_dir, form.image_base_dir, form.flat_search])
 
   function set<K extends keyof WorkflowConfig>(key: K, value: WorkflowConfig[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -190,6 +191,8 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
   function validate(currentDataRange: { min: string; max: string } | null): string | null {
     if (step === 0 && !form.camtrap_dir.trim()) return t('setup.err_no_dir')
+    if (step === 0 && imageCheck && imageCheck.ambiguous.length > 0)
+      return t('setup.err_ambiguous_images', { count: imageCheck.ambiguous.length })
     if (step === 1 && selectedSpecies.size === 0) return t('setup.err_no_species')
     if (step === 2) {
       if (!form.study_start) return t('setup.err_no_start')
@@ -794,10 +797,50 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </button>
             </div>
             <p className={hintClass}>{t('setup.hint_image_base_dir')}</p>
+            {form.image_base_dir.trim() && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.flat_search}
+                  onClick={() => set('flat_search', !form.flat_search)}
+                  className="flex items-start gap-3 w-full text-left group"
+                >
+                  <span
+                    className={`mt-0.5 relative flex-shrink-0 w-10 h-6 rounded-full transition-colors ${
+                      form.flat_search ? 'bg-blue-600' : 'bg-zinc-600'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                        form.flat_search ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
+                      {t('setup.label_flat_search')}
+                    </span>
+                    <span className={hintClass}>{t('setup.hint_flat_search')}</span>
+                  </span>
+                </button>
+              </div>
+            )}
             {checkingImages && (
               <p className={hintClass}>{t('setup.checking_images')}</p>
             )}
-            {!checkingImages && imageCheck && imageCheck.missing > 0 && (
+            {!checkingImages && imageCheck && imageCheck.ambiguous.length > 0 && (
+              <div className="flex items-start gap-2 px-3 py-2 mt-2 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 text-sm">
+                <svg className="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M7.5 1C3.91 1 1 3.91 1 7.5S3.91 14 7.5 14 14 11.09 14 7.5 11.09 1 7.5 1zm.75 10.5h-1.5V7h1.5v4.5zm0-6h-1.5V4h1.5v1.5z" fill="currentColor"/>
+                </svg>
+                <span>
+                  {t('setup.err_ambiguous_images', { count: imageCheck.ambiguous.length })}{' '}
+                  {imageCheck.ambiguous.slice(0, 5).map((a) => a.fileName).join(', ')}
+                </span>
+              </div>
+            )}
+            {!checkingImages && imageCheck && imageCheck.ambiguous.length === 0 && imageCheck.missing > 0 && (
               <div className="flex items-start gap-2 px-3 py-2 mt-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 text-sm">
                 <svg className="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                   <path d="M7.5 1C3.91 1 1 3.91 1 7.5S3.91 14 7.5 14 14 11.09 14 7.5 11.09 1 7.5 1zm.75 10.5h-1.5V7h1.5v4.5zm0-6h-1.5V4h1.5v1.5z" fill="currentColor"/>

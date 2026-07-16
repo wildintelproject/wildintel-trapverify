@@ -6,13 +6,18 @@ CamtrapDP dataset, building the ranked candidate manifest, persisting expert
 decisions, and generating the verified CamtrapDP and occupancy-model inputs.
 """
 import json
+import logging
+import os
 import re
 from datetime import date, timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 # ─── DeepFaune label map ──────────────────────────────────────────────────────
@@ -105,7 +110,147 @@ def load_camtrapdp(camtrap_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
     dep = pd.read_csv(camtrap_dir / "deployments.csv", dtype=str)
     med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
     obs = pd.read_csv(camtrap_dir / "observations.csv", dtype=str)
+    if "fileName" not in med.columns:
+        med["fileName"] = med["filePath"].apply(
+            lambda x: Path(str(x)).name if pd.notna(x) else ""
+        )
     return dep, med, obs
+
+
+@lru_cache(maxsize=8)
+def _flat_image_index(image_base_dir: str) -> dict[str, tuple[str, ...]]:
+    """Recursively index every file under ``image_base_dir`` by lowercase basename.
+
+    Mirrors the "flat" search in R's ``resolve_media_files()``: when the
+    structured ``deploymentID/fileName`` layout doesn't hold, images may sit
+    loose in a single folder (a common TRAPPER download), so we fall back to
+    a name-only lookup across the whole tree. Cached per ``image_base_dir``
+    for the lifetime of the process so it is scanned once, not per image.
+    """
+    index: dict[str, list[str]] = {}
+    for root, _dirs, files in os.walk(image_base_dir):
+        for f in files:
+            index.setdefault(f.lower(), []).append(os.path.join(root, f))
+    return {k: tuple(v) for k, v in index.items()}
+
+
+def resolve_media_path(
+    file_path: str,
+    deployment_id: str,
+    file_name: str,
+    image_base_dir: str,
+    fallback_base: Path,
+    flat_search: bool = False,
+) -> Path:
+    """Resolve a media record to a local file path.
+
+    When ``image_base_dir`` is set, it takes precedence over ``filePath``:
+    the image is first looked up at ``image_base_dir/deploymentID/fileName``
+    (matching R's structured ``resolve_media_files()``), regardless of
+    whether ``filePath`` is absolute, relative, or a remote URL -- a common
+    TRAPPER export has a remote ``filePath`` but the files were downloaded
+    locally under that layout.
+
+    If that misses and ``flat_search`` is enabled, ``fileName`` is looked up
+    case-insensitively anywhere under ``image_base_dir`` (R's "flat" mode).
+    Ties are broken by keeping only hits whose path contains
+    ``deployment_id``; if more than one candidate remains, the match is
+    ambiguous and is logged as such (not raised -- a single image failing to
+    resolve should not interrupt review of the rest), and resolution falls
+    through to the next rule.
+
+    Otherwise falls back to the previous rule (``filePath`` used as-is if
+    absolute, otherwise joined to ``fallback_base``) when nothing above
+    matched, or when ``image_base_dir`` is not set.
+
+    Args:
+        file_path: The record's ``filePath`` value (may be absolute,
+            relative, or a remote URL).
+        deployment_id: The record's ``deploymentID``.
+        file_name: The record's ``fileName`` (or a basename derived from
+            ``filePath`` when the source has no dedicated column).
+        image_base_dir: User-supplied image root, or ``""`` if not set.
+        fallback_base: Base directory used to resolve a relative
+            ``file_path`` when ``image_base_dir`` is not set (normally
+            ``camtrap_dir.parent``).
+        flat_search: If True, search ``image_base_dir`` recursively by
+            ``fileName`` when the structured path misses. Defaults to False.
+
+    Returns:
+        The resolved path (existence is not checked here).
+    """
+    if image_base_dir:
+        structured = Path(image_base_dir) / deployment_id / file_name
+        if structured.exists():
+            return structured
+
+        if flat_search and file_name:
+            hits = _flat_image_index(str(image_base_dir)).get(file_name.lower(), ())
+            if len(hits) == 1:
+                return Path(hits[0])
+            if len(hits) > 1:
+                by_dep = [h for h in hits if deployment_id and deployment_id in h]
+                if len(by_dep) == 1:
+                    return Path(by_dep[0])
+                logger.warning(
+                    "Ambiguous flat match for %s: %d candidates (%s)",
+                    file_name, len(hits), ", ".join(hits),
+                )
+
+    p = Path(file_path)
+    if not p.is_absolute():
+        base = Path(image_base_dir) if image_base_dir else fallback_base
+        p = (base / p).resolve()
+    return p
+
+
+def find_flat_search_ambiguities(med: pd.DataFrame, image_base_dir: str) -> list[dict]:
+    """Find media records whose flat-search-by-fileName match would be ambiguous.
+
+    For each record not resolved by the structured
+    ``image_base_dir/deploymentID/fileName`` path, looks up ``fileName`` in
+    the flat index; if more than one file shares that name and
+    ``deploymentID`` does not disambiguate it, the record is reported.
+    Mirrors the abort condition in R's ``resolve_media_files()``: an
+    ambiguous match risks silently associating the wrong photo with a
+    site/occasion, contaminating an occupancy cell -- callers should stop
+    and ask the user to fix the folder layout rather than guess.
+
+    Args:
+        med: Media DataFrame with at least ``deploymentID`` and ``fileName``
+            columns (as ensured by ``load_camtrapdp``).
+        image_base_dir: Image root to search under. Returns ``[]`` if empty,
+            since there is nothing to search.
+
+    Returns:
+        List of dicts with ``mediaID``, ``fileName``, ``deploymentID`` and
+        the conflicting candidate paths, one per ambiguous record.
+    """
+    if not image_base_dir:
+        return []
+    index = _flat_image_index(str(image_base_dir))
+    ambiguous: list[dict] = []
+    for _, row in med.iterrows():
+        dep_id = str(row.get("deploymentID", "") or "")
+        file_name = str(row.get("fileName", "") or "")
+        if not file_name:
+            continue
+        structured = Path(image_base_dir) / dep_id / file_name
+        if structured.exists():
+            continue
+        hits = index.get(file_name.lower(), ())
+        if len(hits) <= 1:
+            continue
+        by_dep = [h for h in hits if dep_id and dep_id in h]
+        if len(by_dep) == 1:
+            continue
+        ambiguous.append({
+            "mediaID": str(row.get("mediaID", "")),
+            "fileName": file_name,
+            "deploymentID": dep_id,
+            "candidates": list(hits),
+        })
+    return ambiguous
 
 
 def detect_site_col(dep: pd.DataFrame) -> str:
@@ -345,7 +490,7 @@ def build_candidates(
     Returns:
         DataFrame with one row per candidate frame, including columns
         ``site_occasion_key``, ``rank``, ``burst_id``, ``burst_seq``,
-        ``observationID``, ``mediaID``, ``filePath``, ``classificationProbability``,
+        ``observationID``, ``mediaID``, ``filePath``, ``fileName``, ``classificationProbability``,
         ``scientificName``, ``siteID``, ``occasion``, ``species_safe``,
         ``ts``, ``timestamp_display`` and ``is_context``.
         Returns an empty DataFrame if no candidates match the filters.
@@ -356,6 +501,10 @@ def build_candidates(
     med["ts"] = pd.to_datetime(
         med["timestamp"].apply(normalise_ts), errors="coerce", utc=False
     )
+    if "fileName" not in med.columns:
+        med["fileName"] = med["filePath"].apply(
+            lambda x: Path(str(x)).name if pd.notna(x) else ""
+        )
 
     target_obs = obs[
         (obs["observationLevel"] == "media")
@@ -379,7 +528,7 @@ def build_candidates(
 
     joined = (
         target_obs
-        .merge(med[["mediaID", "filePath", "ts"]], on="mediaID", how="left")
+        .merge(med[["mediaID", "filePath", "fileName", "ts"]], on="mediaID", how="left")
         .merge(
             dep[["deploymentID", site_col]].rename(columns={site_col: "siteID"}),
             on="deploymentID", how="left",
@@ -496,6 +645,7 @@ def build_candidates(
                     "observationID":             f"ctx_{row['mediaID']}",
                     "mediaID":                   str(row["mediaID"]),
                     "filePath":                  str(row["filePath"]),
+                    "fileName":                  str(row["fileName"]),
                     "classificationProbability": None,
                     "scientificName":            burst["scientificName"].iloc[0],
                     "deploymentID":              dep_id,
@@ -516,7 +666,7 @@ def build_candidates(
 
     return candidates[[
         "site_occasion_key", "rank", "burst_id", "burst_seq",
-        "observationID", "mediaID", "filePath",
+        "observationID", "mediaID", "filePath", "fileName",
         "classificationProbability", "scientificName", "deploymentID",
         "siteID", "occasion", "species_safe", "ts", "timestamp_display",
         "is_context",

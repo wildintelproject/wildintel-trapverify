@@ -4,7 +4,9 @@ async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch(url, options)
   if (!r.ok) {
     const text = await r.text().catch(() => r.statusText)
-    throw new Error(text)
+    let message = text
+    try { message = JSON.parse(text).detail ?? text } catch { /* not JSON */ }
+    throw new Error(message)
   }
   return r.json() as Promise<T>
 }
@@ -70,9 +72,14 @@ export const api = {
       `/api/fs/inspect?path=${encodeURIComponent(path)}`,
     ),
 
-  checkImages: (camtrapDir: string, imageBaseDir: string) =>
-    req<{ total: number; missing: number; examples: string[] }>(
-      `/api/fs/check-images?camtrap_dir=${encodeURIComponent(camtrapDir)}&image_base_dir=${encodeURIComponent(imageBaseDir)}`,
+  checkImages: (camtrapDir: string, imageBaseDir: string, flatSearch = false) =>
+    req<{
+      total: number
+      missing: number
+      examples: string[]
+      ambiguous: { mediaID: string; fileName: string; deploymentID: string; candidates: string[] }[]
+    }>(
+      `/api/fs/check-images?camtrap_dir=${encodeURIComponent(camtrapDir)}&image_base_dir=${encodeURIComponent(imageBaseDir)}&flat_search=${flatSearch}`,
     ),
 
   getResults: () =>
