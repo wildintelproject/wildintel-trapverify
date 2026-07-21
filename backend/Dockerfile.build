@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # ── System tools ──────────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl ca-certificates \
+        curl ca-certificates git \
         ruby ruby-dev \
         rpm build-essential \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
