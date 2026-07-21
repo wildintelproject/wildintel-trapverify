@@ -79,7 +79,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
     speciesCount: number; resolved: number; total: number; pct: number
   } | null>(null)
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
-  const [imageCheck, setImageCheck] = useState<{ total: number; missing: number; ambiguous: { fileName: string }[] } | null>(null)
+  const [imageCheck, setImageCheck] = useState<{ total: number; missing: number; permission_denied: number; ambiguous: { fileName: string }[] } | null>(null)
   const [checkingImages, setCheckingImages] = useState(false)
 
   useEffect(() => {
@@ -846,6 +846,14 @@ export default function SetupPage({ onSetup, ready }: Props) {
                   <path d="M7.5 1C3.91 1 1 3.91 1 7.5S3.91 14 7.5 14 14 11.09 14 7.5 11.09 1 7.5 1zm.75 10.5h-1.5V7h1.5v4.5zm0-6h-1.5V4h1.5v1.5z" fill="currentColor"/>
                 </svg>
                 <span>{t('setup.images_missing_warning', { missing: imageCheck.missing, total: imageCheck.total })}</span>
+              </div>
+            )}
+            {!checkingImages && imageCheck && imageCheck.permission_denied > 0 && (
+              <div className="flex items-start gap-2 px-3 py-2 mt-2 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 text-sm">
+                <svg className="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M7.5 1C3.91 1 1 3.91 1 7.5S3.91 14 7.5 14 14 11.09 14 7.5 11.09 1 7.5 1zm.75 10.5h-1.5V7h1.5v4.5zm0-6h-1.5V4h1.5v1.5z" fill="currentColor"/>
+                </svg>
+                <span>{t('setup.images_permission_denied_warning', { count: imageCheck.permission_denied, total: imageCheck.total })}</span>
               </div>
             )}
           </div>

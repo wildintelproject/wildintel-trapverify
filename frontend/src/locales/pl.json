@@ -78,6 +78,7 @@
     "hint_flat_search": "Jeśli obraz nie zostanie znaleziony w deploymentID/fileName, przeszukaj cały katalog obrazów w poszukiwaniu pliku o tej nazwie (przydatne, gdy zdjęcia leżą luźno w jednym folderze, jak w niektórych pobraniach TRAPPER).",
     "checking_images": "Sprawdzanie, czy obrazy można odczytać…",
     "images_missing_warning": "{{missing}} z {{total}} obrazów nie zostało znalezionych pod tą ścieżką. Sprawdź katalog obrazów.",
+    "images_permission_denied_warning": "{{count}} z {{total}} obrazów nie można było odczytać z powodu błędu uprawnień. Sprawdź uprawnienia dostępu.",
     "img_base_dir_picker_title": "Wybierz katalog obrazów",
     "label_output_dir": "Katalog wyjściowy",
     "label_output_optional": "(opcjonalnie)",
@@ -222,7 +223,8 @@
     "update_decisions": "Aktualizuj decyzje",
     "updating": "Aktualizowanie…",
     "toast_updated": "Decyzje zaktualizowane. Wyniki przeliczone.",
-    "context_frame": "Kontekst"
+    "context_frame": "Kontekst",
+    "image_permission_denied": "Odmowa dostępu. Sprawdź uprawnienia dostępu."
   },
   "help": {
     "title": "Pomoc — CamTrap Verify",

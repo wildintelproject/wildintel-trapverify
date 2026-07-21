@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import type { SpeciesStats } from '../types'
+import { isPermissionDenied } from '../utils/imageError'
 
 function Spinner() {
   return <div className="w-8 h-8 border-2 border-zinc-600 border-t-blue-500 rounded-full animate-spin" />
@@ -144,10 +145,15 @@ export default function IndexPage() {
                     <img key={i} src={src} alt="" loading="lazy"
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => {
-                        e.currentTarget.onerror = null
-                        e.currentTarget.src = imgError
-                        e.currentTarget.style.objectFit = 'contain'
-                        e.currentTarget.style.background = '#18181b'
+                        const img = e.currentTarget
+                        const failedSrc = img.src
+                        img.onerror = null
+                        img.src = imgError
+                        img.style.objectFit = 'contain'
+                        img.style.background = '#18181b'
+                        isPermissionDenied(failedSrc).then((denied) => {
+                          if (denied) img.title = t('gallery.image_permission_denied')
+                        })
                       }} />
                   ))}
                   {Array.from({ length: Math.max(0, 4 - sp.thumbnails.length) }).map((_, i) => (

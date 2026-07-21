@@ -85,6 +85,31 @@ def test_check_images_all_missing_by_default(client, camtrap_dir):
     assert data["missing"] == 5
     assert len(data["examples"]) == 5
 
+def test_check_images_reports_permission_denied_separately_from_missing(client, camtrap_dir, monkeypatch):
+    """A PermissionError while checking a file must be counted as permission_denied,
+    not lumped in with genuinely missing files."""
+    img_dir = camtrap_dir / "img"
+    img_dir.mkdir()
+    for i in range(5):
+        (img_dir / f"frame{i}.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+    real_exists = Path.exists
+
+    def fake_exists(self):
+        if self.name == "frame0.jpg":
+            raise PermissionError("denied")
+        return real_exists(self)
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+    resp = client.get("/api/fs/check-images", params={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(camtrap_dir),
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 5
+    assert data["permission_denied"] == 1
+    assert data["missing"] == 0
+
 def test_check_images_found_with_image_base_dir(client, camtrap_dir):
     img_dir = camtrap_dir / "img"
     img_dir.mkdir()
@@ -912,6 +937,19 @@ def test_serve_image_unknown_media_id_returns_404(client, setup_session):
     """Unknown mediaID returns 404."""
     resp = client.get("/api/image/nonexistent_id")
     assert resp.status_code == 404
+
+def test_serve_image_permission_denied_returns_403(client, setup_session_with_image_base_dir, monkeypatch):
+    """A PermissionError reading the resolved file returns 403, not a generic 500 or 404."""
+    real_stat = Path.stat
+
+    def fake_stat(self, *args, **kwargs):
+        if self.name == "frame0.jpg":
+            raise PermissionError("denied")
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", fake_stat)
+    resp = client.get("/api/image/m001")
+    assert resp.status_code == 403
 
 def test_serve_image_structured_precedence_over_wrong_absolute_filepath(client, camtrap_dir, tmp_path):
     """image_base_dir/deploymentID/fileName must win even when filePath is an

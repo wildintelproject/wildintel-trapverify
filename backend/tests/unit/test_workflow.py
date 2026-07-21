@@ -213,6 +213,27 @@ def test_resolve_media_path_flat_search_disambiguates_by_deployment_id(tmp_path)
     )
     assert result == tmp_path / "DEP2" / "frame0.jpg"
 
+def test_resolve_media_path_structured_permission_denied_is_treated_as_found(tmp_path, monkeypatch, caplog):
+    """A PermissionError while checking the structured path must not be treated as
+    "missing": the path is returned as-is, so the real error surfaces later when
+    the caller actually tries to read the file."""
+    import pathlib
+    real_exists = pathlib.Path.exists
+
+    def fake_exists(self):
+        if self.name == "frame0.jpg":
+            raise PermissionError("denied")
+        return real_exists(self)
+
+    monkeypatch.setattr(pathlib.Path, "exists", fake_exists)
+    result = resolve_media_path(
+        "/nonexistent/frame0.jpg", "DEP1", "frame0.jpg",
+        str(tmp_path), tmp_path,
+    )
+    assert result == tmp_path / "DEP1" / "frame0.jpg"
+    assert "Permission denied" in caplog.text
+
+
 def test_resolve_media_path_flat_search_still_ambiguous_falls_through(tmp_path, caplog):
     """Same fileName under two folders, neither matching deploymentID: ambiguous,
     logged, and resolution falls through to the fallback rule instead of

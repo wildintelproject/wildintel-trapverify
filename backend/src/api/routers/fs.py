@@ -104,6 +104,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
 
     total = 0
     missing = 0
+    permission_denied = 0
     examples: list[str] = []
     for fp_raw, dep_id, file_name in zip(file_paths, dep_ids, file_names):
         if pd.isna(fp_raw) or str(fp_raw) == "":
@@ -117,7 +118,14 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
             fp, str(dep_id), str(file_name), image_base_dir, fallback_base,
             flat_search=flat_search,
         )
-        if not file_path.exists():
+        try:
+            exists = file_path.exists()
+        except PermissionError:
+            permission_denied += 1
+            if len(examples) < 5:
+                examples.append(str(file_path))
+            continue
+        if not exists:
             missing += 1
             if len(examples) < 5:
                 examples.append(str(file_path))
@@ -126,9 +134,17 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
 
     if missing:
         logger.warning("Image check: %d/%d media files missing under base=%s", missing, total, fallback_base)
+    if permission_denied:
+        logger.warning("Image check: %d/%d media files denied access under base=%s", permission_denied, total, fallback_base)
     if ambiguous:
         logger.warning("Image check: %d ambiguous flat-search match(es) under %s", len(ambiguous), image_base_dir)
-    return {"total": total, "missing": missing, "examples": examples, "ambiguous": ambiguous}
+    return {
+        "total": total,
+        "missing": missing,
+        "permission_denied": permission_denied,
+        "examples": examples,
+        "ambiguous": ambiguous,
+    }
 
 
 @router.get("/browse")

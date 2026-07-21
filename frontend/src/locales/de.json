@@ -78,6 +78,7 @@
     "hint_flat_search": "Wenn ein Bild nicht unter deploymentID/fileName gefunden wird, wird im gesamten Bildverzeichnis nach einer Datei mit diesem Namen gesucht (nützlich, wenn Fotos lose in einem einzigen Ordner liegen, wie bei manchen TRAPPER-Downloads).",
     "checking_images": "Es wird geprüft, ob die Bilder gelesen werden können…",
     "images_missing_warning": "{{missing}} von {{total}} Bildern wurden unter diesem Pfad nicht gefunden. Überprüfen Sie das Bildverzeichnis.",
+    "images_permission_denied_warning": "{{count}} von {{total}} Bildern konnten aufgrund eines Berechtigungsfehlers nicht gelesen werden. Überprüfen Sie die Zugriffsberechtigungen.",
     "img_base_dir_picker_title": "Bildverzeichnis auswählen",
     "label_output_dir": "Ausgabeverzeichnis",
     "label_output_optional": "(optional)",
@@ -222,7 +223,8 @@
     "update_decisions": "Entscheidungen aktualisieren",
     "updating": "Aktualisierung…",
     "toast_updated": "Entscheidungen aktualisiert. Ergebnisse neu generiert.",
-    "context_frame": "Kontext"
+    "context_frame": "Kontext",
+    "image_permission_denied": "Zugriff verweigert. Überprüfen Sie die Zugriffsberechtigungen."
   },
   "help": {
     "title": "Hilfe — CamTrap Verify",

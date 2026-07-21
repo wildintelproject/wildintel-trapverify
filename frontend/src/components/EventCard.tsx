@@ -6,6 +6,7 @@ import 'swiper/css'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 import type { DetectionEvent } from '../types'
+import { isPermissionDenied } from '../utils/imageError'
 
 function bestFrameIndex(frames: DetectionEvent['frames']): number {
   let best = 0
@@ -70,9 +71,14 @@ export default function EventCard({
                 onClick={() => onOpenLightbox(eventIdx, i)}
                 loading="lazy"
                 onError={(e) => {
-                  e.currentTarget.onerror = null
-                  e.currentTarget.src = imgError
-                  e.currentTarget.style.objectFit = 'contain'
+                  const img = e.currentTarget
+                  const failedSrc = img.src
+                  img.onerror = null
+                  img.src = imgError
+                  img.style.objectFit = 'contain'
+                  isPermissionDenied(failedSrc).then((denied) => {
+                    if (denied) img.title = t('gallery.image_permission_denied')
+                  })
                 }}
               />
               {frame.isContext && (

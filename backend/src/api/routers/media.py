@@ -35,10 +35,15 @@ def serve_image(media_id: str) -> FileResponse:
         fallback_base,
         flat_search=bool(config.get("flat_search", False)),
     )
-    if not file_path.exists():
+    try:
+        stat_result = file_path.stat()
+    except FileNotFoundError:
         logger.warning("Image file missing on disk: %s", file_path)
         raise HTTPException(404, f"File not found: {file_path}")
-    return FileResponse(str(file_path))
+    except PermissionError:
+        logger.warning("Permission denied reading image file: %s", file_path)
+        raise HTTPException(403, "Permiso denegado. Revisa los permisos de acceso de la aplicación.")
+    return FileResponse(str(file_path), stat_result=stat_result)
 
 
 def _error_image(label: str) -> Response:

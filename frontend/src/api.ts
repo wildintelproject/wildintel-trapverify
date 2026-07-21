@@ -76,6 +76,7 @@ export const api = {
     req<{
       total: number
       missing: number
+      permission_denied: number
       examples: string[]
       ambiguous: { mediaID: string; fileName: string; deploymentID: string; candidates: string[] }[]
     }>(

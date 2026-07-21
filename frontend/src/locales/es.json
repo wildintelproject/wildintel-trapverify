@@ -78,6 +78,7 @@
     "hint_flat_search": "Si una imagen no se encuentra en deploymentID/fileName, busca en todo el directorio de imágenes un archivo con ese nombre (útil cuando las fotos están sueltas en una sola carpeta, como en algunas descargas de TRAPPER).",
     "checking_images": "Comprobando que las imágenes se pueden leer…",
     "images_missing_warning": "{{missing}} de {{total}} imágenes no se han encontrado en esta ruta. Revisa el directorio de imágenes.",
+    "images_permission_denied_warning": "{{count}} de {{total}} imágenes no se han podido leer por un error de permisos. Revisa los permisos de acceso.",
     "img_base_dir_picker_title": "Seleccionar directorio de imágenes",
     "label_output_dir": "Directorio de salida",
     "label_output_optional": "(opcional)",
@@ -222,7 +223,8 @@
     "update_decisions": "Actualizar decisiones",
     "updating": "Actualizando…",
     "toast_updated": "Decisiones actualizadas. Resultados regenerados.",
-    "context_frame": "Contexto"
+    "context_frame": "Contexto",
+    "image_permission_denied": "Permiso denegado. Revisa los permisos de acceso."
   },
   "help": {
     "title": "Ayuda — CamTrap Verify",

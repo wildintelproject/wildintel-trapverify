@@ -134,6 +134,21 @@ def load_camtrapdp(camtrap_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
     return dep, med, obs
 
 
+def _exists_or_denied(path: Path) -> bool:
+    """Like ``Path.exists()`` but treats a permission error as "exists".
+
+    ``Path.exists()`` re-raises ``PermissionError`` instead of returning
+    ``False`` (unlike a missing file, which it swallows). When the OS denies
+    access to a candidate path, we still want callers to pick it: the real
+    error should surface later, when the file is actually opened for reading.
+    """
+    try:
+        return path.exists()
+    except PermissionError:
+        logger.warning("Permission denied checking %s", path)
+        return True
+
+
 @lru_cache(maxsize=8)
 def _flat_image_index(image_base_dir: str) -> dict[str, tuple[str, ...]]:
     """Recursively index every file under ``image_base_dir`` by lowercase basename.
@@ -198,7 +213,7 @@ def resolve_media_path(
     """
     if image_base_dir:
         structured = Path(image_base_dir) / deployment_id / file_name
-        if structured.exists():
+        if _exists_or_denied(structured):
             return structured
 
         if flat_search and file_name:
