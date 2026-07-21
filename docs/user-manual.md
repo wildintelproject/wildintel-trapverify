@@ -126,18 +126,16 @@ Once launched, the application opens automatically in your default browser.
 
 ### macOS
 
-Download `camtrap-verify-X.Y.Z-macos-arm64.dmg` from the [releases page](https://github.com/wildintelproject/wildintel-trapverify/releases), open it and drag `camtrap-verify` to wherever you want to keep it (e.g. `/Applications`). Then run it from the terminal:
+Download `camtrap-verify-X.Y.Z-macos-arm64.dmg` from the [releases page](https://github.com/wildintelproject/wildintel-trapverify/releases), open it and drag `camtrap-verify` to wherever you want to keep it (e.g. `/Applications`). Then double-click `camtrap-verify` to launch it.
 
-```bash
-/Applications/camtrap-verify
-```
-
-> **Gatekeeper warning:** Because the binary is not signed with an Apple Developer certificate, macOS may show a *"cannot be opened because the developer cannot be verified"* message. To allow it:
+> **⚠️ macOS security warning:** Since this build isn't signed with a paid Apple Developer certificate, macOS Gatekeeper will block the first launch attempt and may describe it as software that "could harm your Mac" — this is expected for any unsigned, independently distributed app, not a sign that the file is actually malicious. To open it anyway:
 >
-> 1. Open **System Settings → Privacy & Security**.
-> 2. Scroll down to the *Security* section and click **Open Anyway** next to the camtrap-verify entry.
+> 1. Double-click `camtrap-verify` once. macOS will show a warning and refuse to open it — that's normal, click **Done**.
+> 2. Open **System Settings → Privacy & Security**.
+> 3. Scroll down to the *Security* section, where you'll see a message about `camtrap-verify` being blocked, and click **Open Anyway**.
+> 4. Confirm by clicking **Open Anyway** again when the app tries to launch.
 >
-> Alternatively, from the terminal: `xattr -d com.apple.quarantine /Applications/camtrap-verify`
+> You only need to do this once — after that, the app opens normally.
 
 The build targets Intel (x86_64) and runs on Apple Silicon Macs via Rosetta 2.
 
