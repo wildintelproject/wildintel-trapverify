@@ -1407,16 +1407,16 @@
 </ul>
 <p>Once launched, the application opens automatically in your default browser.</p>
 <h3 id="macos">macOS</h3>
-<p>Download <code>camtrap-verify-X.Y.Z-macos-arm64.dmg</code> from the <a href="https://github.com/wildintelproject/wildintel-trapverify/releases">releases page</a>, open it and drag <code>camtrap-verify</code> to wherever you want to keep it (e.g. <code>/Applications</code>). Then run it from the terminal:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>/Applications/camtrap-verify
-</code></pre></div>
+<p>Download <code>camtrap-verify-X.Y.Z-macos-arm64.dmg</code> from the <a href="https://github.com/wildintelproject/wildintel-trapverify/releases">releases page</a>, open it and drag <code>camtrap-verify</code> to wherever you want to keep it (e.g. <code>/Applications</code>). Then double-click <code>camtrap-verify</code> to launch it.</p>
 <blockquote>
-<p><strong>Gatekeeper warning:</strong> Because the binary is not signed with an Apple Developer certificate, macOS may show a <em>"cannot be opened because the developer cannot be verified"</em> message. To allow it:</p>
+<p><strong>⚠️ macOS security warning:</strong> Since this build isn't signed with a paid Apple Developer certificate, macOS Gatekeeper will block the first launch attempt and may describe it as software that "could harm your Mac" — this is expected for any unsigned, independently distributed app, not a sign that the file is actually malicious. To open it anyway:</p>
 <ol>
+<li>Double-click <code>camtrap-verify</code> once. macOS will show a warning and refuse to open it — that's normal, click <strong>Done</strong>.</li>
 <li>Open <strong>System Settings → Privacy &amp; Security</strong>.</li>
-<li>Scroll down to the <em>Security</em> section and click <strong>Open Anyway</strong> next to the camtrap-verify entry.</li>
+<li>Scroll down to the <em>Security</em> section, where you'll see a message about <code>camtrap-verify</code> being blocked, and click <strong>Open Anyway</strong>.</li>
+<li>Confirm by clicking <strong>Open Anyway</strong> again when the app tries to launch.</li>
 </ol>
-<p>Alternatively, from the terminal: <code>xattr -d com.apple.quarantine /Applications/camtrap-verify</code></p>
+<p>You only need to do this once — after that, the app opens normally.</p>
 </blockquote>
 <p>The build targets Intel (x86_64) and runs on Apple Silicon Macs via Rosetta 2.</p>
 <hr />
