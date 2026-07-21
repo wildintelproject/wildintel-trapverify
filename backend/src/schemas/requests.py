@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class SetupRequest(BaseModel):
     camtrap_dir: str
     image_base_dir: str = ""
+    flat_search: bool = False
     output_dir: str = ""
     target_species: list[str]
     study_start: str
