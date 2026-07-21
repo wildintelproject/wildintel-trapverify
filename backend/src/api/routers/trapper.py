@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, HTTPException
+from trapper_client import err
 
 from schemas.requests import TrapperGenerateRequest, TrapperLoginRequest
 from services import trapper_service
@@ -15,8 +16,22 @@ from services.session_service import DEFAULT_OUTPUT_DIR
 router = APIRouter(prefix="/api/trapper", tags=["trapper"])
 logger = logging.getLogger(__name__)
 
+# wildintel-trapper-sdk raises typed err.APIError subclasses instead of a raw
+# httpx.HTTPStatusError — map each back to the HTTP status it represents.
+_ERR_STATUS: dict[type[err.APIError], int] = {
+    err.BadRequestError: 400,
+    err.UnauthorizedError: 401,
+    err.ForbiddenError: 403,
+    err.NotFoundError: 404,
+    err.ConflictError: 409,
+    err.UnprocessableEntityError: 422,
+    err.ServerError: 500,
+}
+
 
 def _http_exc(exc: Exception) -> HTTPException:
+    if isinstance(exc, err.APIError):
+        return HTTPException(_ERR_STATUS.get(type(exc), 400), str(exc))
     if isinstance(exc, httpx.HTTPStatusError):
         return HTTPException(exc.response.status_code, str(exc))
     if isinstance(exc, RuntimeError):
