@@ -78,19 +78,36 @@ def sanitize(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9]", "_", name)
 
 
+_TZ_OFFSET_RE = re.compile(r"(Z|[+-]\d{2}:?\d{2})$")
+
+
 def normalise_ts(x: str) -> str:
-    """Convert an EXIF timestamp to ISO-8601 format.
+    """Convert an EXIF timestamp to a tz-naive ISO-8601 string.
 
     EXIF stores dates as ``'YYYY:MM:DD HH:MM:SS'``; this converts the date
-    separator from ``:`` to ``-``. Already-ISO strings are returned unchanged.
+    separator from ``:`` to ``-``. Already-ISO strings are returned unchanged
+    other than the timezone stripping below.
+
+    Also strips any trailing UTC offset or ``Z`` suffix (e.g. ``+01:00``,
+    ``+0000``, ``Z``). Real-world Trapper/CamtrapDP exports can mix
+    tz-aware and tz-naive timestamps in the same ``media.csv`` — e.g. some
+    rows carry ``+00:00`` and others none at all — and pandas 2.x's
+    ``to_datetime`` refuses to build one array out of a mix of aware/naive
+    values ("Mixed timezones detected"). Every caller of this function
+    only uses the resulting timestamp for its wall-clock date/time (sampling
+    occasion assignment, burst gaps, display) via ``utc=False``, never as an
+    absolute instant, so dropping the offset and keeping the recorded local
+    time is the correct behavior here, not just a crash workaround.
 
     Args:
-        x: Timestamp string, either EXIF (``'YYYY:MM:DD …'``) or ISO-8601.
+        x: Timestamp string, either EXIF (``'YYYY:MM:DD …'``) or ISO-8601,
+            optionally with a UTC offset or ``Z`` suffix.
 
     Returns:
-        ISO-8601 timestamp string ``'YYYY-MM-DD HH:MM:SS'``.
+        Tz-naive ISO-8601 timestamp string ``'YYYY-MM-DD HH:MM:SS'``.
     """
-    return re.sub(r"^(\d{4}):(\d{2}):(\d{2})", r"\1-\2-\3", str(x))
+    s = re.sub(r"^(\d{4}):(\d{2}):(\d{2})", r"\1-\2-\3", str(x))
+    return _TZ_OFFSET_RE.sub("", s)
 
 
 # ─── CamtrapDP I/O ────────────────────────────────────────────────────────────

@@ -55,6 +55,36 @@ def test_normalise_ts_iso_passthrough():
 def test_normalise_ts_iso_with_T():
     assert normalise_ts("2025-11-02T14:30:00") == "2025-11-02T14:30:00"
 
+def test_normalise_ts_strips_colon_utc_offset():
+    assert normalise_ts("2025-11-02T14:30:00+01:00") == "2025-11-02T14:30:00"
+
+def test_normalise_ts_strips_compact_utc_offset():
+    assert normalise_ts("2025-11-02T14:30:00+0000") == "2025-11-02T14:30:00"
+
+def test_normalise_ts_strips_negative_utc_offset():
+    assert normalise_ts("2025-11-02T14:30:00-05:00") == "2025-11-02T14:30:00"
+
+def test_normalise_ts_strips_z_suffix():
+    assert normalise_ts("2025-11-02T14:30:00Z") == "2025-11-02T14:30:00"
+
+def test_normalise_ts_exif_with_utc_offset():
+    assert normalise_ts("2025:11:02 14:30:00+02:00") == "2025-11-02 14:30:00"
+
+def test_normalise_ts_mixed_offsets_do_not_crash_to_datetime():
+    """Regression: a media.csv timestamp column mixing tz-aware and
+    tz-naive strings used to crash pandas' to_datetime with "Mixed
+    timezones detected" once normalise_ts stopped removing the offset."""
+    raw = pd.Series([
+        "2025-11-02T14:30:00+01:00",
+        "2025-11-02T15:00:00",
+        "2025-11-02T15:30:00Z",
+        "2025-11-02T16:00:00-03:00",
+    ])
+    ts = pd.to_datetime(raw.apply(normalise_ts), errors="coerce", utc=False)
+    assert ts.notna().all()
+    assert ts.dt.tz is None
+    assert list(ts.dt.hour) == [14, 15, 15, 16]
+
 
 # ─── detect_site_col ──────────────────────────────────────────────────────────
 

@@ -19,10 +19,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - GitHub repository link (icon, stars, forks) added to the documentation header via `repo_url` in `mkdocs.yml`.
 - `CHANGELOG.md` with release history following the Keep a Changelog format.
 - Release notes section in the developer manual describing the full release process.
+- `flat_search` option added to the setup request schema and workflow config (backend/frontend type wiring for a non-recursive directory search).
 
 ### Changed
 - **Show all event frames** (formerly *Show event context images*): reworked logic so that only frames captured between the first and last detection of the target species are included, preventing frames from adjacent animal visits from appearing in the carousel.
 - **Gallery review cards** now open on the sequence frame with the highest detection confidence instead of the chronologically first one; the zoom button opens the lightbox at that same frame instead of always the first.
+- The Trapper integration (`trapper_service.py`) now uses `wildintel-trapper-sdk` instead of a hand-rolled `httpx.AsyncClient` wrapper, with SDK calls run via `asyncio.to_thread` to keep the event loop unblocked. Behavior-preserving; error responses now map the SDK's typed exceptions to HTTP status codes.
+
+### Fixed
+- `media.csv` timestamps that mix timezone-aware and timezone-naive values (or different UTC offsets) no longer crash `/api/fs/inspect` and `/api/setup` with `ValueError: Mixed timezones detected` — `normalise_ts()` now strips any UTC offset/`Z` suffix before parsing, since every caller only uses the resulting timestamp as wall-clock local time (sampling occasion assignment, burst gaps, display), never as an absolute instant.
+- The Linux `.deb`/`.rpm` package build no longer fails with `Git executable not found` — the build image now installs `git`, needed since `wildintel-trapper-sdk` is a git-sourced dependency.
+- macOS installation instructions (Gatekeeper workaround) rewritten to use only GUI steps (double-click, System Settings → Privacy & Security → Open Anyway), removing the terminal-based quarantine-removal alternative.
 
 ## Released 
 
