@@ -305,12 +305,22 @@ def _write_deepfaune_csv(path, fmt="new"):
             "score":    ["0.92", "0.10"],
             "site":     ["SITE_A", "SITE_A"],
         }).to_csv(path, index=False)
-    else:  # old DeepFaune format
+    elif fmt == "old":
         pd.DataFrame({
             "filename":       ["/imgs/SITE_A/f1.jpg"],
             "date":           ["2025-11-02 10:00:00"],
             "predictionbase": ["fox"],
             "scorebase":      ["0.88"],
+            "site":           ["SITE_A"],
+        }).to_csv(path, index=False)
+    else:  # fmt == "both": both column sets present at once
+        pd.DataFrame({
+            "filename":       ["/imgs/SITE_A/f1.jpg"],
+            "date":           ["2025-11-02 10:00:00"],
+            "predictionbase": ["fox"],
+            "scorebase":      ["0.88"],
+            "top1":           ["red deer"],
+            "score":          ["0.50"],
             "site":           ["SITE_A"],
         }).to_csv(path, index=False)
 
@@ -367,6 +377,21 @@ def test_convert_deepfaune_new_format_reports_detected_columns(client, tmp_path)
     assert resp.status_code == 200
     assert resp.json()["label_col"] == "top1"
     assert resp.json()["score_col"] == "score"
+
+def test_convert_deepfaune_predictionbase_takes_priority_over_top1(client, tmp_path):
+    """predictionbase/scorebase (DeepFaune's per-image base classifier) must win
+    over top1/score when both are present, matching the reference R tool."""
+    csv = tmp_path / "both.csv"
+    _write_deepfaune_csv(csv, fmt="both")
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    assert resp.status_code == 200
+    assert resp.json()["label_col"] == "predictionbase"
+    assert resp.json()["score_col"] == "scorebase"
+    out = Path(resp.json()["camtrap_dir"])
+    obs = pd.read_csv(out / "observations.csv")
+    animal_row = obs[obs["observationType"] == "animal"]
+    assert animal_row.iloc[0]["scientificName"] == "Vulpes vulpes"  # fox, not "red deer"
+    assert animal_row.iloc[0]["classificationProbability"] == pytest.approx(0.88)
 
 def test_convert_deepfaune_observations_have_correct_type(client, tmp_path):
     csv = tmp_path / "results.csv"

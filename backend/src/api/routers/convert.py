@@ -19,12 +19,18 @@ class DeepfauneConvertRequest(BaseModel):
 
 
 def _detect_deepfaune_columns(df: pd.DataFrame) -> tuple[str, str]:
-    """Return (label_col, score_col) by inspecting the CSV headers."""
+    """Return (label_col, score_col) by inspecting the CSV headers.
+
+    predictionbase/scorebase (DeepFaune's per-image base classifier) takes
+    priority over top1/score when both are present, matching the reference
+    R tool: it is the confident per-image call, not the sequence-aggregated
+    "prediction".
+    """
     cols = set(df.columns)
-    if "top1" in cols:
-        return "top1", "score" if "score" in cols else "top1"
     if "predictionbase" in cols:
         return "predictionbase", "scorebase" if "scorebase" in cols else "predictionbase"
+    if "top1" in cols:
+        return "top1", "score" if "score" in cols else "top1"
     # Fallback: look for any column that might be a label
     for c in ("label", "species", "class", "prediction"):
         if c in cols:
