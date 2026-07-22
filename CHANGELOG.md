@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `CHANGELOG.md` with release history following the Keep a Changelog format.
 - Release notes section in the developer manual describing the full release process.
 - `flat_search` option added to the setup request schema and workflow config (backend/frontend type wiring for a non-recursive directory search).
+- Optional **Output directory** field in the setup wizard's Parameters step, with a directory browser, so a session's folder no longer always defaults silently to `~/Documents/camtrap_verify` — the backend and its config already supported a custom `output_dir`, but no UI ever exposed it.
 
 ### Changed
 - **Show all event frames** (formerly *Show event context images*): reworked logic so that only frames captured between the first and last detection of the target species are included, preventing frames from adjacent animal visits from appearing in the carousel.

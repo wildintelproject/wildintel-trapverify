@@ -84,6 +84,7 @@
     "label_output_optional": "(optional)",
     "placeholder_output_dir": "Standard: ~/Documents/camtrap_verify",
     "hint_output_dir": "Jede Ausführung erstellt einen Unterordner mit Zeitstempel.",
+    "output_dir_picker_title": "Ausgabeverzeichnis auswählen",
     "browse": "📁 Durchsuchen",
     "step1_title": "Zielarten",
     "step1_desc": "Wählen Sie die zu überprüfenden Arten aus. Die Namen entsprechen scientificName in observations.csv.",

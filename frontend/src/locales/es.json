@@ -84,6 +84,7 @@
     "label_output_optional": "(opcional)",
     "placeholder_output_dir": "Por defecto: ~/Documents/camtrap_verify",
     "hint_output_dir": "Cada ejecución crea una subcarpeta con marca de tiempo.",
+    "output_dir_picker_title": "Seleccionar directorio de salida",
     "browse": "📁 Explorar",
     "step1_title": "Especies objetivo",
     "step1_desc": "Marca las especies que quieres verificar. Los nombres corresponden a scientificName en observations.csv.",

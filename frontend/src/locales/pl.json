@@ -84,6 +84,7 @@
     "label_output_optional": "(opcjonalnie)",
     "placeholder_output_dir": "Domyślnie: ~/Documents/camtrap_verify",
     "hint_output_dir": "Każde uruchomienie tworzy podfolder ze znacznikiem czasu.",
+    "output_dir_picker_title": "Wybierz katalog wyjściowy",
     "browse": "📁 Przeglądaj",
     "step1_title": "Gatunki docelowe",
     "step1_desc": "Zaznacz gatunki, które chcesz zweryfikować. Nazwy odpowiadają scientificName w observations.csv.",

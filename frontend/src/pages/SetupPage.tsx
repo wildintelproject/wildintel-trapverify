@@ -69,7 +69,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [converting, setConverting] = useState(false)
   const [convertError, setConvertError] = useState<string | null>(null)
   const [deepfauneColumnsInfo, setDeepfauneColumnsInfo] = useState<{ label_col: string; score_col: string } | null>(null)
-  const [picker, setPicker] = useState<'camtrap_dir' | 'img_base_dir' | 'df_csv' | 'df_imgdir' | null>(null)
+  const [picker, setPicker] = useState<'camtrap_dir' | 'img_base_dir' | 'df_csv' | 'df_imgdir' | 'output_dir' | null>(null)
   const [inspecting, setInspecting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
@@ -149,6 +149,9 @@ export default function SetupPage({ onSetup, ready }: Props) {
       setPicker(null)
     } else if (picker === 'df_imgdir') {
       setDeepfauneForm(f => ({ ...f, imageBaseDir: path }))
+      setPicker(null)
+    } else if (picker === 'output_dir') {
+      set('output_dir', path)
       setPicker(null)
     }
   }
@@ -1026,6 +1029,29 @@ export default function SetupPage({ onSetup, ready }: Props) {
         <div>
           <h4 className="text-lg font-semibold mb-6">{t('setup.step3_title')}</h4>
 
+          {/* ── Output location ── */}
+          <div className="mb-6">
+            <label className={labelClass}>
+              {t('setup.label_output_dir')}{' '}
+              <span className="text-zinc-400 font-normal">{t('setup.label_output_optional')}</span>
+            </label>
+            <div className="flex">
+              <input
+                className={`${inputClass} rounded-r-none`}
+                placeholder={t('setup.placeholder_output_dir')}
+                value={form.output_dir}
+                onChange={(e) => set('output_dir', e.target.value)}
+              />
+              <button type="button" className={browseBtn}
+                onClick={() => setPicker('output_dir')}>
+                {t('setup.browse')}
+              </button>
+            </div>
+            <p className={hintClass}>{t('setup.hint_output_dir')}</p>
+          </div>
+
+          <div className="border-t border-zinc-200 dark:border-zinc-700 mt-2 mb-5" />
+
           {/* ── Sampling parameters ── */}
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1">
             {t('setup.section_sampling')}
@@ -1166,6 +1192,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
             : picker === 'img_base_dir' ? form.image_base_dir || undefined
             : picker === 'df_csv' ? deepfauneForm.csvPath || undefined
             : picker === 'df_imgdir' ? deepfauneForm.imageBaseDir || undefined
+            : picker === 'output_dir' ? form.output_dir || undefined
             : undefined
           }
           showFiles={picker === 'df_csv'}
@@ -1174,6 +1201,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
             picker === 'img_base_dir' ? t('setup.img_base_dir_picker_title')
             : picker === 'df_csv' ? t('setup.deepfaune_csv_picker_title')
             : picker === 'df_imgdir' ? t('setup.deepfaune_imgdir_picker_title')
+            : picker === 'output_dir' ? t('setup.output_dir_picker_title')
             : undefined
           }
           onSelect={handleDirSelected}

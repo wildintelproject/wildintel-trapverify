@@ -84,6 +84,7 @@
     "label_output_optional": "(optional)",
     "placeholder_output_dir": "Default: ~/Documents/camtrap_verify",
     "hint_output_dir": "Each run creates a timestamped subfolder.",
+    "output_dir_picker_title": "Select output directory",
     "browse": "📁 Browse",
     "step1_title": "Target species",
     "step1_desc": "Check the species you want to verify. Names match scientificName in observations.csv.",
