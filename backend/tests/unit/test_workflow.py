@@ -399,9 +399,9 @@ def test_build_candidates_no_match_returns_empty(camtrap_dir):
     )
     assert result.empty
 
-def test_build_candidates_min_score_drops_low_confidence_bursts(camtrap_dir):
-    """A burst whose highest classification probability is below min_score
-    must be dropped entirely, not merely deprioritized in ranking."""
+def test_build_candidates_min_score_drops_low_confidence_frames(camtrap_dir):
+    """Frames whose own classification probability is below min_score are
+    demoted (excluded), mirroring to_camtrapdp()'s per-frame threshold."""
     dep, med, obs = load_camtrapdp(camtrap_dir)
     result = build_candidates(
         dep, med, obs,
@@ -413,15 +413,15 @@ def test_build_candidates_min_score_drops_low_confidence_bursts(camtrap_dir):
         gap_seconds=60,
         min_score=0.75,
     )
-    # burst1 (m005, max=0.6) and SITE_A occ2 (m003, max=0.7) fall below 0.75
+    # m005 (0.6) and m003 (0.7) individually fall below 0.75
     assert "m005" not in set(result["mediaID"])
     assert "m003" not in set(result["mediaID"])
-    # burst0 (m001=0.9, m002=0.8) and SITE_B (m004=0.85) meet the threshold
+    # m001 (0.9), m002 (0.8) and m004 (0.85) individually meet the threshold
     assert {"m001", "m002", "m004"} <= set(result["mediaID"])
 
-def test_build_candidates_min_score_keeps_whole_burst_if_any_frame_qualifies(camtrap_dir):
-    """The threshold applies to the burst's best frame; a burst that qualifies
-    keeps all its frames, even ones individually below min_score."""
+def test_build_candidates_min_score_demotes_frame_even_within_qualifying_burst(camtrap_dir):
+    """The threshold applies per frame, not per burst: a frame below min_score
+    is demoted even when another frame in the same burst clears it."""
     dep, med, obs = load_camtrapdp(camtrap_dir)
     result = build_candidates(
         dep, med, obs,
@@ -433,8 +433,36 @@ def test_build_candidates_min_score_keeps_whole_burst_if_any_frame_qualifies(cam
         gap_seconds=60,
         min_score=0.85,
     )
-    # burst0's max is m001=0.9 (>= 0.85), so m002=0.8 stays too despite being below threshold
-    assert {"m001", "m002"} <= set(result["mediaID"])
+    # burst0: m001=0.9 clears 0.85 and stays; m002=0.8 does not and is demoted,
+    # even though both frames belong to the same burst.
+    assert "m001" in set(result["mediaID"])
+    assert "m002" not in set(result["mediaID"])
+
+def test_build_candidates_min_score_never_demotes_unscored_frames(tmp_path):
+    """A frame with no classification score at all must not be demoted, even
+    with min_score set -- only a known low score excludes it (mirrors
+    to_camtrapdp()'s `!is.na(scores) &` guard)."""
+    dep = pd.DataFrame({"deploymentID": ["DEP1"], "locationID": ["SITE_A"]})
+    med = pd.DataFrame({
+        "mediaID": ["m001"], "deploymentID": ["DEP1"],
+        "timestamp": ["2025-11-02 10:00:00"], "filePath": ["img/frame0.jpg"],
+    })
+    obs = pd.DataFrame({
+        "observationID": ["o001"], "deploymentID": ["DEP1"], "mediaID": ["m001"],
+        "observationLevel": ["media"], "observationType": ["animal"],
+        "scientificName": ["Vulpes vulpes"], "classificationProbability": [None],
+    })
+    result = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        min_score=0.95,
+    )
+    assert "m001" in set(result["mediaID"])
 
 def test_build_candidates_min_score_all_below_returns_empty(camtrap_dir):
     dep, med, obs = load_camtrapdp(camtrap_dir)

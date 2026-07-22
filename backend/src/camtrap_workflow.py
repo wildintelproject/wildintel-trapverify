@@ -506,11 +506,12 @@ def build_candidates(
 ) -> pd.DataFrame:
     """Build the verification candidate manifest from CamtrapDP tables.
 
-    Filters observations to ``target_species`` within the study window, assigns
-    each frame to a sampling occasion (fixed-width breaks of ``occasion_days``),
-    groups frames into sequences (bursts separated by more than ``gap_seconds``),
-    drops bursts whose highest classification probability is below
-    ``min_score``, and ranks the remaining bursts by maximum classification
+    Filters observations to ``target_species`` within the study window, demotes
+    (excludes) any individual frame whose own classification probability falls
+    below ``min_score`` -- mirroring ``to_camtrapdp()``'s per-frame threshold --
+    assigns each surviving frame to a sampling occasion (fixed-width breaks of
+    ``occasion_days``), groups frames into sequences (bursts separated by more
+    than ``gap_seconds``), and ranks bursts by maximum classification
     probability within each site × occasion × species cell (rank 1 = highest
     confidence).
 
@@ -533,9 +534,10 @@ def build_candidates(
             Defaults to 60.
         include_burst_context: If True, adds neighbouring frames around each burst
             as context (``is_context=True``). Defaults to False.
-        min_score: Minimum classification probability a burst's best frame must
-            reach to be kept; bursts whose every frame scores below this are
-            dropped entirely. Defaults to 0.0 (no filtering).
+        min_score: Minimum classification probability an individual frame must
+            reach to remain a candidate. A frame with no score at all is never
+            demoted -- only a known score below this excludes it. Defaults to
+            0.0 (no filtering).
 
     Returns:
         DataFrame with one row per candidate frame, including columns
@@ -575,6 +577,14 @@ def build_candidates(
         .drop_duplicates(subset=["mediaID", "scientificName"], keep="first")
         .drop(columns="_prob_sort")
     )
+
+    # Demote frames whose own classification score falls below min_score, mirroring
+    # to_camtrapdp()'s per-frame threshold: a frame with no score at all is never
+    # demoted (only a known low score excludes it), and this runs before burst
+    # grouping, so a demoted frame no longer counts toward a burst's gap sequence.
+    if min_score > 0:
+        target_prob = pd.to_numeric(target_obs["classificationProbability"], errors="coerce")
+        target_obs = target_obs[~(target_prob.notna() & (target_prob < min_score))]
 
     joined = (
         target_obs
@@ -648,10 +658,6 @@ def build_candidates(
         .max()
         .reset_index(name="burst_max_prob")
     )
-    burst_max = burst_max[burst_max["burst_max_prob"] >= min_score]
-    if burst_max.empty:
-        return pd.DataFrame()
-
     burst_max["rank"] = (
         burst_max.groupby("site_occasion_key")["burst_max_prob"]
         .rank(method="first", ascending=False)
