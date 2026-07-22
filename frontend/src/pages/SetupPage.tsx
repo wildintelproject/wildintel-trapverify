@@ -68,6 +68,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [deepfauneForm, setDeepfauneForm] = useState({ csvPath: '', imageBaseDir: '' })
   const [converting, setConverting] = useState(false)
   const [convertError, setConvertError] = useState<string | null>(null)
+  const [deepfauneColumnsInfo, setDeepfauneColumnsInfo] = useState<{ label_col: string; score_col: string } | null>(null)
   const [picker, setPicker] = useState<'camtrap_dir' | 'img_base_dir' | 'df_csv' | 'df_imgdir' | null>(null)
   const [inspecting, setInspecting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -176,11 +177,12 @@ export default function SetupPage({ onSetup, ready }: Props) {
     setConverting(true)
     setConvertError(null)
     try {
-      const { camtrap_dir } = await api.convertDeepfaune(
+      const { camtrap_dir, label_col, score_col } = await api.convertDeepfaune(
         deepfauneForm.csvPath,
         deepfauneForm.imageBaseDir || null,
         form.min_score,
       )
+      setDeepfauneColumnsInfo({ label_col, score_col })
       await afterConversion(camtrap_dir)
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : t('setup.err_unknown'))
@@ -512,6 +514,15 @@ export default function SetupPage({ onSetup, ready }: Props) {
       {stepError && (
         <div className="px-4 py-2 rounded bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm mb-4">
           {stepError}
+        </div>
+      )}
+
+      {deepfauneColumnsInfo && (
+        <div className="px-4 py-2 rounded bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-sm mb-4">
+          {t('setup.deepfaune_columns_detected', {
+            label: deepfauneColumnsInfo.label_col,
+            score: deepfauneColumnsInfo.score_col,
+          })}
         </div>
       )}
 

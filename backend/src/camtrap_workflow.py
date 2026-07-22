@@ -325,6 +325,7 @@ def deepfaune_to_camtrapdp(
     out_dir: Path,
     image_base_dir: Optional[Path] = None,
     label_col: str = "top1",
+    score_col: str = "score",
     min_score: float = 0.0,
 ) -> Path:
     """Convert a DeepFaune results CSV to CamtrapDP format.
@@ -342,6 +343,8 @@ def deepfaune_to_camtrapdp(
             If ``None``, paths are used as-is.
         label_col: Column in ``df`` holding the predicted label. Defaults to
             ``'top1'``.
+        score_col: Column in ``df`` holding the confidence score. Defaults to
+            ``'score'``.
         min_score: Minimum confidence score to assign a scientific name.
             Rows below this threshold get ``scientificName=None``.
 
@@ -367,7 +370,7 @@ def deepfaune_to_camtrapdp(
     paths = df["filename"].astype(str).apply(abs_path)
     sites = df["site"].astype(str) if "site" in df.columns else paths.apply(site_from_path)
     labels = df[label_col].astype(str).str.lower().str.strip()
-    scores = pd.to_numeric(df.get("score", pd.Series([None] * len(df))), errors="coerce")
+    scores = pd.to_numeric(df.get(score_col, pd.Series([None] * len(df))), errors="coerce")
     timestamps = df["date"].astype(str).apply(normalise_ts)
 
     n = len(df)

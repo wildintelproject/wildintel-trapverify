@@ -126,6 +126,7 @@
     "deepfaune_csv_label": "DeepFaune results file (.csv)",
     "deepfaune_csv_placeholder": "/path/to/results.csv",
     "deepfaune_csv_hint": "CSV exported from DeepFaune containing the columns filename, date, top1 and score.",
+    "deepfaune_columns_detected": "Detected columns: \"{{label}}\" for the species label, \"{{score}}\" for the confidence score.",
     "deepfaune_csv_picker_title": "Select CSV file",
     "deepfaune_imgdir_label": "Image root directory",
     "deepfaune_imgdir_placeholder": "/path/to/images",

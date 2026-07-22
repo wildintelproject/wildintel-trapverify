@@ -344,9 +344,29 @@ def test_convert_deepfaune_old_format_detected(client, tmp_path):
     csv = tmp_path / "old.csv"
     _write_deepfaune_csv(csv, fmt="old")
     resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
-    # Old format has predictionbase/scorebase but missing top1 → no label col recognised
-    # The endpoint should return 400 (no recognized label column)
-    assert resp.status_code in (200, 400)
+    # Old format has predictionbase/scorebase and no top1 -> those are detected instead.
+    assert resp.status_code == 200
+    assert resp.json()["label_col"] == "predictionbase"
+    assert resp.json()["score_col"] == "scorebase"
+
+def test_convert_deepfaune_old_format_score_is_read_correctly(client, tmp_path):
+    """The detected score_col (scorebase) must actually be used -- not silently
+    dropped to NaN because deepfaune_to_camtrapdp() only ever looked at a
+    hardcoded 'score' column."""
+    csv = tmp_path / "old.csv"
+    _write_deepfaune_csv(csv, fmt="old")
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    out = Path(resp.json()["camtrap_dir"])
+    obs = pd.read_csv(out / "observations.csv")
+    assert obs["classificationProbability"].iloc[0] == pytest.approx(0.88)
+
+def test_convert_deepfaune_new_format_reports_detected_columns(client, tmp_path):
+    csv = tmp_path / "results.csv"
+    _write_deepfaune_csv(csv, fmt="new")
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    assert resp.status_code == 200
+    assert resp.json()["label_col"] == "top1"
+    assert resp.json()["score_col"] == "score"
 
 def test_convert_deepfaune_observations_have_correct_type(client, tmp_path):
     csv = tmp_path / "results.csv"

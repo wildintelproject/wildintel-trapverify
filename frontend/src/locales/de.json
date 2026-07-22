@@ -126,6 +126,7 @@
     "deepfaune_csv_label": "DeepFaune-Ergebnisdatei (.csv)",
     "deepfaune_csv_placeholder": "/Pfad/zu/Ergebnisse.csv",
     "deepfaune_csv_hint": "Von DeepFaune exportierte CSV mit den Spalten filename, date, top1 und score.",
+    "deepfaune_columns_detected": "Erkannte Spalten: \"{{label}}\" für die Artbezeichnung, \"{{score}}\" für den Konfidenzwert.",
     "deepfaune_csv_picker_title": "CSV-Datei auswählen",
     "deepfaune_imgdir_label": "Bild-Stammverzeichnis",
     "deepfaune_imgdir_placeholder": "/Pfad/zu/Bildern",

@@ -988,6 +988,20 @@ def test_deepfaune_above_min_score_keeps_name(tmp_path):
     animal_row = obs[obs["observationType"] == "animal"]
     assert animal_row.iloc[0]["scientificName"] == "Cervus elaphus"
 
+def test_deepfaune_custom_score_col_is_read(tmp_path):
+    """score_col must be configurable, not hardcoded to 'score' -- a caller
+    using the old DeepFaune column names (predictionbase/scorebase) directly,
+    without going through the API router's rename workaround, must still get
+    a real classificationProbability instead of a silent NaN."""
+    df = _minimal_deepfaune_df().rename(columns={"top1": "predictionbase", "score": "scorebase"})
+    out = deepfaune_to_camtrapdp(
+        df, DEEPFAUNE_LABEL_MAP, tmp_path / "out",
+        label_col="predictionbase", score_col="scorebase",
+    )
+    obs = pd.read_csv(out / "observations.csv")
+    animal_row = obs[obs["observationType"] == "animal"]
+    assert animal_row.iloc[0]["classificationProbability"] == pytest.approx(0.92)
+
 def test_deepfaune_derives_site_from_path_when_no_site_col(tmp_path):
     df = _minimal_deepfaune_df().drop(columns=["site"])
     out = deepfaune_to_camtrapdp(df, DEEPFAUNE_LABEL_MAP, tmp_path / "out")

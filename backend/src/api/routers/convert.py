@@ -69,9 +69,6 @@ def convert_deepfaune(req: DeepfauneConvertRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    if score_col != label_col and score_col in df.columns:
-        df = df.rename(columns={score_col: "score"})
-
     image_base = Path(req.image_base_dir) if req.image_base_dir else None
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -84,14 +81,18 @@ def convert_deepfaune(req: DeepfauneConvertRequest) -> dict:
             out_dir=out_dir,
             image_base_dir=image_base,
             label_col=label_col,
+            score_col=score_col,
             min_score=req.min_score,
         )
     except Exception as exc:
         logger.exception("Error converting DeepFaune CSV: %s", exc)
         raise HTTPException(500, f"Error en la conversión: {exc}") from exc
 
-    logger.info("DeepFaune conversion complete: %s → %s", csv_path, out_dir)
-    return {"camtrap_dir": str(out_dir)}
+    logger.info(
+        "DeepFaune conversion complete: %s → %s (label_col=%s, score_col=%s)",
+        csv_path, out_dir, label_col, score_col,
+    )
+    return {"camtrap_dir": str(out_dir), "label_col": label_col, "score_col": score_col}
 
 
 class CsvConvertRequest(BaseModel):
