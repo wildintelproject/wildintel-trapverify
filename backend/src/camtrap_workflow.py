@@ -682,10 +682,13 @@ def build_candidates(
             ["site_occasion_key", "burst_id"], sort=False
         ):
             dep_id = str(burst["deploymentID"].iloc[0])
-            # Use the burst's own boundaries so only frames that fall within the
-            # detected event are included, not frames from adjacent visits.
-            t0 = burst["ts"].min()
-            t1 = burst["ts"].max()
+            # Pad by gap_seconds on each side so a burst with a single detection
+            # (min == max) still gets a real window instead of collapsing to a
+            # zero-width instant, while frames from adjacent visits (further away
+            # than gap_seconds) stay excluded. Matches the reference R tool.
+            pad = pd.Timedelta(seconds=gap_seconds)
+            t0 = burst["ts"].min() - pad
+            t1 = burst["ts"].max() + pad
 
             neighbors = med[
                 (med["deploymentID"].astype(str) == dep_id)

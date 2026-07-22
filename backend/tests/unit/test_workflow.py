@@ -1006,6 +1006,42 @@ def test_burst_context_is_context_column_present(candidates):
 def test_burst_context_false_all_false(candidates):
     assert (candidates["is_context"] == False).all()  # noqa: E712
 
+def test_burst_context_single_detection_burst_still_gets_context(camtrap_dir: Path):
+    """A burst with a single target detection (min == max timestamp) must not
+    collapse to a zero-width window: a neighbouring frame within gap_seconds
+    of that lone detection is still picked up as context. This is the
+    dominant real-world case (only one frame of a trigger sequence gets a
+    positive species classification)."""
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    # m005 (SITE_A occ1 burst1) is alone at 2025-11-02 12:00:00 -- add a
+    # neighbour 20 s later, well within gap_seconds=60.
+    extra = pd.DataFrame({
+        "mediaID":      ["m_neighbor"],
+        "deploymentID": ["DEP1"],
+        "timestamp":    ["2025-11-02 12:00:20"],
+        "filePath":     ["img/neighbor.jpg"],
+    })
+    pd.concat([med, extra], ignore_index=True).to_csv(
+        camtrap_dir / "media.csv", index=False
+    )
+    dep, med2, obs = load_camtrapdp(camtrap_dir)
+    cands = build_candidates(
+        dep, med2, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    m005_burst_id = cands.loc[cands["mediaID"] == "m005", "burst_id"].iloc[0]
+    ctx_ids = set(
+        cands[(cands["is_context"] == True) & (cands["burst_id"] == m005_burst_id)]  # noqa: E712
+        ["mediaID"]
+    )
+    assert "m_neighbor" in ctx_ids
+
 def test_burst_context_adds_context_rows(camtrap_dir_with_context):
     dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
     cands = build_candidates(
@@ -1163,10 +1199,14 @@ def test_get_events_max_prob_from_non_context(camtrap_dir_with_context, tmp_path
 
 # ─── build_candidates: burst context boundary ─────────────────────────────────
 
-def test_burst_context_excludes_frames_outside_burst(camtrap_dir: Path):
-    """Frames outside [t_min, t_max] of the burst must NOT appear as context."""
+def test_burst_context_pads_window_by_gap_seconds(camtrap_dir: Path):
+    """A frame within gap_seconds of the burst's first detection IS included as
+    context -- the window is padded by gap_seconds on each side (matching the
+    reference R tool), not clipped exactly to [t_min, t_max]. Otherwise a burst
+    with a single detection would get a zero-width window and never show any
+    context at all."""
     med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
-    # Add a frame 30 s BEFORE the burst's first detection (10:00:00)
+    # 30 s before the burst's first detection (10:00:00) -- within gap_seconds=60.
     extra = pd.DataFrame({
         "mediaID":      ["m_before"],
         "deploymentID": ["DEP1"],
@@ -1188,4 +1228,32 @@ def test_burst_context_excludes_frames_outside_burst(camtrap_dir: Path):
         include_burst_context=True,
     )
     ctx_ids = set(cands[cands["is_context"] == True]["mediaID"])  # noqa: E712
-    assert "m_before" not in ctx_ids
+    assert "m_before" in ctx_ids
+
+def test_burst_context_excludes_frames_beyond_gap_seconds(camtrap_dir: Path):
+    """A frame further than gap_seconds from the burst boundary must still be
+    excluded -- e.g. a frame from an adjacent, unrelated visit."""
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    # 5 minutes before the burst's first detection (10:00:00) -- well beyond gap_seconds=60.
+    extra = pd.DataFrame({
+        "mediaID":      ["m_far_before"],
+        "deploymentID": ["DEP1"],
+        "timestamp":    ["2025-11-02 09:55:00"],
+        "filePath":     ["img/far_before.jpg"],
+    })
+    pd.concat([med, extra], ignore_index=True).to_csv(
+        camtrap_dir / "media.csv", index=False
+    )
+    dep, med2, obs = load_camtrapdp(camtrap_dir)
+    cands = build_candidates(
+        dep, med2, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        include_burst_context=True,
+    )
+    ctx_ids = set(cands[cands["is_context"] == True]["mediaID"])  # noqa: E712
+    assert "m_far_before" not in ctx_ids
