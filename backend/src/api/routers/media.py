@@ -43,7 +43,10 @@ def serve_image(media_id: str) -> FileResponse:
     except PermissionError:
         logger.warning("Permission denied reading image file: %s", file_path)
         raise HTTPException(403, "Permiso denegado. Revisa los permisos de acceso de la aplicación.")
-    return FileResponse(str(file_path), stat_result=stat_result)
+    return FileResponse(
+        str(file_path), stat_result=stat_result,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 def _error_image(label: str) -> Response:

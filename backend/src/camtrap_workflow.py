@@ -166,6 +166,18 @@ def _flat_image_index(image_base_dir: str) -> dict[str, tuple[str, ...]]:
     return {k: tuple(v) for k, v in index.items()}
 
 
+def clear_media_caches() -> None:
+    """Drop the cached flat-search file index.
+
+    ``_flat_image_index`` never invalidates on its own (no mtime/TTL check),
+    so a new session reusing the same ``image_base_dir`` after files were
+    added, moved, or removed on disk would otherwise keep seeing the old
+    listing for as long as this backend process stays alive. Call this once
+    per new setup so each session starts from a fresh scan.
+    """
+    _flat_image_index.cache_clear()
+
+
 def resolve_media_path(
     file_path: str,
     deployment_id: str,

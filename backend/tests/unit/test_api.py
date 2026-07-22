@@ -422,6 +422,50 @@ def test_setup_min_score_filters_low_confidence_events(client, camtrap_dir, tmp_
     assert "m003" not in set(manifest["mediaID"])
     assert "m005" not in set(manifest["mediaID"])
 
+def test_setup_clears_stale_flat_search_cache_on_new_session(client, camtrap_dir, tmp_path):
+    """A second /api/setup reusing the same image_base_dir must not keep resolving
+    files to a stale flat-search index built by a previous session. The
+    in-process lru_cache never invalidates on its own, so if a photo is moved
+    to a new subfolder under the same image_base_dir between sessions (without
+    restarting the backend), a stale index would still point at the old,
+    now-missing location and wrongly 404 it -- even though the file exists at
+    its new location and a fresh scan would find it there."""
+    imgs = tmp_path / "images"
+    loose = imgs / "loose"
+    loose.mkdir(parents=True)
+    for i in range(5):
+        (loose / f"frame{i}.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+    out = tmp_path / "out"
+    setup_body = {
+        "camtrap_dir":      str(camtrap_dir),
+        "output_dir":       str(out),
+        "target_species":   ["Vulpes vulpes"],
+        "study_start":      "2025-11-01",
+        "study_end":        "2025-11-10",
+        "occasion_days":    5,
+        "total_iterations": 100_000,
+        "gap_seconds":      60,
+        "min_score":        0.5,
+        "image_base_dir":   str(imgs),
+        "flat_search":      True,
+    }
+    resp = client.post("/api/setup", json=setup_body)
+    assert resp.status_code == 200
+    resp = client.get("/api/image/m001")
+    assert resp.status_code == 200
+
+    # Simulate moving the photo to a new subfolder of the same image_base_dir
+    # between sessions (no backend restart in between).
+    moved = imgs / "moved"
+    moved.mkdir()
+    (loose / "frame0.jpg").rename(moved / "frame0.jpg")
+
+    resp = client.post("/api/setup", json=setup_body)
+    assert resp.status_code == 200
+    resp = client.get("/api/image/m001")
+    assert resp.status_code == 200
+
 def test_setup_missing_camtrap_dir(client, tmp_path):
     resp = client.post("/api/setup", json={
         "camtrap_dir":    str(tmp_path / "nonexistent"),
@@ -961,6 +1005,14 @@ def test_serve_image_unknown_media_id_returns_404(client, setup_session):
     """Unknown mediaID returns 404."""
     resp = client.get("/api/image/nonexistent_id")
     assert resp.status_code == 404
+
+def test_serve_image_sets_no_store_cache_control(client, setup_session_with_image_base_dir):
+    """Images must never be cached by the browser: the same mediaID URL is reused
+    across sessions, so a stale browser cache could keep showing a file that has
+    since been moved or deleted even though the backend would now 404 it."""
+    resp = client.get("/api/image/m001")
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "no-store"
 
 def test_serve_image_permission_denied_returns_403(client, setup_session_with_image_base_dir, monkeypatch):
     """A PermissionError reading the resolved file returns 403, not a generic 500 or 404."""

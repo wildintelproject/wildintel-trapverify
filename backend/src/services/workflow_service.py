@@ -17,6 +17,7 @@ from camtrap_workflow import (
     build_candidates,
     build_occupancy_inputs,
     build_review_effort,
+    clear_media_caches,
     export_verified_camtrapdp,
     find_flat_search_ambiguities,
     load_camtrapdp,
@@ -57,6 +58,7 @@ def run_setup(req: SetupRequest) -> dict:
         Dict with ok, session_dir, n_candidates, n_combos.
     """
     logger.info("Starting setup: camtrap_dir=%s species=%s", req.camtrap_dir, req.target_species)
+    clear_media_caches()
     camtrap_dir = Path(req.camtrap_dir)
     dep, med, obs = load_camtrapdp(camtrap_dir)
 

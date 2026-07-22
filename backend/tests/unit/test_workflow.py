@@ -12,6 +12,7 @@ from camtrap_workflow import (
     build_candidates,
     build_occupancy_inputs,
     build_review_effort,
+    clear_media_caches,
     confirmed_keys_set,
     deepfaune_to_camtrapdp,
     detect_site_col,
@@ -233,6 +234,31 @@ def test_resolve_media_path_structured_permission_denied_is_treated_as_found(tmp
     assert result == tmp_path / "DEP1" / "frame0.jpg"
     assert "Permission denied" in caplog.text
 
+
+def test_resolve_media_path_flat_search_stale_until_cache_cleared(tmp_path):
+    """The flat-search index is cached per image_base_dir and never invalidates
+    on its own, so a file added after the first scan won't be found until
+    clear_media_caches() runs -- reproducing the "new session, same folder,
+    changed files" staleness bug."""
+    loose = tmp_path / "loose"
+    loose.mkdir()
+    (loose / "frame0.jpg").write_bytes(b"x")
+    # Prime the cache with the initial listing.
+    resolve_media_path(
+        "img/frame0.jpg", "DEP1", "frame0.jpg", str(tmp_path), tmp_path, flat_search=True,
+    )
+    # A file is added after the index was built -- not yet visible.
+    (loose / "frame_new.jpg").write_bytes(b"x")
+    result = resolve_media_path(
+        "img/frame_new.jpg", "DEP1", "frame_new.jpg", str(tmp_path), tmp_path, flat_search=True,
+    )
+    assert result != loose / "frame_new.jpg"
+
+    clear_media_caches()
+    result = resolve_media_path(
+        "img/frame_new.jpg", "DEP1", "frame_new.jpg", str(tmp_path), tmp_path, flat_search=True,
+    )
+    assert result == loose / "frame_new.jpg"
 
 def test_resolve_media_path_flat_search_still_ambiguous_falls_through(tmp_path, caplog):
     """Same fileName under two folders, neither matching deploymentID: ambiguous,

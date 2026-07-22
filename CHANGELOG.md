@@ -31,6 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The Linux `.deb`/`.rpm` package build no longer fails with `Git executable not found` — the build image now installs `git`, needed since `wildintel-trapper-sdk` is a git-sourced dependency.
 - macOS installation instructions (Gatekeeper workaround) rewritten to use only GUI steps (double-click, System Settings → Privacy & Security → Open Anyway), removing the terminal-based quarantine-removal alternative.
 - The **Minimum detection score** setting was never applied to the review workflow — `build_candidates()` had no `min_score` parameter, so events were included regardless of confidence. Bursts whose highest classification probability falls below the configured threshold are now excluded entirely.
+- `/api/image/{mediaID}` now sends `Cache-Control: no-store`, so the browser always revalidates against the backend instead of reusing a previously cached image for the same mediaID — a stale browser cache could otherwise keep showing a photo after it was moved or deleted between sessions.
+- The in-process flat-search file index (used when the *Images directory* option's subfolder search is enabled) is now cleared at the start of every `/api/setup`, so starting a new session no longer risks resolving images against a listing scanned before files were added, moved, or removed on disk.
 
 ## Released 
 
