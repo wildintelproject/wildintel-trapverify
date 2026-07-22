@@ -1,0 +1,85 @@
+{
+  "name": "camtrap-dp-example",
+  "title": "Do\u00f1ana camera trap pilot survey (example)",
+  "profile": "https://raw.githubusercontent.com/tdwg/camtrap-dp/1.0.2/camtrap-dp-profile.json",
+  "created": "2026-07-22T18:50:30Z",
+  "resources": [
+    {
+      "name": "deployments",
+      "path": "deployments.csv",
+      "profile": "tabular-data-resource",
+      "schema": "https://raw.githubusercontent.com/tdwg/camtrap-dp/1.0.2/deployments-table-schema.json"
+    },
+    {
+      "name": "media",
+      "path": "media.csv",
+      "profile": "tabular-data-resource",
+      "schema": "https://raw.githubusercontent.com/tdwg/camtrap-dp/1.0.2/media-table-schema.json"
+    },
+    {
+      "name": "observations",
+      "path": "observations.csv",
+      "profile": "tabular-data-resource",
+      "schema": "https://raw.githubusercontent.com/tdwg/camtrap-dp/1.0.2/observations-table-schema.json"
+    }
+  ],
+  "contributors": [
+    {
+      "title": "WildINTEL project",
+      "role": "principalInvestigator"
+    }
+  ],
+  "project": {
+    "title": "Do\u00f1ana camera trap pilot survey",
+    "samplingDesign": "opportunistic",
+    "captureMethod": [
+      "activityDetection"
+    ],
+    "individualAnimals": false,
+    "observationLevel": [
+      "media"
+    ]
+  },
+  "spatial": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -6.437,
+          36.988
+        ],
+        [
+          -6.361,
+          36.988
+        ],
+        [
+          -6.361,
+          37.045
+        ],
+        [
+          -6.437,
+          37.045
+        ],
+        [
+          -6.437,
+          36.988
+        ]
+      ]
+    ]
+  },
+  "temporal": {
+    "start": "2025-11-01",
+    "end": "2025-11-14"
+  },
+  "taxonomic": [
+    {
+      "scientificName": "Cervus elaphus"
+    },
+    {
+      "scientificName": "Sus scrofa"
+    },
+    {
+      "scientificName": "Vulpes vulpes"
+    }
+  ]
+}
