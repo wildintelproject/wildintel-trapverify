@@ -631,7 +631,18 @@ def build_candidates(
     joined["prob"] = pd.to_numeric(
         joined["classificationProbability"], errors="coerce"
     ).fillna(0)
-    joined = joined.sort_values(["site_occasion_key", "ts"])
+    # Tiebreaker for same-timestamp burst frames: some exports (e.g. Wildlife
+    # Insights) only carry second-resolution timestamps, so several frames of
+    # the same burst can tie; a trailing numeric suffix in the file name
+    # (e.g. "..._1.JPEG" -> 1) recovers true capture order. Matches the
+    # reference R tool; unparseable/absent suffixes sort last.
+    joined["capture_seq"] = pd.to_numeric(
+        joined["filePath"].astype(str).str.extract(r"_(\d+)\.[^/]*$")[0],
+        errors="coerce",
+    )
+    joined = joined.sort_values(
+        ["site_occasion_key", "ts", "capture_seq"], na_position="last"
+    )
 
     # Assign burst IDs (consecutive frames within gap_seconds form one burst)
     records = []

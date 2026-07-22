@@ -355,6 +355,40 @@ def test_build_candidates_burst_grouping(candidates):
     assert burst_of_m001 == burst_of_m002
     assert burst_of_m005 != burst_of_m001
 
+def test_build_candidates_same_timestamp_frames_ordered_by_capture_seq(tmp_path):
+    """When two frames of the same burst share the exact same timestamp (e.g.
+    second-resolution timestamps from some exports), a trailing numeric
+    suffix in the file name breaks the tie in true capture order, matching
+    the reference R tool -- not the arbitrary order rows happen to appear in
+    the source tables."""
+    dep = pd.DataFrame({"deploymentID": ["DEP1"], "locationID": ["SITE_A"]})
+    med = pd.DataFrame({
+        "mediaID":      ["m002", "m001"],  # deliberately fed out of capture order
+        "deploymentID": ["DEP1", "DEP1"],
+        "timestamp":    ["2025-11-02 10:00:00", "2025-11-02 10:00:00"],
+        "filePath":     ["img/frame_2.jpg", "img/frame_1.jpg"],
+    })
+    obs = pd.DataFrame({
+        "observationID":             ["o002", "o001"],
+        "deploymentID":              ["DEP1", "DEP1"],
+        "mediaID":                   ["m002", "m001"],
+        "observationLevel":          ["media", "media"],
+        "observationType":           ["animal", "animal"],
+        "scientificName":            ["Vulpes vulpes", "Vulpes vulpes"],
+        "classificationProbability": [0.9, 0.5],
+    })
+    result = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+    )
+    ordered = result.sort_values("burst_seq")
+    assert list(ordered["mediaID"]) == ["m001", "m002"]
+
 def test_build_candidates_occasion_assignment(candidates):
     # m003 at 2025-11-07 must be in occ2 (days 6-10)
     occ = candidates[candidates["mediaID"] == "m003"]["occasion"].iloc[0]
