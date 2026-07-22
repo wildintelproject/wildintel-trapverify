@@ -73,6 +73,27 @@ def test_fs_inspect_date_range_order(client, camtrap_dir):
     data = resp.json()
     assert data["study_start"] <= data["study_end"]
 
+def test_fs_inspect_no_datapackage_json(client, camtrap_dir):
+    """The fixture ships no datapackage.json — nothing to validate."""
+    resp = client.get("/api/fs/inspect", params={"path": str(camtrap_dir)})
+    assert resp.json()["datapackage_errors"] is None
+
+def test_fs_inspect_valid_datapackage_json(client, camtrap_dir):
+    (camtrap_dir / "datapackage.json").write_text(json.dumps({
+        "name": "test-package",
+        "resources": [{"name": "observations", "path": "observations.csv"}],
+    }))
+    resp = client.get("/api/fs/inspect", params={"path": str(camtrap_dir)})
+    assert resp.status_code == 200
+    assert resp.json()["datapackage_errors"] == []
+
+def test_fs_inspect_invalid_datapackage_json_is_non_blocking(client, camtrap_dir):
+    """A broken datapackage.json is surfaced as a warning, not a 400."""
+    (camtrap_dir / "datapackage.json").write_text("{ not valid json")
+    resp = client.get("/api/fs/inspect", params={"path": str(camtrap_dir)})
+    assert resp.status_code == 200
+    assert resp.json()["datapackage_errors"]
+
 
 # ─── /api/fs/check-images ─────────────────────────────────────────────────────
 
@@ -766,6 +787,30 @@ def test_get_results_seq_total_matches_candidate_bursts(client, setup_session):
 def test_get_results_by_species_row(client, setup_session):
     data = client.get("/api/results").json()
     assert len(data["by_species"]) == 1
+
+def test_get_results_flags_generated_datapackage(client, setup_session):
+    """The camtrap_dir fixture ships no datapackage.json, so a default is generated."""
+    data = client.get("/api/results").json()
+    assert data["datapackage_generated"] is True
+    assert "spatial" in data["datapackage_fabricated_fields"]
+
+def test_get_results_no_warning_when_source_has_datapackage(client, camtrap_dir, tmp_path):
+    (camtrap_dir / "datapackage.json").write_text('{"name": "test"}')
+    resp = client.post("/api/setup", json={
+        "camtrap_dir":      str(camtrap_dir),
+        "output_dir":       str(tmp_path / "out"),
+        "target_species":   ["Vulpes vulpes"],
+        "study_start":      "2025-11-01",
+        "study_end":        "2025-11-10",
+        "occasion_days":    5,
+        "total_iterations": 100_000,
+        "gap_seconds":      60,
+        "min_score":        0.5,
+    })
+    assert resp.status_code == 200
+    data = client.get("/api/results").json()
+    assert data["datapackage_generated"] is False
+    assert data["datapackage_fabricated_fields"] == []
     sp = data["by_species"][0]
     assert sp["species"] == "Vulpes vulpes"
     assert "confirmed" in sp and "rejected" in sp and "unverified" in sp

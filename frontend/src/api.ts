@@ -68,9 +68,12 @@ export const api = {
     req<{ rejected: string[] }>('/api/rejected'),
 
   inspectDir: (path: string) =>
-    req<{ species: string[]; study_start: string | null; study_end: string | null }>(
-      `/api/fs/inspect?path=${encodeURIComponent(path)}`,
-    ),
+    req<{
+      species: string[]
+      study_start: string | null
+      study_end: string | null
+      datapackage_errors: string[] | null
+    }>(`/api/fs/inspect?path=${encodeURIComponent(path)}`),
 
   checkImages: (camtrapDir: string, imageBaseDir: string, flatSearch = false) =>
     req<{
@@ -92,6 +95,8 @@ export const api = {
       rejected: number
       unverified: number
       by_species: { species: string; confirmed: number; rejected: number; unverified: number }[]
+      datapackage_generated: boolean
+      datapackage_fabricated_fields: string[]
     }>('/api/results'),
 
   getOccupancy: () =>

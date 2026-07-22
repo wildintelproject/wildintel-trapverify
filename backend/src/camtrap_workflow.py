@@ -134,6 +134,148 @@ def load_camtrapdp(camtrap_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
     return dep, med, obs
 
 
+def validate_camtrapdp_datapackage(datapackage_path: Path) -> list[str]:
+    """Validate a ``datapackage.json`` with ``frictionless``, as its own CLI does.
+
+    Checks the descriptor is well-formed and that each declared resource's
+    data matches its own schema (types, required fields, missing files).
+    Returns a list of human-readable error strings (empty when valid). This
+    only applies to a *pre-existing* CamtrapDP package (e.g. from Trapper or
+    another tool) that already ships a ``datapackage.json`` -- packages this
+    app generates itself from a DeepFaune/generic CSV don't have one yet, so
+    callers should skip validation rather than treat its absence as an error.
+    """
+    import frictionless
+
+    report = frictionless.validate(str(datapackage_path))
+    if report.valid:
+        return []
+
+    def _describe(err) -> str:
+        # Some error types (e.g. missing-label) leave .note empty and put the
+        # actual detail in .message instead.
+        return err.note or err.message or err.title
+
+    errors = [_describe(err) for err in report.errors]
+    for task in report.tasks:
+        for err in task.errors:
+            row, field = getattr(err, "row_number", None), getattr(err, "field_name", None)
+            detail = _describe(err)
+            if row is not None and field is not None:
+                errors.append(f"{task.name}: fila {row}, campo '{field}': {detail}")
+            else:
+                errors.append(f"{task.name}: {detail}")
+    return errors
+
+
+CAMTRAPDP_PROFILE = "https://raw.githubusercontent.com/tdwg/camtrap-dp/1.0.2/camtrap-dp-profile.json"
+
+
+def generate_default_datapackage(
+    dep: pd.DataFrame, med: pd.DataFrame, obs: pd.DataFrame,
+) -> dict:
+    """Build a best-effort ``datapackage.json`` descriptor for a package that has none.
+
+    Fills in whatever can be derived from the data itself (``resources``,
+    ``temporal`` from ``media.csv`` timestamps, ``taxonomic`` from
+    ``observations.csv`` species, ``spatial`` from ``deployments.csv``
+    coordinates when present, ``project.observationLevel`` when
+    ``observations.csv`` uses a single consistent value) and invents a
+    placeholder for everything else the app has no way to know
+    (``contributors``, sampling/capture method, whether individuals are
+    tracked, a project title, and ``spatial`` when no coordinates exist).
+
+    The invented keys are listed under the non-standard ``wildintelGenerated``
+    property so a caller can warn the user which parts are placeholders, not
+    real study metadata -- this descriptor is a starting point to edit, not a
+    citable/archival-ready one as-is.
+    """
+    from datetime import datetime, timezone
+
+    fabricated: list[str] = []
+
+    def resource(name: str) -> dict:
+        # Camtrap DP requires deployments/media/observations to reference the
+        # official versioned Table Schema by URL, not an inline schema.
+        return {
+            "name": name,
+            "path": f"{name}.csv",
+            "profile": "tabular-data-resource",
+            "schema": f"https://raw.githubusercontent.com/tdwg/camtrap-dp/1.0.2/{name}-table-schema.json",
+        }
+
+    ts = pd.to_datetime(med.get("timestamp", pd.Series(dtype=str)).apply(normalise_ts), errors="coerce").dropna()
+    if not ts.empty:
+        temporal = {"start": ts.min().date().isoformat(), "end": ts.max().date().isoformat()}
+    else:
+        temporal = {"start": None, "end": None}
+        fabricated.append("temporal")
+
+    species = sorted({s for s in obs.get("scientificName", pd.Series(dtype=str)).dropna().tolist() if s})
+    if species:
+        taxonomic = [{"scientificName": s} for s in species]
+    else:
+        taxonomic = []
+        fabricated.append("taxonomic")
+
+    lat = pd.to_numeric(dep.get("latitude", pd.Series(dtype=str)), errors="coerce").dropna()
+    lon = pd.to_numeric(dep.get("longitude", pd.Series(dtype=str)), errors="coerce").dropna()
+    if not lat.empty and not lon.empty:
+        spatial = {
+            "type": "Polygon",
+            "coordinates": [[
+                [lon.min(), lat.min()], [lon.max(), lat.min()],
+                [lon.max(), lat.max()], [lon.min(), lat.max()],
+                [lon.min(), lat.min()],
+            ]],
+        }
+    else:
+        spatial = {"type": "Point", "coordinates": [0.0, 0.0]}
+        fabricated.append("spatial")
+
+    levels = obs.get("observationLevel", pd.Series(dtype=str)).dropna().unique().tolist()
+    if len(levels) == 1 and levels[0] in ("media", "event"):
+        observation_level = [levels[0]]
+    else:
+        observation_level = ["media"]
+        fabricated.append("project.observationLevel")
+
+    fabricated += [
+        "contributors", "project.title", "project.samplingDesign",
+        "project.captureMethod", "project.individualAnimals",
+    ]
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {
+        "name": "camtrap-dp-export",
+        "profile": CAMTRAPDP_PROFILE,
+        "created": now,
+        "resources": [resource("deployments"), resource("media"), resource("observations")],
+        "contributors": [{"title": "Unknown", "role": "contributor"}],
+        "project": {
+            "title": "Untitled camera trap project",
+            "samplingDesign": "opportunistic",
+            "captureMethod": ["activityDetection"],
+            "individualAnimals": False,
+            "observationLevel": observation_level,
+        },
+        "spatial": spatial,
+        "temporal": temporal,
+        "taxonomic": taxonomic,
+        "wildintelGenerated": {
+            "generated": True,
+            "generatedAt": now,
+            "fabricatedFields": fabricated,
+            "note": (
+                "Auto-generated by CamTrap Verify because the source package had no "
+                "datapackage.json. Fields listed in fabricatedFields are placeholders, "
+                "not derived from the data -- review and correct them before treating "
+                "this as a citable/archival package."
+            ),
+        },
+    }
+
+
 def _exists_or_denied(path: Path) -> bool:
     """Like ``Path.exists()`` but treats a permission error as "exists".
 
@@ -1054,9 +1196,18 @@ def export_verified_camtrapdp(
 ) -> None:
     """Write ``camtrap_dp_verified/``, replicating R's ``update_metadata()`` + ``export_results()``.
 
-    ``deployments.csv`` and ``media.csv`` are copied unchanged. In
-    ``observations.csv`` the representative observation of each confirmed
-    sequence is updated: ``classificationMethod='human'``,
+    ``deployments.csv`` and ``media.csv`` are copied unchanged, as is
+    ``datapackage.json`` when the source package has one (only the values in
+    ``observations.csv`` change, not its schema, so the original descriptor
+    still describes the exported package correctly). When the source has no
+    ``datapackage.json`` -- e.g. it was converted from a DeepFaune/generic CSV,
+    or it came from Trapper/elsewhere without one -- a best-effort default is
+    generated instead via ``generate_default_datapackage()``, so the exported
+    package is never missing the file outright; callers can check
+    ``datapackage.json``'s ``wildintelGenerated.fabricatedFields`` to warn the
+    user which parts are placeholders. In ``observations.csv`` the
+    representative observation of each confirmed sequence is updated:
+    ``classificationMethod='human'``,
     ``classificationProbability=1.0``, ``classifiedBy``, and
     ``classificationTimestamp`` (UTC). When ``extended_confirmation=True`` all
     observations that belong to the same burst as each confirmed representative
@@ -1087,7 +1238,9 @@ def export_verified_camtrapdp(
         if src.exists():
             shutil.copy2(src, out_dir / name)
 
-    # Cargar observaciones originales
+    # Cargar deployments/media (para el datapackage.json) y observaciones originales
+    dep = pd.read_csv(camtrap_dir / "deployments.csv", dtype=str)
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
     obs = pd.read_csv(camtrap_dir / "observations.csv", dtype=str)
 
     # IDs de observaciones confirmadas (repObsId de cada decisión)
@@ -1124,6 +1277,13 @@ def export_verified_camtrapdp(
         obs.loc[mask, "classificationTimestamp"] = now_ts
 
     obs.to_csv(out_dir / "observations.csv", index=False)
+
+    dp_src = camtrap_dir / "datapackage.json"
+    if dp_src.exists():
+        shutil.copy2(dp_src, out_dir / "datapackage.json")
+    else:
+        descriptor = generate_default_datapackage(dep, med, obs)
+        (out_dir / "datapackage.json").write_text(json.dumps(descriptor, indent=2))
 
 
 # ─── Occasion windows helper ──────────────────────────────────────────────────

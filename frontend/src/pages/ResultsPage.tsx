@@ -25,6 +25,8 @@ interface Results {
   seq_rejected: number
   seq_unverified: number
   by_species_seqs: SpeciesRow[]
+  datapackage_generated: boolean
+  datapackage_fabricated_fields: string[]
 }
 
 export default function ResultsPage() {
@@ -211,6 +213,17 @@ export default function ResultsPage() {
       </div>
       <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm"
         dangerouslySetInnerHTML={{ __html: t('results.subtitle') }} />
+
+      {results.datapackage_generated && (
+        <div className="px-4 py-2 rounded bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm mb-4">
+          <p className="font-medium">{t('results.datapackage_generated')}</p>
+          {results.datapackage_fabricated_fields.length > 0 && (
+            <ul className="list-disc list-inside mt-1">
+              {results.datapackage_fabricated_fields.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Output directory */}
       <div className={`${cardClass} mb-4`}>

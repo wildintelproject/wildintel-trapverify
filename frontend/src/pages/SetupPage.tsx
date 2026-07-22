@@ -69,6 +69,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [converting, setConverting] = useState(false)
   const [convertError, setConvertError] = useState<string | null>(null)
   const [deepfauneColumnsInfo, setDeepfauneColumnsInfo] = useState<{ label_col: string; score_col: string } | null>(null)
+  const [datapackageErrors, setDatapackageErrors] = useState<string[] | null>(null)
   const [picker, setPicker] = useState<'camtrap_dir' | 'img_base_dir' | 'df_csv' | 'df_imgdir' | 'output_dir' | null>(null)
   const [inspecting, setInspecting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -134,6 +135,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         const info = await api.inspectDir(path)
         setAvailableSpecies(info.species)
         setSelectedSpecies(new Set(info.species))
+        setDatapackageErrors(info.datapackage_errors)
         if (info.study_start && info.study_end) {
           set('study_start', info.study_start)
           set('study_end', info.study_end)
@@ -165,6 +167,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         setAvailableSpecies(info.species)
         setSelectedSpecies(new Set(info.species))
       }
+      setDatapackageErrors(info.datapackage_errors)
       if (info.study_start && info.study_end) {
         set('study_start', info.study_start)
         set('study_end', info.study_end)
@@ -223,6 +226,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
           setAvailableSpecies(info.species)
           setSelectedSpecies(new Set(info.species))
         }
+        setDatapackageErrors(info.datapackage_errors)
         if (info.study_start && info.study_end) {
           set('study_start', info.study_start)
           set('study_end', info.study_end)
@@ -318,6 +322,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
               setAvailableSpecies(info.species)
               setSelectedSpecies(new Set(info.species))
             }
+            setDatapackageErrors(info.datapackage_errors)
             if (info.study_start && info.study_end) {
               set('study_start', info.study_start)
               set('study_end', info.study_end)
@@ -526,6 +531,15 @@ export default function SetupPage({ onSetup, ready }: Props) {
             label: deepfauneColumnsInfo.label_col,
             score: deepfauneColumnsInfo.score_col,
           })}
+        </div>
+      )}
+
+      {datapackageErrors && datapackageErrors.length > 0 && (
+        <div className="px-4 py-2 rounded bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm mb-4">
+          <p className="font-medium">{t('setup.datapackage_invalid', { count: datapackageErrors.length })}</p>
+          <ul className="list-disc list-inside mt-1">
+            {datapackageErrors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
         </div>
       )}
 

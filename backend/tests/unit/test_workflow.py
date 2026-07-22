@@ -25,8 +25,10 @@ from camtrap_workflow import (
     normalise_ts,
     resolve_media_path,
     sanitize,
+    generate_default_datapackage,
     save_decisions,
     species_stats,
+    validate_camtrapdp_datapackage,
 )
 
 
@@ -705,6 +707,84 @@ def test_get_review_events_sorted_by_site_occasion(decisions_dir, candidates):
     assert sites == sorted(sites) or occasions == sorted(occasions)
 
 
+# ─── validate_camtrapdp_datapackage ───────────────────────────────────────────
+
+def _write_datapackage(tmp_path: Path, deployments_required: bool) -> Path:
+    (tmp_path / "deployments.csv").write_text(
+        "deploymentID,latitude\nDEP1,40.5\n" if deployments_required else "deploymentID,latitude\nDEP1,\n"
+    )
+    schema = {
+        "fields": [
+            {"name": "deploymentID", "type": "string", "constraints": {"required": True}},
+            {"name": "latitude", "type": "number", "constraints": {"required": True}},
+        ]
+    }
+    dp_path = tmp_path / "datapackage.json"
+    dp_path.write_text(json.dumps({
+        "name": "test-package",
+        "resources": [
+            {"name": "deployments", "path": "deployments.csv", "profile": "tabular-data-resource", "schema": schema},
+        ],
+    }))
+    return dp_path
+
+def test_validate_camtrapdp_datapackage_valid(tmp_path):
+    dp_path = _write_datapackage(tmp_path, deployments_required=True)
+    assert validate_camtrapdp_datapackage(dp_path) == []
+
+def test_validate_camtrapdp_datapackage_reports_errors(tmp_path):
+    dp_path = _write_datapackage(tmp_path, deployments_required=False)
+    errors = validate_camtrapdp_datapackage(dp_path)
+    assert errors
+    assert any("latitude" in e for e in errors)
+
+def test_validate_camtrapdp_datapackage_malformed_json(tmp_path):
+    dp_path = tmp_path / "datapackage.json"
+    dp_path.write_text("{ not valid json")
+    errors = validate_camtrapdp_datapackage(dp_path)
+    assert errors
+
+
+# ─── generate_default_datapackage ─────────────────────────────────────────────
+
+def test_generate_default_datapackage_derives_taxonomic_and_temporal(camtrap_dir):
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    dp = generate_default_datapackage(dep, med, obs)
+    assert dp["taxonomic"] == [{"scientificName": "Vulpes vulpes"}]
+    assert dp["temporal"]["start"] and dp["temporal"]["end"]
+    fabricated = dp["wildintelGenerated"]["fabricatedFields"]
+    assert "taxonomic" not in fabricated
+    assert "temporal" not in fabricated
+
+def test_generate_default_datapackage_derives_observation_level(camtrap_dir):
+    """The fixture's observations.csv uses a single 'media' value throughout."""
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    dp = generate_default_datapackage(dep, med, obs)
+    assert dp["project"]["observationLevel"] == ["media"]
+    assert "project.observationLevel" not in dp["wildintelGenerated"]["fabricatedFields"]
+
+def test_generate_default_datapackage_fabricates_spatial_without_coordinates(camtrap_dir):
+    """The fixture's deployments.csv has no latitude/longitude columns."""
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    dp = generate_default_datapackage(dep, med, obs)
+    assert "spatial" in dp["wildintelGenerated"]["fabricatedFields"]
+
+def test_generate_default_datapackage_derives_spatial_with_coordinates(camtrap_dir):
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    dep["latitude"] = ["40.0", "41.0"]
+    dep["longitude"] = ["-3.0", "-2.0"]
+    dp = generate_default_datapackage(dep, med, obs)
+    assert "spatial" not in dp["wildintelGenerated"]["fabricatedFields"]
+    assert dp["spatial"]["type"] == "Polygon"
+
+def test_generate_default_datapackage_always_fabricates_project_metadata(camtrap_dir):
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    fabricated = generate_default_datapackage(dep, med, obs)["wildintelGenerated"]["fabricatedFields"]
+    for key in ("contributors", "project.title", "project.samplingDesign",
+                "project.captureMethod", "project.individualAnimals"):
+        assert key in fabricated
+
+
 # ─── export_verified_camtrapdp ────────────────────────────────────────────────
 
 def test_export_copies_deployments_and_media(camtrap_dir, tmp_path, decisions_dir):
@@ -713,6 +793,19 @@ def test_export_copies_deployments_and_media(camtrap_dir, tmp_path, decisions_di
     assert (out / "deployments.csv").exists()
     assert (out / "media.csv").exists()
     assert (out / "observations.csv").exists()
+
+def test_export_copies_datapackage_json_when_present(camtrap_dir, tmp_path, decisions_dir):
+    (camtrap_dir / "datapackage.json").write_text('{"name": "test"}')
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, decisions_dir, set())
+    assert (out / "datapackage.json").read_text() == '{"name": "test"}'
+
+def test_export_generates_default_datapackage_when_absent(camtrap_dir, tmp_path, decisions_dir):
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, decisions_dir, set())
+    dp = json.loads((out / "datapackage.json").read_text())
+    assert dp["wildintelGenerated"]["generated"] is True
+    assert "Vulpes vulpes" in [t["scientificName"] for t in dp["taxonomic"]]
 
 def test_export_marks_confirmed_as_human(camtrap_dir, tmp_path, decisions_dir, candidates):
     out = tmp_path / "verified"

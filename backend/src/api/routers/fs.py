@@ -25,6 +25,21 @@ def _read_csv(path: Path) -> "pd.DataFrame":
     return pd.read_csv(path, dtype=str, compression=compression)
 
 
+def _find_datapackage(directory: Path) -> Path | None:
+    """Return the path to ``datapackage.json`` if present, at the root or one subdir down.
+
+    Mirrors ``_find_csv``'s subdirectory search (needed for the same reason:
+    a Trapper ZIP extracts into a named subfolder).
+    """
+    if not directory.exists() or not directory.is_dir():
+        return None
+    for base in (directory, *[d for d in directory.iterdir() if d.is_dir()]):
+        candidate = base / "datapackage.json"
+        if candidate.exists():
+            return candidate
+    return None
+
+
 @router.get("/inspect")
 def fs_inspect(path: str) -> dict:
     """Inspect a CamtrapDP directory for species and date range.
@@ -32,6 +47,12 @@ def fs_inspect(path: str) -> dict:
     Accepts plain .csv and gzip-compressed .csv.gz files, and also searches
     one level of subdirectory (needed when a Trapper ZIP extracts into a
     named subfolder).
+
+    If the directory already ships a ``datapackage.json`` (e.g. it came from
+    Trapper or another CamtrapDP-producing tool), it's validated with
+    ``frictionless`` and any errors are returned in ``datapackage_errors`` --
+    non-fatal, just surfaced to the user. Packages this app itself converts
+    from a DeepFaune/generic CSV don't have one, so that key is ``None`` then.
     """
     logger.info("Inspecting CamtrapDP directory: %s", path)
     p = Path(path)
@@ -63,8 +84,23 @@ def fs_inspect(path: str) -> dict:
             start_date = ts.min().date().isoformat()
             end_date = ts.max().date().isoformat()
 
+    datapackage_errors: list[str] | None = None
+    dp_path = _find_datapackage(p)
+    if dp_path is not None:
+        from camtrap_workflow import validate_camtrapdp_datapackage
+        try:
+            datapackage_errors = validate_camtrapdp_datapackage(dp_path)
+        except Exception:
+            logger.exception("Failed to validate datapackage.json at %s", dp_path)
+            datapackage_errors = None
+
     logger.info("Inspect result: %d species, %s to %s", len(species), start_date, end_date)
-    return {"species": species, "study_start": start_date, "study_end": end_date}
+    return {
+        "species": species,
+        "study_start": start_date,
+        "study_end": end_date,
+        "datapackage_errors": datapackage_errors,
+    }
 
 
 @router.get("/check-images")
