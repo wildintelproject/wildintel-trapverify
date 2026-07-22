@@ -398,6 +398,30 @@ def test_setup_creates_output_dirs(setup_session):
     assert (session_dir / "camtrap_dp_verified").exists()
     assert (session_dir / "occupancy_inputs").exists()
 
+def test_setup_min_score_filters_low_confidence_events(client, camtrap_dir, tmp_path):
+    """min_score from the setup wizard must actually reach build_candidates and
+    drop events whose best frame doesn't meet the threshold (SITE_A occ2's only
+    burst tops out at 0.7)."""
+    out = tmp_path / "out"
+    resp = client.post("/api/setup", json={
+        "camtrap_dir":      str(camtrap_dir),
+        "output_dir":       str(out),
+        "target_species":   ["Vulpes vulpes"],
+        "study_start":      "2025-11-01",
+        "study_end":        "2025-11-10",
+        "occasion_days":    5,
+        "total_iterations": 100_000,
+        "gap_seconds":      60,
+        "min_score":        0.75,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["n_combos"] == 2
+    session_dir = Path(data["session_dir"])
+    manifest = pd.read_csv(session_dir / "candidate_manifest.csv")
+    assert "m003" not in set(manifest["mediaID"])
+    assert "m005" not in set(manifest["mediaID"])
+
 def test_setup_missing_camtrap_dir(client, tmp_path):
     resp = client.post("/api/setup", json={
         "camtrap_dir":    str(tmp_path / "nonexistent"),

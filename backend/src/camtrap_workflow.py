@@ -490,14 +490,17 @@ def build_candidates(
     total_iterations: int,
     gap_seconds: int = 60,
     include_burst_context: bool = False,
+    min_score: float = 0.0,
 ) -> pd.DataFrame:
     """Build the verification candidate manifest from CamtrapDP tables.
 
     Filters observations to ``target_species`` within the study window, assigns
     each frame to a sampling occasion (fixed-width breaks of ``occasion_days``),
     groups frames into sequences (bursts separated by more than ``gap_seconds``),
-    and ranks bursts by maximum classification probability within each
-    site × occasion × species cell (rank 1 = highest confidence).
+    drops bursts whose highest classification probability is below
+    ``min_score``, and ranks the remaining bursts by maximum classification
+    probability within each site × occasion × species cell (rank 1 = highest
+    confidence).
 
     When ``include_burst_context`` is True, neighbouring frames from ``media.csv``
     (same deployment, within ``gap_seconds`` of each burst boundary) are appended
@@ -518,6 +521,9 @@ def build_candidates(
             Defaults to 60.
         include_burst_context: If True, adds neighbouring frames around each burst
             as context (``is_context=True``). Defaults to False.
+        min_score: Minimum classification probability a burst's best frame must
+            reach to be kept; bursts whose every frame scores below this are
+            dropped entirely. Defaults to 0.0 (no filtering).
 
     Returns:
         DataFrame with one row per candidate frame, including columns
@@ -630,6 +636,10 @@ def build_candidates(
         .max()
         .reset_index(name="burst_max_prob")
     )
+    burst_max = burst_max[burst_max["burst_max_prob"] >= min_score]
+    if burst_max.empty:
+        return pd.DataFrame()
+
     burst_max["rank"] = (
         burst_max.groupby("site_occasion_key")["burst_max_prob"]
         .rank(method="first", ascending=False)

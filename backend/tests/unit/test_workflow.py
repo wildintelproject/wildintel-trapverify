@@ -373,6 +373,57 @@ def test_build_candidates_no_match_returns_empty(camtrap_dir):
     )
     assert result.empty
 
+def test_build_candidates_min_score_drops_low_confidence_bursts(camtrap_dir):
+    """A burst whose highest classification probability is below min_score
+    must be dropped entirely, not merely deprioritized in ranking."""
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    result = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        min_score=0.75,
+    )
+    # burst1 (m005, max=0.6) and SITE_A occ2 (m003, max=0.7) fall below 0.75
+    assert "m005" not in set(result["mediaID"])
+    assert "m003" not in set(result["mediaID"])
+    # burst0 (m001=0.9, m002=0.8) and SITE_B (m004=0.85) meet the threshold
+    assert {"m001", "m002", "m004"} <= set(result["mediaID"])
+
+def test_build_candidates_min_score_keeps_whole_burst_if_any_frame_qualifies(camtrap_dir):
+    """The threshold applies to the burst's best frame; a burst that qualifies
+    keeps all its frames, even ones individually below min_score."""
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    result = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        min_score=0.85,
+    )
+    # burst0's max is m001=0.9 (>= 0.85), so m002=0.8 stays too despite being below threshold
+    assert {"m001", "m002"} <= set(result["mediaID"])
+
+def test_build_candidates_min_score_all_below_returns_empty(camtrap_dir):
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    result = build_candidates(
+        dep, med, obs,
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+        min_score=0.99,
+    )
+    assert result.empty
+
 def test_build_candidates_outside_period_excluded(camtrap_dir):
     dep, med, obs = load_camtrapdp(camtrap_dir)
     # study_start=2025-11-06 includes only m003 (2025-11-07); m001/m002/m005 are before

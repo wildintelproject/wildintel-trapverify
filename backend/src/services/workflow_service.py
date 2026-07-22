@@ -85,6 +85,7 @@ def run_setup(req: SetupRequest) -> dict:
         total_iterations=req.total_iterations,
         gap_seconds=req.gap_seconds,
         include_burst_context=req.include_burst_context,
+        min_score=req.min_score,
     )
 
     base_out = Path(req.output_dir) if req.output_dir else session_service.DEFAULT_OUTPUT_DIR

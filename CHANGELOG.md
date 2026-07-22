@@ -30,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `media.csv` timestamps that mix timezone-aware and timezone-naive values (or different UTC offsets) no longer crash `/api/fs/inspect` and `/api/setup` with `ValueError: Mixed timezones detected` — `normalise_ts()` now strips any UTC offset/`Z` suffix before parsing, since every caller only uses the resulting timestamp as wall-clock local time (sampling occasion assignment, burst gaps, display), never as an absolute instant.
 - The Linux `.deb`/`.rpm` package build no longer fails with `Git executable not found` — the build image now installs `git`, needed since `wildintel-trapper-sdk` is a git-sourced dependency.
 - macOS installation instructions (Gatekeeper workaround) rewritten to use only GUI steps (double-click, System Settings → Privacy & Security → Open Anyway), removing the terminal-based quarantine-removal alternative.
+- The **Minimum detection score** setting was never applied to the review workflow — `build_candidates()` had no `min_score` parameter, so events were included regardless of confidence. Bursts whose highest classification probability falls below the configured threshold are now excluded entirely.
 
 ## Released 
 
