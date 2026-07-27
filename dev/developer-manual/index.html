@@ -870,10 +870,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1-update-changelogmd" class="md-nav__link">
+  <a href="#1-check-development-is-release-ready" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Update CHANGELOG.md
+        1. Check development is release-ready
       
     </span>
   </a>
@@ -881,10 +881,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-commit-the-changelog" class="md-nav__link">
+  <a href="#2-merge-to-main" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Commit the changelog
+        2. Merge to main
       
     </span>
   </a>
@@ -892,10 +892,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-merge-to-main" class="md-nav__link">
+  <a href="#3-tag-and-push" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Merge to main
+        3. Tag and push
       
     </span>
   </a>
@@ -903,10 +903,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#4-tag-and-push" class="md-nav__link">
+  <a href="#4-verify" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Tag and push
+        4. Verify
       
     </span>
   </a>
@@ -1404,10 +1404,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1-update-changelogmd" class="md-nav__link">
+  <a href="#1-check-development-is-release-ready" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Update CHANGELOG.md
+        1. Check development is release-ready
       
     </span>
   </a>
@@ -1415,10 +1415,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-commit-the-changelog" class="md-nav__link">
+  <a href="#2-merge-to-main" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Commit the changelog
+        2. Merge to main
       
     </span>
   </a>
@@ -1426,10 +1426,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-merge-to-main" class="md-nav__link">
+  <a href="#3-tag-and-push" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. Merge to main
+        3. Tag and push
       
     </span>
   </a>
@@ -1437,10 +1437,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#4-tag-and-push" class="md-nav__link">
+  <a href="#4-verify" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Tag and push
+        4. Verify
       
     </span>
   </a>
@@ -1914,50 +1914,47 @@
 </code></pre></div>
 <hr />
 <h2 id="12-releasing-a-new-version">12. Releasing a New Version</h2>
-<h3 id="1-update-changelogmd">1. Update <code>CHANGELOG.md</code></h3>
-<p>Open <code>CHANGELOG.md</code> and move all entries from <strong>Upcoming release</strong> into a new versioned section:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="gu">## [X.Y.Z](https://github.com/wildintelproject/wildintel-trapverify/compare/vX.Y.Z-1...vX.Y.Z) - YYYY-MM-DD</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="gu">### Added</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">-</span><span class="w"> </span>...
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="gu">### Changed</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="k">-</span><span class="w"> </span>...
-<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
-<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="gu">### Fixed</span>
-<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="k">-</span><span class="w"> </span>...
-<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>
-<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="gs">**Full Changelog:**</span> [<span class="sb">`vX.Y.Z-1...vX.Y.Z`</span>](https://github.com/wildintelproject/wildintel-trapverify/compare/vX.Y.Z-1...vX.Y.Z)
+<p>CHANGELOG promotion is automated (<code>.github/scripts/promote_changelog.py</code>, run by
+<code>release.yml</code> on a tag push) — there is no manual editing step before tagging.</p>
+<h3 id="1-check-development-is-release-ready">1. Check <code>development</code> is release-ready</h3>
+<ul>
+<li>CI is green on the latest <code>development</code> commit.</li>
+<li><code>CHANGELOG.md</code>'s <strong>Upcoming release</strong> section on <code>development</code> accurately lists
+  everything you want to ship — this is the exact content that gets promoted, so
+  fix it up on <code>development</code> now if it's missing anything or needs wording changes.</li>
+</ul>
+<h3 id="2-merge-to-main">2. Merge to <code>main</code></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>git<span class="w"> </span>merge<span class="w"> </span>development
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
 </code></pre></div>
-<p>Then restore the <strong>Upcoming release</strong> section as empty, ready for the next cycle:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="gu">## Upcoming release</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="gu">### Added</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="gu">### Changed</span>
-<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="gu">### Fixed</span>
-</code></pre></div>
-<h3 id="2-commit-the-changelog">2. Commit the changelog</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>git<span class="w"> </span>add<span class="w"> </span>CHANGELOG.md
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: release vX.Y.Z&quot;</span>
-</code></pre></div>
-<h3 id="3-merge-to-main">3. Merge to <code>main</code></h3>
-<p>Make sure all changes intended for this release are merged into <code>main</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>git<span class="w"> </span>merge<span class="w"> </span>development
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
-</code></pre></div>
-<h3 id="4-tag-and-push">4. Tag and push</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>git<span class="w"> </span>tag<span class="w"> </span>vX.Y.Z
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
+<h3 id="3-tag-and-push">3. Tag and push</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>git<span class="w"> </span>tag<span class="w"> </span>vX.Y.Z
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
 </code></pre></div>
 <p>Pushing a <code>v*</code> tag triggers the <code>release.yml</code> workflow automatically. It will:</p>
 <ul>
 <li>Build the Linux packages (<code>.deb</code>, <code>.rpm</code>, <code>.AppImage</code>) via Docker.</li>
 <li>Build the Windows packages (portable <code>.exe</code> + Inno Setup installer) via PyInstaller.</li>
-<li>Extract the release notes for <code>vX.Y.Z</code> from <code>CHANGELOG.md</code> and publish a GitHub Release with all artefacts attached.</li>
+<li>Build the macOS package (<code>.dmg</code>, Apple Silicon arm64).</li>
+<li>Promote <code>CHANGELOG.md</code>'s <strong>Upcoming release</strong> section (read from <code>development</code>,
+  not from the tag) into a new dated, versioned section, restoring <strong>Upcoming
+  release</strong> empty, and commit that straight back to <code>development</code>.</li>
+<li>Publish a GitHub Release with all artefacts attached and the promoted section as
+  the release notes.</li>
+</ul>
+<h3 id="4-verify">4. Verify</h3>
+<ul>
+<li>The <code>release</code> job (and the three build jobs it depends on) finished successfully.</li>
+<li>The GitHub Release has all five artefacts attached (<code>.deb</code>, <code>.rpm</code>, <code>.AppImage</code>,
+  <code>.exe</code>, <code>.dmg</code>).</li>
+<li><code>development</code> received the automated <code>docs: promote Upcoming release to vX.Y.Z…</code>
+  commit updating <code>CHANGELOG.md</code>.</li>
 </ul>
 <h3 id="5-update-the-github-release-notes-for-past-releases-first-time-only">5. Update the GitHub Release notes for past releases <em>(first time only)</em></h3>
-<p>If you need to backfill release notes for releases published before the <code>CHANGELOG.md</code> workflow was set up, edit each release manually on GitHub and paste the corresponding section from <code>CHANGELOG.md</code>.</p>
+<p>If you need to backfill release notes for releases published before the
+<code>CHANGELOG.md</code> automation was set up, edit each release manually on GitHub and
+paste the corresponding section from <code>CHANGELOG.md</code>.</p>
 
 
 
