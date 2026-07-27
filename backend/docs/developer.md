@@ -38,6 +38,7 @@ backend/
 ├── mkdocs.yml                      MkDocs configuration
 ├── pyproject.toml                  project metadata, dependencies, scripts
 ├── setup.sh                        preflight check + uv sync
+├── setup.ps1                       preflight check + uv sync (Windows)
 └── .env.example                    template for .env
 ```
 

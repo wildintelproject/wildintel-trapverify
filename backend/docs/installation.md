@@ -69,7 +69,11 @@ See [Configuration](configuration.md) for all available options.
     ```bash
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
-    Or run `./setup.sh` — it will install uv automatically if missing.
+    On Windows (PowerShell):
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+    Or run `./setup.sh` (`.\setup.ps1` on Windows) — it will install uv automatically if missing.
 
 ### Clone and install
 
@@ -115,7 +119,13 @@ echo "CAMTRAP_PORT=9000" >> .env
 ./setup.sh
 ```
 
-It verifies that Docker and uv are available (installing uv if missing), then runs `uv sync`.
+On Windows, use the PowerShell equivalent instead:
+
+```powershell
+.\setup.ps1
+```
+
+Both verify that Docker and uv are available (installing uv if missing), then run `uv sync`.
 
 ---
 

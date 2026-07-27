@@ -39,7 +39,7 @@ Full online documentation at:
 
 ```bash
 # Check requirements and install dependencies
-./setup.sh
+./setup.sh          # Windows (PowerShell): .\setup.ps1
 
 # Start in development mode (hot-reload)
 uv run cli serve
@@ -51,7 +51,7 @@ uv run cli serve prod
 uv run cli serve debug
 ```
 
-`setup.sh` verifies that Docker and [uv](https://github.com/astral-sh/uv) are available, installs uv automatically if missing, and runs `uv sync` to install all Python dependencies. All server management is handled by `cli`.
+`setup.sh` (`setup.ps1` on Windows) verifies that Docker and [uv](https://github.com/astral-sh/uv) are available, installs uv automatically if missing, and runs `uv sync` to install all Python dependencies. All server management is handled by `cli`.
 
 The API will be available at `http://localhost:8765`. Interactive Swagger UI at `http://localhost:8765/docs`.
 
@@ -125,6 +125,7 @@ backend/
 ├── Dockerfile.build.windows    ← cross-compiles .exe via Docker + Wine
 ├── pyproject.toml
 ├── setup.sh
+├── setup.ps1
 └── .env.example
 ```
 

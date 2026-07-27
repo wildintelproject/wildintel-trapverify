@@ -64,7 +64,7 @@ git clone https://github.com/wildintelproject/wildintel-trapverify.git
 cd wildintel-trapverify
 
 # Install dependencies
-./setup.sh
+./setup.sh          # Windows (PowerShell): .\setup.ps1
 
 # Start in development mode
 uv run cli  dev
