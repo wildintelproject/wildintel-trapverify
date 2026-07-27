@@ -362,45 +362,17 @@ docs: update configuration table
 
 ## 12. Releasing a New Version
 
-### 1. Update `CHANGELOG.md`
+CHANGELOG promotion is automated (`.github/scripts/promote_changelog.py`, run by
+`release.yml` on a tag push) — there is no manual editing step before tagging.
 
-Open `CHANGELOG.md` and move all entries from **Upcoming release** into a new versioned section:
+### 1. Check `development` is release-ready
 
-```markdown
-## [X.Y.Z](https://github.com/wildintelproject/wildintel-trapverify/compare/vX.Y.Z-1...vX.Y.Z) - YYYY-MM-DD
+- CI is green on the latest `development` commit.
+- `CHANGELOG.md`'s **Upcoming release** section on `development` accurately lists
+  everything you want to ship — this is the exact content that gets promoted, so
+  fix it up on `development` now if it's missing anything or needs wording changes.
 
-### Added
-- ...
-
-### Changed
-- ...
-
-### Fixed
-- ...
-
-**Full Changelog:** [`vX.Y.Z-1...vX.Y.Z`](https://github.com/wildintelproject/wildintel-trapverify/compare/vX.Y.Z-1...vX.Y.Z)
-```
-
-Then restore the **Upcoming release** section as empty, ready for the next cycle:
-
-```markdown
-## Upcoming release
-
-### Added
-### Changed
-### Fixed
-```
-
-### 2. Commit the changelog
-
-```bash
-git add CHANGELOG.md
-git commit -m "chore: release vX.Y.Z"
-```
-
-### 3. Merge to `main`
-
-Make sure all changes intended for this release are merged into `main`:
+### 2. Merge to `main`
 
 ```bash
 git checkout main
@@ -408,7 +380,7 @@ git merge development
 git push origin main
 ```
 
-### 4. Tag and push
+### 3. Tag and push
 
 ```bash
 git tag vX.Y.Z
@@ -419,8 +391,23 @@ Pushing a `v*` tag triggers the `release.yml` workflow automatically. It will:
 
 - Build the Linux packages (`.deb`, `.rpm`, `.AppImage`) via Docker.
 - Build the Windows packages (portable `.exe` + Inno Setup installer) via PyInstaller.
-- Extract the release notes for `vX.Y.Z` from `CHANGELOG.md` and publish a GitHub Release with all artefacts attached.
+- Build the macOS package (`.dmg`, Apple Silicon arm64).
+- Promote `CHANGELOG.md`'s **Upcoming release** section (read from `development`,
+  not from the tag) into a new dated, versioned section, restoring **Upcoming
+  release** empty, and commit that straight back to `development`.
+- Publish a GitHub Release with all artefacts attached and the promoted section as
+  the release notes.
+
+### 4. Verify
+
+- The `release` job (and the three build jobs it depends on) finished successfully.
+- The GitHub Release has all five artefacts attached (`.deb`, `.rpm`, `.AppImage`,
+  `.exe`, `.dmg`).
+- `development` received the automated `docs: promote Upcoming release to vX.Y.Z…`
+  commit updating `CHANGELOG.md`.
 
 ### 5. Update the GitHub Release notes for past releases *(first time only)*
 
-If you need to backfill release notes for releases published before the `CHANGELOG.md` workflow was set up, edit each release manually on GitHub and paste the corresponding section from `CHANGELOG.md`.
+If you need to backfill release notes for releases published before the
+`CHANGELOG.md` automation was set up, edit each release manually on GitHub and
+paste the corresponding section from `CHANGELOG.md`.
