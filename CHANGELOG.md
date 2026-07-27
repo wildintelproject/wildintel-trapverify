@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Upcoming release
 
+#### Added
+- `scripts/anonymize_repo.py`: exports an anonymized snapshot of the repo (via `git archive`, so no commit history or author metadata) for double-blind review. Strips author names/emails, this repo's own GitHub URLs, project branding, and funding/grant identifiers using the redaction map in `scripts/anonymize_repo.config.json`, while leaving third-party dependencies (e.g. `wildintel-trapper-sdk`) untouched -- verified automatically after the run. Also rebuilds `backend/site/` so the in-app Help button, repointed at the local `/docs/` mount, still resolves to a (now-anonymized) manual instead of leaking the public docs site.
+
 #### Fixed
 - `deployments.csv`/`media.csv`/`observations.csv` are now located via the `path` each resource declares in `datapackage.json` (resolved relative to its own directory) before falling back to the `{name}.csv`/`{name}.csv.gz` naming convention. Packages using non-standard file names, or shipping only gzip-compressed tables (e.g. some Trapper exports), previously failed to load even though the descriptor already pointed at the right files.
 

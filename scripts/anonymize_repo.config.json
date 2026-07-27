@@ -1,0 +1,77 @@
+{
+  "_comment": "Redaction map for scripts/anonymize_repo.py. 'replacements' are literal, case-sensitive, exact-string substitutions applied to every text file in the exported snapshot -- no regex, so entries never accidentally widen their own match. Keep entries specific (full URLs, full names) rather than short generic fragments, to avoid collateral damage to unrelated text or to the protected strings below.",
+
+  "protected_substrings": [
+    "wildintel-trapper-sdk",
+    "https://github.com/wildintelproject/wildintelproject-trapper-sdk"
+  ],
+
+  "replacements": [
+    { "_section": "author identity" },
+    { "old": "Iñaki Josep Fernández de V", "new": "Anonymous Author" },
+    { "old": "ijfviana@gmail.com", "new": "anonymous@example.com" },
+    { "old": "i.fviana@dti.uhu.es", "new": "anonymous@example.com" },
+    { "old": "ijfviana", "new": "anonymous" },
+
+    { "_section": "this repo's identity (NOT the wildintel-trapper-sdk dependency, left untouched)" },
+    { "old": "href=\"https://wildintelproject.github.io/wildintel-trapverify/\"", "new": "href=\"/docs/\"" },
+    { "old": "https://wildintelproject.github.io/wildintel-trapverify/", "new": "https://anon-org.github.io/anon-repo/" },
+    { "old": "https://wildintelproject.github.io/wildintel-trap-verify/", "new": "https://anon-org.github.io/anon-repo/" },
+    { "old": "https://api.github.com/repos/wildintelproject/wildintel-trapverify", "new": "https://api.github.com/repos/anon-org/anon-repo" },
+    { "old": "https://github.com/wildintelproject/wildintel-trapverify", "new": "https://github.com/anon-org/anon-repo" },
+    { "old": "wildintelproject/wildintel-trapverify", "new": "anon-org/anon-repo" },
+    { "old": "wildintel-trapverify", "new": "anon-repo" },
+    { "old": "wildintel-project", "new": "anon-project" },
+    { "old": "      link: https://github.com/wildintelproject\n      name: WildINTEL on GitHub", "new": "      link: https://example.com/anon-org\n      name: Project on GitHub" },
+
+    { "_section": "brand / product name (no brackets/braces -- those break as bare YAML scalars, e.g. 'name: [PROJECT] website' parses as a flow sequence)" },
+    { "old": "WildINTEL", "new": "AnonProject" },
+    { "old": "wildintel.eu", "new": "project-website.example" },
+    { "old": "wildintel-camtrap-verify-", "new": "anon-tool-" },
+    { "old": "CamTrap Verify", "new": "Anonymous Tool" },
+    { "old": "camtrap-verify", "new": "anon-tool" },
+    { "old": "camtrap_verify", "new": "anon_tool" },
+    { "old": "wildintelGenerated", "new": "anonGenerated" },
+    { "old": "wildIntel_logo.webp", "new": "project_logo.webp" },
+    { "old": "WildINTEL_onlyCircle_25.png", "new": "project_icon.png" },
+
+    { "_section": "funding acknowledgment (grant IDs are as identifying as the project name)" },
+    { "old": "101052342", "new": "XXXXXXXXX" },
+    { "old": "PCI2023-145963-2", "new": "XXX-XXXXXX" },
+    { "old": "PCI2024-153489", "new": "XXX-XXXXXX" },
+    { "old": "UMO-2023/05/Y/NZ8/00104", "new": "XXX-XXXX" },
+    { "old": "NFR350962", "new": "XXXXXXXX" },
+    { "old": "Biodiversa+", "new": "the funding programme" },
+    { "old": "BiodivMon", "new": "the project acronym" },
+    { "old": "Agencia Estatal de Investigación", "new": "a national funding agency" },
+    { "old": "National Science Centre", "new": "a national funding agency" },
+    { "old": "Research Council of Norway", "new": "a national funding agency" },
+    { "old": "German Research Foundation", "new": "a national funding agency" }
+  ],
+
+  "renames": [
+    { "old_path": "img/wildIntel_logo.webp", "new_path": "img/project_logo.webp" },
+    { "old_path": "docs/img/wildIntel_logo.webp", "new_path": "docs/img/project_logo.webp" },
+    { "old_path": "docs/img/WildINTEL_onlyCircle_25.png", "new_path": "docs/img/project_icon.png" },
+    { "old_path": "backend/docs/img/WildINTEL_onlyCircle_25.png", "new_path": "backend/docs/img/project_icon.png" }
+  ],
+
+  "skip_extensions": [
+    ".png", ".webp", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".pdf",
+    ".woff", ".woff2", ".ttf", ".eot", ".otf",
+    ".zip", ".gz", ".tar", ".7z",
+    ".pyc", ".so", ".dylib", ".dll", ".exe"
+  ],
+
+  "report_patterns": [
+    "wildintelproject(?!/wildintelproject-trapper-sdk)",
+    "(?i)wildintel(?!-trapper-sdk)",
+    "[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}",
+    "\\bGA No\\.",
+    "\\bPCI20\\d\\d-",
+    "\\bUMO-",
+    "\\bNFR\\d+",
+    "/home/(?!user/)[a-zA-Z0-9_.-]+/",
+    "C:\\\\Users\\\\[a-zA-Z0-9_.-]+"
+  ]
+}
