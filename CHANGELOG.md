@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Upcoming release
 
+#### Fixed
+- `deployments.csv`/`media.csv`/`observations.csv` are now located via the `path` each resource declares in `datapackage.json` (resolved relative to its own directory) before falling back to the `{name}.csv`/`{name}.csv.gz` naming convention. Packages using non-standard file names, or shipping only gzip-compressed tables (e.g. some Trapper exports), previously failed to load even though the descriptor already pointed at the right files.
+
 ## Released 
 
 **Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
