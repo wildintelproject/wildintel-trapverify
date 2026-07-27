@@ -12,7 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Upcoming release
 
-### Added
+## Released 
+
+**Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
+
+### [0.4.0](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.3.0...v0.4.0) - 2026-07-27
+
+#### Added
 - Optional **Images directory** field in the CamtrapDP setup flow: when provided, relative `filePath` values in `media.csv` are resolved against this directory instead of the parent of the data directory.
 - **Download results** button on the Results page: generates a ZIP file of the full session directory (`wildintel-camtrap-verify-{session_id}.zip`) and triggers a browser download.
 - macOS DMG package (`camtrap-verify-X.Y.Z-macos-arm64.dmg`) added to the release workflow for Apple Silicon.
@@ -24,13 +30,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - When a source directory (local pick or Trapper download) already ships a `datapackage.json`, `/api/fs/inspect` now validates it with `frictionless` and the setup wizard shows any schema/data errors as a non-blocking warning — helps catch a malformed source package instead of silently working around it.
 - When the source package has no `datapackage.json` at all (converted from a DeepFaune/generic CSV, or a CamtrapDP source that simply never had one), `export_verified_camtrapdp()` now generates a best-effort default via `generate_default_datapackage()` instead of leaving the exported package without one. It derives `temporal`/`taxonomic`/`project.observationLevel` from the data and `spatial` from `deployments.csv` coordinates when present, and invents placeholders for everything it can't know (`contributors`, `project.title`/`samplingDesign`/`captureMethod`/`individualAnimals`, `spatial` when no coordinates exist). The Results page shows a warning listing exactly which fields were invented, read from the generated file's `wildintelGenerated.fabricatedFields` marker — the process is never blocked by a missing or invented descriptor.
 
-### Changed
+#### Changed
 - `export_verified_camtrapdp()` now also copies `datapackage.json` unchanged into `camtrap_dp_verified/` when the source package has one, instead of dropping it — only the values in `observations.csv` change, not its schema, so the original descriptor still describes the exported package correctly and it stays usable by other CamtrapDP tools.
 - **Show all event frames** (formerly *Show event context images*): reworked logic so that only frames captured between the first and last detection of the target species are included, preventing frames from adjacent animal visits from appearing in the carousel.
 - **Gallery review cards** now open on the sequence frame with the highest detection confidence instead of the chronologically first one; the zoom button opens the lightbox at that same frame instead of always the first.
 - The Trapper integration (`trapper_service.py`) now uses `wildintel-trapper-sdk` instead of a hand-rolled `httpx.AsyncClient` wrapper, with SDK calls run via `asyncio.to_thread` to keep the event loop unblocked. Behavior-preserving; error responses now map the SDK's typed exceptions to HTTP status codes.
 
-### Fixed
+#### Fixed
 - `media.csv` timestamps that mix timezone-aware and timezone-naive values (or different UTC offsets) no longer crash `/api/fs/inspect` and `/api/setup` with `ValueError: Mixed timezones detected` — `normalise_ts()` now strips any UTC offset/`Z` suffix before parsing, since every caller only uses the resulting timestamp as wall-clock local time (sampling occasion assignment, burst gaps, display), never as an absolute instant.
 - The Linux `.deb`/`.rpm` package build no longer fails with `Git executable not found` — the build image now installs `git`, needed since `wildintel-trapper-sdk` is a git-sourced dependency.
 - macOS installation instructions (Gatekeeper workaround) rewritten to use only GUI steps (double-click, System Settings → Privacy & Security → Open Anyway), removing the terminal-based quarantine-removal alternative.
@@ -42,9 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `predictionbase`/`scorebase` (DeepFaune's per-image base classifier) now take priority over `top1`/`score` when a CSV has both, matching the reference R tool — previously `top1`/`score` always won, silently ignoring `predictionbase`/`scorebase`.
 - The in-process flat-search file index (used when the *Images directory* option's subfolder search is enabled) is now cleared at the start of every `/api/setup`, so starting a new session no longer risks resolving images against a listing scanned before files were added, moved, or removed on disk.
 
-## Released 
-
-**Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
+**Full Changelog:** [`v0.3.0...v0.4.0`](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.3.0...v0.4.0)
 
 ### [0.3.0](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.2.0...v0.3.0) - 2026-07-01
 
