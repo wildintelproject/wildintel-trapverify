@@ -112,21 +112,88 @@ def normalise_ts(x: str) -> str:
 
 # ─── CamtrapDP I/O ────────────────────────────────────────────────────────────
 
+def find_datapackage(camtrap_dir: Path) -> Optional[Path]:
+    """Return the path to ``datapackage.json`` if present, at the root or one subdir down.
+
+    One level of subdirectory is checked because a Trapper ZIP extracts into
+    a named subfolder.
+    """
+    if not camtrap_dir.exists() or not camtrap_dir.is_dir():
+        return None
+    for base in (camtrap_dir, *[d for d in camtrap_dir.iterdir() if d.is_dir()]):
+        candidate = base / "datapackage.json"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def resolve_camtrapdp_resource(camtrap_dir: Path, name: str) -> Optional[Path]:
+    """Locate one of the CamtrapDP tables (``deployments``, ``media`` or ``observations``).
+
+    When a ``datapackage.json`` is present, the Data Package spec requires
+    each resource to declare where its data lives via ``path`` -- so that's
+    used first, resolved relative to the datapackage.json's own directory
+    (not necessarily ``camtrap_dir`` itself, since it may be one subdir
+    down). This is what lets non-standard file names (e.g. a Trapper export
+    named ``deployments.csv.gz`` or something else entirely) still be found.
+
+    Falls back to the ``{name}.csv`` / ``{name}.csv.gz`` naming convention
+    (checked at ``camtrap_dir``'s root or one subdir down) when there's no
+    datapackage.json, the resource is missing from it, or its declared path
+    doesn't actually exist on disk.
+    """
+    dp_path = find_datapackage(camtrap_dir)
+    if dp_path is not None:
+        try:
+            descriptor = json.loads(dp_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            logger.warning("Failed to read %s while resolving resource %r", dp_path, name)
+        else:
+            for resource in descriptor.get("resources", []):
+                if resource.get("name") == name:
+                    path = resource.get("path")
+                    if isinstance(path, str):
+                        candidate = (dp_path.parent / path).resolve()
+                        if candidate.exists():
+                            return candidate
+                    break
+
+    if not camtrap_dir.exists() or not camtrap_dir.is_dir():
+        return None
+    for base in (camtrap_dir, *[d for d in camtrap_dir.iterdir() if d.is_dir()]):
+        for suffix in ("csv", "csv.gz"):
+            candidate = base / f"{name}.{suffix}"
+            if candidate.exists():
+                return candidate
+    return None
+
+
 def load_camtrapdp(camtrap_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Read the three core CamtrapDP tables from a directory.
 
     All columns are kept as ``str`` to avoid silent type coercions on IDs.
+    File locations are resolved via :func:`resolve_camtrapdp_resource`, so a
+    ``datapackage.json`` declaring non-standard file names (or ``.csv.gz``
+    compression) is honoured; missing tables raise the same
+    ``FileNotFoundError`` pandas would for a plain ``{name}.csv`` lookup.
 
     Args:
         camtrap_dir: Path to the directory containing ``deployments.csv``,
-            ``media.csv`` and ``observations.csv``.
+            ``media.csv`` and ``observations.csv`` (or a ``datapackage.json``
+            pointing at differently-named equivalents).
 
     Returns:
         Tuple of ``(deployments, media, observations)`` DataFrames.
     """
-    dep = pd.read_csv(camtrap_dir / "deployments.csv", dtype=str)
-    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
-    obs = pd.read_csv(camtrap_dir / "observations.csv", dtype=str)
+    def _load(name: str) -> pd.DataFrame:
+        path = resolve_camtrapdp_resource(camtrap_dir, name)
+        if path is None:
+            path = camtrap_dir / f"{name}.csv"  # let pandas raise a familiar error
+        return pd.read_csv(path, dtype=str)
+
+    dep = _load("deployments")
+    med = _load("media")
+    obs = _load("observations")
     if "fileName" not in med.columns:
         med["fileName"] = med["filePath"].apply(
             lambda x: Path(str(x)).name if pd.notna(x) else ""
@@ -1232,16 +1299,17 @@ def export_verified_camtrapdp(
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # deployments y media se copian sin cambios
-    for name in ("deployments.csv", "media.csv"):
-        src = camtrap_dir / name
-        if src.exists():
-            shutil.copy2(src, out_dir / name)
+    # deployments y media se copian sin cambios, bajo su nombre real (para no
+    # romper el path declarado en datapackage.json si éste se copia tal cual)
+    for src in (
+        resolve_camtrapdp_resource(camtrap_dir, "deployments"),
+        resolve_camtrapdp_resource(camtrap_dir, "media"),
+    ):
+        if src is not None:
+            shutil.copy2(src, out_dir / src.name)
 
     # Cargar deployments/media (para el datapackage.json) y observaciones originales
-    dep = pd.read_csv(camtrap_dir / "deployments.csv", dtype=str)
-    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
-    obs = pd.read_csv(camtrap_dir / "observations.csv", dtype=str)
+    dep, med, obs = load_camtrapdp(camtrap_dir)
 
     # IDs de observaciones confirmadas (repObsId de cada decisión)
     confirmed_ids: set[str] = set()
@@ -1278,8 +1346,8 @@ def export_verified_camtrapdp(
 
     obs.to_csv(out_dir / "observations.csv", index=False)
 
-    dp_src = camtrap_dir / "datapackage.json"
-    if dp_src.exists():
+    dp_src = find_datapackage(camtrap_dir)
+    if dp_src is not None:
         shutil.copy2(dp_src, out_dir / "datapackage.json")
     else:
         descriptor = generate_default_datapackage(dep, med, obs)
@@ -1356,8 +1424,8 @@ def build_occupancy_inputs(
     # Universo de sitios: todo despliegue CLASIFICADO (presente en deployments.csv),
     # incluyendo cámaras sin ninguna detección del target (ceros verdaderos). Usar
     # solo los siteID de candidates infla psi_obs porque excluye esas cámaras.
-    dep_path = Path(config["camtrap_dir"]) / "deployments.csv"
-    if dep_path.exists():
+    dep_path = resolve_camtrapdp_resource(Path(config["camtrap_dir"]), "deployments")
+    if dep_path is not None:
         dep = pd.read_csv(dep_path, dtype=str)
         site_col = detect_site_col(dep)
         sites = sorted(dep[site_col].astype(str).unique())
@@ -1369,7 +1437,7 @@ def build_occupancy_inputs(
     op = np.zeros((n_sites, n_occ), dtype=int)
 
     activity: dict[str, list[tuple[date, date]]] = {}
-    if dep_path.exists():
+    if dep_path is not None:
         if "deploymentStart" in dep.columns and "deploymentEnd" in dep.columns:
             for _, row in dep.iterrows():
                 s = str(row[site_col])
@@ -1525,8 +1593,8 @@ def build_review_effort(
 
     total_media: Optional[int] = None
     target_assigned: Optional[int] = None
-    obs_path = Path(config["camtrap_dir"]) / "observations.csv"
-    if obs_path.exists():
+    obs_path = resolve_camtrapdp_resource(Path(config["camtrap_dir"]), "observations")
+    if obs_path is not None:
         obs_all = pd.read_csv(obs_path, dtype=str)
         total_media = len(obs_all)
         target_assigned = int(

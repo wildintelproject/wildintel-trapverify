@@ -17,12 +17,14 @@ from camtrap_workflow import (
     deepfaune_to_camtrapdp,
     detect_site_col,
     export_verified_camtrapdp,
+    find_datapackage,
     find_flat_search_ambiguities,
     get_events,
     get_review_events,
     load_all_decisions,
     load_camtrapdp,
     normalise_ts,
+    resolve_camtrapdp_resource,
     resolve_media_path,
     sanitize,
     generate_default_datapackage,
@@ -142,6 +144,78 @@ def test_load_camtrapdp_keeps_existing_filename_column(camtrap_dir):
     med.to_csv(camtrap_dir / "media.csv", index=False)
     dep, med2, obs = load_camtrapdp(camtrap_dir)
     assert (med2["fileName"] == "custom_name.jpg").all()
+
+
+# ─── resolve_camtrapdp_resource / find_datapackage ────────────────────────────
+
+def test_resolve_camtrapdp_resource_uses_datapackage_path(tmp_path):
+    """A non-conventional resource path declared in datapackage.json (here,
+    gzip-compressed under an unrelated file name) wins over the
+    ``{name}.csv``/``{name}.csv.gz`` naming convention."""
+    pd.DataFrame({"mediaID": ["m1"]}).to_csv(
+        tmp_path / "medias_export.csv.gz", index=False, compression="gzip"
+    )
+    (tmp_path / "datapackage.json").write_text(json.dumps(
+        {"resources": [{"name": "media", "path": "medias_export.csv.gz"}]}
+    ))
+    resolved = resolve_camtrapdp_resource(tmp_path, "media")
+    assert resolved == (tmp_path / "medias_export.csv.gz").resolve()
+
+def test_resolve_camtrapdp_resource_relative_to_datapackage_dir(tmp_path):
+    """A relative ``path`` in datapackage.json resolves against the
+    datapackage.json's own directory, not the ``camtrap_dir`` passed in --
+    matters when the package lives one subdir down (Trapper ZIP layout)."""
+    sub = tmp_path / "trapper_export"
+    (sub / "data").mkdir(parents=True)
+    pd.DataFrame({"mediaID": ["m1"]}).to_csv(sub / "data" / "media.csv", index=False)
+    (sub / "datapackage.json").write_text(json.dumps(
+        {"resources": [{"name": "media", "path": "data/media.csv"}]}
+    ))
+    resolved = resolve_camtrapdp_resource(tmp_path, "media")
+    assert resolved == (sub / "data" / "media.csv").resolve()
+
+def test_resolve_camtrapdp_resource_falls_back_without_datapackage(camtrap_dir):
+    resolved = resolve_camtrapdp_resource(camtrap_dir, "media")
+    assert resolved == (camtrap_dir / "media.csv").resolve()
+
+def test_resolve_camtrapdp_resource_falls_back_when_declared_path_missing(tmp_path):
+    (tmp_path / "datapackage.json").write_text(json.dumps(
+        {"resources": [{"name": "media", "path": "does_not_exist.csv"}]}
+    ))
+    pd.DataFrame({"mediaID": ["m1"]}).to_csv(tmp_path / "media.csv", index=False)
+    resolved = resolve_camtrapdp_resource(tmp_path, "media")
+    assert resolved == (tmp_path / "media.csv").resolve()
+
+def test_resolve_camtrapdp_resource_missing_entirely_returns_none(tmp_path):
+    assert resolve_camtrapdp_resource(tmp_path, "media") is None
+
+def test_find_datapackage_one_subdir_down(tmp_path):
+    sub = tmp_path / "trapper_export"
+    sub.mkdir()
+    (sub / "datapackage.json").write_text("{}")
+    assert find_datapackage(tmp_path) == sub / "datapackage.json"
+
+def test_load_camtrapdp_reads_gzip_tables_named_via_datapackage(tmp_path):
+    """Regression: a package shipping only .csv.gz tables under non-standard
+    names, resolved purely through datapackage.json's resource paths."""
+    pd.DataFrame({"deploymentID": ["DEP1"], "locationID": ["SITE_A"]}).to_csv(
+        tmp_path / "deployments.csv.gz", index=False, compression="gzip"
+    )
+    pd.DataFrame({
+        "mediaID": ["m1"], "deploymentID": ["DEP1"], "filePath": ["img/f1.jpg"],
+    }).to_csv(tmp_path / "medias.csv.gz", index=False, compression="gzip")
+    pd.DataFrame({
+        "observationID": ["o1"], "mediaID": ["m1"], "scientificName": ["Vulpes vulpes"],
+    }).to_csv(tmp_path / "observations.csv.gz", index=False, compression="gzip")
+    (tmp_path / "datapackage.json").write_text(json.dumps({"resources": [
+        {"name": "deployments", "path": "deployments.csv.gz"},
+        {"name": "media", "path": "medias.csv.gz"},
+        {"name": "observations", "path": "observations.csv.gz"},
+    ]}))
+    dep, med, obs = load_camtrapdp(tmp_path)
+    assert len(dep) == 1
+    assert len(med) == 1
+    assert len(obs) == 1
 
 
 # ─── resolve_media_path ───────────────────────────────────────────────────────

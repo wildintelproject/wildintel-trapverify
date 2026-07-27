@@ -8,36 +8,9 @@ router = APIRouter(prefix="/api/fs", tags=["filesystem"])
 logger = logging.getLogger(__name__)
 
 
-def _find_csv(directory: Path, stem: str) -> Path | None:
-    """Return the first existing variant: stem.csv, stem.csv.gz, or inside a single subdir."""
-    if not directory.exists() or not directory.is_dir():
-        return None
-    for base in (directory, *[d for d in directory.iterdir() if d.is_dir()]):
-        for suffix in ("csv", "csv.gz"):
-            candidate = base / f"{stem}.{suffix}"
-            if candidate.exists():
-                return candidate
-    return None
-
-
 def _read_csv(path: Path) -> "pd.DataFrame":
     compression = "gzip" if path.name.endswith(".gz") else None
     return pd.read_csv(path, dtype=str, compression=compression)
-
-
-def _find_datapackage(directory: Path) -> Path | None:
-    """Return the path to ``datapackage.json`` if present, at the root or one subdir down.
-
-    Mirrors ``_find_csv``'s subdirectory search (needed for the same reason:
-    a Trapper ZIP extracts into a named subfolder).
-    """
-    if not directory.exists() or not directory.is_dir():
-        return None
-    for base in (directory, *[d for d in directory.iterdir() if d.is_dir()]):
-        candidate = base / "datapackage.json"
-        if candidate.exists():
-            return candidate
-    return None
 
 
 @router.get("/inspect")
@@ -54,10 +27,12 @@ def fs_inspect(path: str) -> dict:
     non-fatal, just surfaced to the user. Packages this app itself converts
     from a DeepFaune/generic CSV don't have one, so that key is ``None`` then.
     """
+    from camtrap_workflow import find_datapackage, resolve_camtrapdp_resource
+
     logger.info("Inspecting CamtrapDP directory: %s", path)
     p = Path(path)
 
-    obs_path = _find_csv(p, "observations")
+    obs_path = resolve_camtrapdp_resource(p, "observations")
     if obs_path is None:
         logger.warning("observations.csv not found in %s", path)
         raise HTTPException(400, f"No se encontró observations.csv en {path}")
@@ -73,7 +48,7 @@ def fs_inspect(path: str) -> dict:
     )
 
     start_date, end_date = None, None
-    med_path = _find_csv(p, "media")
+    med_path = resolve_camtrapdp_resource(p, "media")
     if med_path is not None:
         from camtrap_workflow import normalise_ts
         med = _read_csv(med_path)
@@ -85,7 +60,7 @@ def fs_inspect(path: str) -> dict:
             end_date = ts.max().date().isoformat()
 
     datapackage_errors: list[str] | None = None
-    dp_path = _find_datapackage(p)
+    dp_path = find_datapackage(p)
     if dp_path is not None:
         from camtrap_workflow import validate_camtrapdp_datapackage
         try:
@@ -119,10 +94,10 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
     skipped, since those are fetched on demand via the image proxy and are
     not expected to exist locally).
     """
-    from camtrap_workflow import find_flat_search_ambiguities, resolve_media_path
+    from camtrap_workflow import find_flat_search_ambiguities, resolve_camtrapdp_resource, resolve_media_path
 
     p = Path(camtrap_dir)
-    med_path = _find_csv(p, "media")
+    med_path = resolve_camtrapdp_resource(p, "media")
     if med_path is None:
         raise HTTPException(400, f"No se encontró media.csv en {camtrap_dir}")
 
