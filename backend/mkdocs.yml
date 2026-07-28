@@ -53,7 +53,13 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  - pymdownx.snippets:
+      # base_path is resolved relative to the working directory `mkdocs` is
+      # invoked from, not relative to this file -- and that differs between
+      # `cli.py` (cwd=backend/) and the CI docs workflow (cwd=repo root), so
+      # both candidates are listed; pymdownx.snippets uses the first that
+      # actually resolves.
+      base_path: ['../docs/_snippets', 'docs/_snippets']
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.emoji

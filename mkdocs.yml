@@ -7,6 +7,8 @@ copyright: Copyright &copy; 2026 <a href="https://wildintel.eu/">WildINTEL</a>
 
 docs_dir: docs
 site_dir: site
+exclude_docs: |
+  _snippets/
 
 theme:
   name: material
@@ -58,7 +60,8 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  - pymdownx.snippets:
+      base_path: ['docs/_snippets']
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.emoji

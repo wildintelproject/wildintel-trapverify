@@ -16,8 +16,9 @@ This document covers the project architecture, development setup, configuration,
 8. [CI/CD — GitHub Actions](#8-cicd--github-actions)
 9. [Backend API Reference](#9-backend-api-reference)
 10. [Frontend Architecture](#10-frontend-architecture)
-11. [Contributing](#11-contributing)
-12. [Releasing a New Version](#12-releasing-a-new-version)
+11. [Anonymized Snapshot for Double-Blind Review](#11-anonymized-snapshot-for-double-blind-review)
+12. [Contributing](#12-contributing)
+13. [Releasing a New Version](#13-releasing-a-new-version)
 
 ---
 
@@ -339,7 +340,13 @@ All HTTP calls go through `frontend/src/api.ts`. The base URL is `/api` in produ
 
 ---
 
-## 11. Contributing
+## 11. Anonymized Snapshot for Double-Blind Review
+
+--8<-- "anonymize-repo.md"
+
+---
+
+## 12. Contributing
 
 1. Fork the repository and create a feature branch.
 2. Install dependencies: `uv sync --group dev && cd frontend && npm install`.
@@ -360,7 +367,7 @@ docs: update configuration table
 
 ---
 
-## 12. Releasing a New Version
+## 13. Releasing a New Version
 
 CHANGELOG promotion is automated (`.github/scripts/promote_changelog.py`, run by
 `release.yml` on a tag push) — there is no manual editing step before tagging.
