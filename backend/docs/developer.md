@@ -24,7 +24,7 @@ backend/
 │   ├── camtrap_workflow.py         sampling periods, sequences, ranking, exports
 │   ├── settings.py                 pydantic-settings config (reads .env)
 │   └── app_entry.py                PyInstaller entry point (desktop binary)
-├── cli.py                          Typer management CLI (uv run cli)
+├── manage.py                       Typer management CLI (uv run cli)
 ├── tests/
 │   ├── conftest.py                 shared fixtures and sys.path setup
 │   ├── unit/
@@ -147,7 +147,7 @@ Browser / httpx
 
 ### Settings
 
-`src/settings.py` uses [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) to load configuration from `.env` files and environment variables. The `Settings` singleton is instantiated at import time; `cli.py` reads from it to determine ports and log levels.
+`src/settings.py` uses [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) to load configuration from `.env` files and environment variables. The `Settings` singleton is instantiated at import time; `manage.py` reads from it to determine ports and log levels.
 
 ---
 

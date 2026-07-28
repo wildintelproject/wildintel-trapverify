@@ -57,7 +57,7 @@ The API will be available at `http://localhost:8765`. Interactive Swagger UI at 
 
 ## 🛠️ CLI
 
-`cli.py` is a [Typer](https://typer.tiangolo.com/) CLI registered as a `uv run cli` script that centralises all management tasks.
+`manage.py` is a [Typer](https://typer.tiangolo.com/) CLI registered as a `uv run cli` script that centralises all management tasks.
 
 ### Server
 
@@ -115,7 +115,7 @@ backend/
 │   ├── camtrap_workflow.py     ← period, sequence, ranking and export logic
 │   ├── settings.py             ← pydantic-settings config (reads .env)
 │   └── app_entry.py            ← PyInstaller entry point
-├── cli.py                      ← management CLI (uv run cli)
+├── manage.py                   ← management CLI (uv run cli)
 ├── tests/
 │   ├── conftest.py
 │   ├── unit/

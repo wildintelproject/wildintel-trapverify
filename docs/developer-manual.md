@@ -97,7 +97,7 @@ wildintel-trapverify/
 │   └── workflows/
 │       ├── docs.yml            # Deploy MkDocs to GitHub Pages
 │       └── release.yml         # Build Linux packages + Windows installer
-├── cli.py                      # Project management CLI (uv run cli …)
+├── manage.py                   # Project management CLI (uv run cli …)
 ├── pyproject.toml
 ├── docker-compose.yml
 ├── Caddyfile                   # Reverse proxy config (production)

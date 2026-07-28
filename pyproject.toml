@@ -3,7 +3,15 @@ requires = ["setuptools>=70"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["cli"]
+# Named "manage", not "cli" -- wildintel-trapper-sdk also installs a
+# top-level module literally named "cli" (its own management script), and
+# since it's a normal (non-editable) dependency, its physical cli.py in
+# site-packages/ always wins Python's import resolution over this project's
+# own editable-installed module of the same name -- `uv run cli` silently
+# ran wildintel-trapper-sdk's CLI instead of this project's. The command
+# name stays `cli` (see [project.scripts] below); only the underlying
+# module is renamed, to something unlikely to collide with any dependency.
+py-modules = ["manage"]
 
 [project]
 name = "camtrap-verify"
@@ -42,7 +50,7 @@ dev = [
 wildintel-trapper-sdk = { git = "https://github.com/wildintelproject/wildintelproject-trapper-sdk", tag = "v0.1.0" }
 
 [project.scripts]
-cli = "cli:app"
+cli = "manage:app"
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests/unit", "backend/tests/integration"]
