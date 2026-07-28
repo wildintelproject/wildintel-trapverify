@@ -173,6 +173,7 @@ uv run cli package --help
 | `cli serve [dev\|prod\|debug] [--port N]` | Start the FastAPI server |
 | `cli docs serve [--port N]` | Serve MkDocs documentation locally |
 | `cli docs build` | Build static documentation to `backend/site/` |
+| `cli docs pdf` | Build the documentation as a single PDF (`backend/site/pdf/camtrap-verify-backend.pdf`) |
 | `cli package build [--format deb\|rpm\|windows\|all] [--version X]` | Build distributable packages |
 
 ---

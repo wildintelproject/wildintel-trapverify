@@ -74,6 +74,18 @@ markdown_extensions:
 
 plugins:
   - search
+  # Only active with ENABLE_PDF_EXPORT=1 (set by `uv run cli backend docs pdf`)
+  # -- generating the PDF adds build time (WeasyPrint renders every page), so
+  # a normal `docs serve`/`docs build` doesn't pay that cost.
+  - with-pdf:
+      enabled_if_env: ENABLE_PDF_EXPORT
+      output_path: pdf/camtrap-verify-backend.pdf
+      cover_title: CamTrap Verify
+      cover_subtitle: Iterative expert verification of camera-trap classifications
+      author: WildINTEL
+      copyright: Copyright © 2026 WildINTEL
+      toc_title: Table of contents
+      toc_level: 2
 
 nav:
   - Home: index.md

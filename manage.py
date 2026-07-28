@@ -6,10 +6,15 @@ Uso:
     uv run cli backend test [unit|integration|all]
     uv run cli backend docs serve
     uv run cli backend docs build
+    uv run cli backend docs pdf
     uv run cli frontend dev [--port 5173]
     uv run cli frontend test
     uv run cli frontend docs serve
     uv run cli frontend docs build
+    uv run cli frontend docs pdf
+    uv run cli docs serve
+    uv run cli docs build
+    uv run cli docs pdf
     uv run cli dev
     uv run cli package build [--format deb|rpm|appimage|windows|all] [--version 0.1.0]
 """
@@ -67,10 +72,14 @@ class PackageFormat(str, Enum):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _run(*args: str, cwd: Path | None = None) -> None:
-    result = subprocess.run(list(args), cwd=cwd)
+def _run(*args: str, cwd: Path | None = None, env: dict | None = None) -> None:
+    result = subprocess.run(list(args), cwd=cwd, env=env)
     if result.returncode != 0:
         raise typer.Exit(result.returncode)
+
+
+def _pdf_env() -> dict:
+    return {**os.environ, "ENABLE_PDF_EXPORT": "1"}
 
 
 def _require(tool: str, hint: str) -> None:
@@ -106,6 +115,14 @@ def docs_build() -> None:
     console.print("[green]Generando manuales...[/green]")
     _run("mkdocs", "build", "--config-file", str(ROOT_MKDOCS_CFG), cwd=ROOT_DIR)
     console.print(f"[green]✔  Sitio generado en {ROOT_DIR / 'site'}[/green]")
+
+
+@docs_app.command("pdf")
+def docs_pdf() -> None:
+    """Genera un PDF con los manuales (site/pdf/camtrap-verify.pdf)."""
+    console.print("[green]Generando PDF (WeasyPrint)...[/green]")
+    _run("mkdocs", "build", "--config-file", str(ROOT_MKDOCS_CFG), cwd=ROOT_DIR, env=_pdf_env())
+    console.print(f"[green]✔  PDF generado en {ROOT_DIR / 'site' / 'pdf' / 'camtrap-verify.pdf'}[/green]")
 
 
 # ── backend ───────────────────────────────────────────────────────────────────
@@ -200,6 +217,14 @@ def backend_docs_build() -> None:
     console.print(f"[green]✔  Sitio generado en {BACKEND_DIR / 'site'}[/green]")
 
 
+@backend_docs_app.command("pdf")
+def backend_docs_pdf() -> None:
+    """Genera un PDF con la documentación del backend."""
+    console.print("[green]Generando PDF (WeasyPrint)...[/green]")
+    _run("mkdocs", "build", "--config-file", str(MKDOCS_CFG), cwd=BACKEND_DIR, env=_pdf_env())
+    console.print(f"[green]✔  PDF generado en {BACKEND_DIR / 'site' / 'pdf' / 'camtrap-verify-backend.pdf'}[/green]")
+
+
 # ── frontend ──────────────────────────────────────────────────────────────────
 
 frontend_app = typer.Typer(help="Gestiona el frontend React (npm).")
@@ -278,6 +303,14 @@ def frontend_docs_build() -> None:
     console.print("[green]Generando documentación del frontend...[/green]")
     _run("mkdocs", "build", "--config-file", str(FRONTEND_MKDOCS), cwd=FRONTEND_DIR)
     console.print(f"[green]✔  Sitio generado en {FRONTEND_DIR / 'site'}[/green]")
+
+
+@frontend_docs_app.command("pdf")
+def frontend_docs_pdf() -> None:
+    """Genera un PDF con la documentación del frontend."""
+    console.print("[green]Generando PDF (WeasyPrint)...[/green]")
+    _run("mkdocs", "build", "--config-file", str(FRONTEND_MKDOCS), cwd=FRONTEND_DIR, env=_pdf_env())
+    console.print(f"[green]✔  PDF generado en {FRONTEND_DIR / 'site' / 'pdf' / 'camtrap-verify-frontend.pdf'}[/green]")
 
 
 # ── dev (backend + frontend juntos) ──────────────────────────────────────────

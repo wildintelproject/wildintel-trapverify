@@ -39,6 +39,7 @@ dev = [
     "debugpy>=1.8",
     "mike>=2.0",
     "mkdocs-material>=9.7.6",
+    "mkdocs-with-pdf>=0.9.3",
     "pyinstaller>=6.21.0",
     "pytest>=8.0",
     "rich>=13.0",
