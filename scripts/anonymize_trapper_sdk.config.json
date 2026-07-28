@@ -1,0 +1,86 @@
+{
+  "_comment": "Redaction map for the vendored wildintel-trapper-sdk copy, applied by scripts/anonymize_repo.py's vendor_dependency() the same way anonymize_repo.config.json is applied to the main tree. Same format: literal, case-sensitive, exact-string replacements.",
+
+  "protected_substrings": [],
+
+  "replacements": [
+    { "_section": "author identity (this repo has an extra GitHub noreply alias and a fuller name variant used in test fixtures, not just comments)" },
+    { "old": "Iñaki Fernández de Viana y González", "new": "Anonymous Author" },
+    { "old": "Iñaki Josep Fernández de V", "new": "Anonymous Author" },
+    { "old": "ijfvianauhu@users.noreply.github.com", "new": "anonymous@example.com" },
+    { "old": "ijfvianauhu", "new": "anonymous" },
+    { "old": "ijfviana@gmail.com", "new": "anonymous@example.com" },
+    { "old": "i.fviana@dti.uhu.es", "new": "anonymous@example.com" },
+    { "old": "wildintel@uhu.es", "new": "anonymous@example.com" },
+    { "old": "Pedro Garcia", "new": "Anonymous Author" },
+    { "old": "pedro.garcia@dci.uhu.es", "new": "anonymous@example.com" },
+    { "old": "Jorge García", "new": "Anonymous Author" },
+    { "old": "jorge.garcia@dci.uhu.es", "new": "anonymous@example.com" },
+    { "old": "jorga.garcia@dci.uhu.es", "new": "anonymous@example.com" },
+    { "old": "\"username\": \"wildintel\"", "new": "\"username\": \"testuser\"" },
+    { "old": "/home/ijfviana/Documentos/Programacion/trapper-project/trapper_api_client", "new": "/home/user/project" },
+    { "old": "ijfviana", "new": "anonymous" },
+
+    { "_section": "this repo's identity" },
+    { "old": "https://wildintelproject.github.io/wildintelproject-trapper-sdk/", "new": "https://anon-org.github.io/anon-trapper-sdk/" },
+    { "old": "https://github.com/wildintelproject/wildintelproject-trapper-sdk.git", "new": "https://github.com/anon-org/anon-trapper-sdk.git" },
+    { "old": "https://github.com/wildintelproject/wildintelproject-trapper-sdk", "new": "https://github.com/anon-org/anon-trapper-sdk" },
+    { "old": "wildintelproject/wildintelproject-trapper-sdk", "new": "anon-org/anon-trapper-sdk" },
+    { "old": "wildintelproject-trapper-sdk", "new": "anon-trapper-sdk" },
+    { "old": "https://github.com/wildintelproject/wildintel-publisher", "new": "https://github.com/anon-org/anon-publisher" },
+    { "old": "wildintel-publisher", "new": "anon-publisher" },
+    { "old": "      link: https://github.com/wildintelproject/wildintelproject-trapper-sdk\n      name: wildintel-trapper-sdk on GitHub", "new": "      link: https://example.com/anon-org\n      name: Project on GitHub" },
+    { "old": "https://www.facebook.com/people/WildIntel/61556603674655/", "new": "https://example.com/anon-org" },
+    { "old": "https://bsky.app/profile/wildintel.bsky.social", "new": "https://example.com/anon-org" },
+    { "old": "container_name: wildintel_trapper_sdk", "new": "container_name: anon_trapper_sdk" },
+
+    { "_section": "package/distribution name -- vendored locally now, so unlike a real external dependency this can (and must, to avoid a giant brand-name string plastered across every doc page and badge) be renamed. The Python import name is already generic (`trapper_client`, not `wildintel_trapper_sdk`) so no source code needs touching." },
+    { "old": "wildintel-trapper-sdk", "new": "anon-trapper-sdk" },
+
+    { "_section": "brand / product name (same as anonymize_repo.config.json -- keep in sync)" },
+    { "old": "WILDINTEL_", "new": "ANON_" },
+    { "old": "WildINTEL", "new": "AnonProject" },
+    { "old": "Wildintel", "new": "AnonProject" },
+    { "old": "wildintel.eu", "new": "project-website.example" },
+    { "old": "wildIntel_logo.webp", "new": "project_logo.webp" },
+    { "old": "WildINTEL_onlyCircle_25.png", "new": "project_icon.png" },
+
+    { "_section": "funding acknowledgment (same as anonymize_repo.config.json -- keep in sync)" },
+    { "old": "101052342", "new": "XXXXXXXXX" },
+    { "old": "PCI2023-145963-2", "new": "XXX-XXXXXX" },
+    { "old": "PCI2024-153489", "new": "XXX-XXXXXX" },
+    { "old": "UMO-2023/05/Y/NZ8/00104", "new": "XXX-XXXX" },
+    { "old": "NFR350962", "new": "XXXXXXXX" },
+    { "old": "Biodiversa+", "new": "the funding programme" },
+    { "old": "BiodivMon", "new": "the project acronym" },
+    { "old": "Agencia Estatal de Investigación", "new": "a national funding agency" },
+    { "old": "National Science Centre", "new": "a national funding agency" },
+    { "old": "Research Council of Norway", "new": "a national funding agency" },
+    { "old": "German Research Foundation", "new": "a national funding agency" }
+  ],
+
+  "renames": [
+    { "old_path": "img/wildIntel_logo.webp", "new_path": "img/project_logo.webp" },
+    { "old_path": "docs/img/wildIntel_logo.webp", "new_path": "docs/img/project_logo.webp" },
+    { "old_path": "docs/img/WildINTEL_onlyCircle_25.png", "new_path": "docs/img/project_icon.png" }
+  ],
+
+  "skip_extensions": [
+    ".png", ".webp", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".pdf",
+    ".woff", ".woff2", ".ttf", ".eot", ".otf",
+    ".zip", ".gz", ".tar", ".7z",
+    ".pyc", ".so", ".dylib", ".dll", ".exe"
+  ],
+
+  "report_patterns": [
+    "(?i)wildintel",
+    "[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}",
+    "\\bGA No\\.",
+    "\\bPCI20\\d\\d-",
+    "\\bUMO-",
+    "\\bNFR\\d+",
+    "uhu\\.es",
+    "/home/(?!user/)[a-zA-Z0-9_.-]+/",
+    "C:\\\\Users\\\\[a-zA-Z0-9_.-]+"
+  ]
+}

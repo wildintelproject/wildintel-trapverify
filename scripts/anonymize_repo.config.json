@@ -1,16 +1,24 @@
 {
   "_comment": "Redaction map for scripts/anonymize_repo.py. 'replacements' are literal, case-sensitive, exact-string substitutions applied to every text file in the exported snapshot -- no regex, so entries never accidentally widen their own match. Keep entries specific (full URLs, full names) rather than short generic fragments, to avoid collateral damage to unrelated text or to the protected strings below.",
 
-  "protected_substrings": [
-    "wildintel-trapper-sdk",
-    "https://github.com/wildintelproject/wildintelproject-trapper-sdk"
-  ],
+  "protected_substrings": [],
 
-  "_exclude_comment": "Files that must never ship inside the snapshot: this tooling's own config contains the real org/repo URL as literal JSON data (not prose), so self-redaction when the substitution pass encounters it as one more file in the tree isn't reliable -- delete it outright instead.",
+  "_exclude_comment": "Files that must never ship inside the snapshot: this tooling's own config contains the real org/repo URL as literal JSON data (not prose), so self-redaction when the substitution pass encounters it as one more file in the tree isn't reliable -- delete it outright instead. uv.lock is excluded because it goes stale the moment wildintel-trapper-sdk's git source is rewritten to a local vendor path below -- regenerate_lock() rebuilds it against the vendored copy.",
   "exclude_paths": [
     "scripts/anonymize_repo.py",
     "scripts/anonymize_repo.config.json",
-    "docs/_snippets/anonymize-repo.md"
+    "scripts/anonymize_trapper_sdk.config.json",
+    "docs/_snippets/anonymize-repo.md",
+    "uv.lock"
+  ],
+
+  "vendor_dependencies": [
+    {
+      "dependency_name": "wildintel-trapper-sdk",
+      "anon_name": "anon-trapper-sdk",
+      "target_path": "vendor/anon-trapper-sdk",
+      "redaction_config": "anonymize_trapper_sdk.config.json"
+    }
   ],
 
   "strip_sections": [
@@ -30,7 +38,12 @@
     { "old": "i.fviana@dti.uhu.es", "new": "anonymous@example.com" },
     { "old": "ijfviana", "new": "anonymous" },
 
-    { "_section": "this repo's identity (NOT the wildintel-trapper-sdk dependency, left untouched)" },
+    { "_section": "wildintel-trapper-sdk dependency -- vendored locally by vendor_dependencies (see anonymize_trapper_sdk.config.json), not left as a real GitHub git dependency, so it's fully renamed here too. The exact [tool.uv.sources] line must be rewritten before the generic bare-name rule below touches it, or the exact-match breaks." },
+    { "old": "# wildintel-trapper-sdk aún no está publicado en PyPI, solo como release de GitHub.", "new": "# anon-trapper-sdk: vendored locally under vendor/, not a real published dependency." },
+    { "old": "wildintel-trapper-sdk = { git = \"https://github.com/wildintelproject/wildintelproject-trapper-sdk\", tag = \"v0.1.0\" }", "new": "anon-trapper-sdk = { path = \"vendor/anon-trapper-sdk\" }" },
+    { "old": "wildintel-trapper-sdk", "new": "anon-trapper-sdk" },
+
+    { "_section": "this repo's identity" },
     { "old": "href=\"https://wildintelproject.github.io/wildintel-trapverify/\"", "new": "href=\"/docs/\"" },
     { "old": "https://wildintelproject.github.io/wildintel-trapverify/", "new": "https://anon-org.github.io/anon-repo/" },
     { "old": "https://wildintelproject.github.io/wildintel-trap-verify/", "new": "https://anon-org.github.io/anon-repo/" },
@@ -39,6 +52,7 @@
     { "old": "wildintelproject/wildintel-trapverify", "new": "anon-org/anon-repo" },
     { "old": "wildintel-trapverify", "new": "anon-repo" },
     { "old": "wildintel-project", "new": "anon-project" },
+    { "old": "wildintel-publisher", "new": "anon-publisher" },
     { "old": "      link: https://github.com/wildintelproject\n      name: WildINTEL on GitHub", "new": "      link: https://example.com/anon-org\n      name: Project on GitHub" },
 
     { "_section": "brand / product name (no brackets/braces -- those break as bare YAML scalars, e.g. 'name: [PROJECT] website' parses as a flow sequence)" },
@@ -81,8 +95,8 @@
   ],
 
   "report_patterns": [
-    "wildintelproject(?!/wildintelproject-trapper-sdk)",
-    "(?i)wildintel(?!-trapper-sdk)",
+    "wildintelproject",
+    "(?i)wildintel",
     "[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}",
     "\\bGA No\\.",
     "\\bPCI20\\d\\d-",

@@ -5,10 +5,12 @@ Pulls a clean tree straight from git (no .git/, no commit history, no
 author metadata -- via `git archive`) and applies a literal, case-sensitive
 find/replace map (scripts/anonymize_repo.config.json) to strip author names,
 emails, this repo's own GitHub URLs, project branding, and funding/grant
-identifiers from every text file. Third-party dependencies (e.g. the
-wildintel-trapper-sdk git dependency in pyproject.toml) are deliberately
-left untouched -- see "protected_substrings" in the config -- and the script
-verifies they survived intact before finishing.
+identifiers from every text file. Genuinely external third-party
+dependencies (fastapi, pandas, ...) are left alone by construction -- the
+replacement map only ever targets this project's own identity, never
+generic package names -- and anything that still needs protecting from an
+overly broad rule can be listed in "protected_substrings", verified intact
+before finishing.
 
 This script and its own config are excluded from the snapshot outright
 (`exclude_paths`), rather than relying on the substitution pass to redact
@@ -26,11 +28,22 @@ always read scripts/anonymize_repo.config.json to see exactly what it looks
 for, and always check the report printed at the end (also saved to
 <output>.report.txt) before submitting anything.
 
+Sibling WildINTEL repos depended on via a real git URL (e.g.
+wildintel-trapper-sdk in pyproject.toml's [tool.uv.sources]) aren't "third
+party" the way fastapi/pandas are -- that URL reveals the org just as much
+as anything else -- but can't just be text-substituted like a doc mention,
+since the dependency has to actually resolve. `--vendor NAME=SOURCE[#REF]`
+exports and anonymizes a real (redacted) copy of it too, under vendor/, and
+the main config's replacement rules rewrite [tool.uv.sources] to a local
+path pointing at it; uv.lock is then regenerated against the vendored copy.
+
 Usage:
     python scripts/anonymize_repo.py --output /path/to/anon-snapshot
     python scripts/anonymize_repo.py --ref main --output ../anon-snapshot --zip
     python scripts/anonymize_repo.py --source https://github.com/org/repo.git \\
         --ref main --output /tmp/anon-snapshot
+    python scripts/anonymize_repo.py --output ../anon-snapshot \\
+        --vendor wildintel-trapper-sdk=../wildintel-trapper-sdk#v0.1.0
 """
 import argparse
 import json
@@ -214,6 +227,66 @@ def apply_renames(root: Path, renames: list[dict]) -> list[str]:
     return applied
 
 
+def vendor_dependency(output_root: Path, spec: dict, source: str, ref: str) -> tuple[list[dict], list[str]]:
+    """Export `source`@`ref` into output_root/spec['target_path'] and apply
+    its own redaction config -- for a sibling WildINTEL repo depended on via
+    a real git URL (e.g. wildintel-trapper-sdk), leaving that URL in the
+    snapshot would reveal the org just as much as anything else, but it
+    can't just be text-substituted like a doc mention: the dependency has to
+    actually resolve, so a real (redacted) copy is vendored in and
+    pyproject.toml's `[tool.uv.sources]` entry is rewritten to a local path
+    by the main config's own replacement rules.
+
+    Returns (replacements, protected_substrings) from the vendor's own
+    config, so the caller can fold them into the final verify_no_leaks scan
+    of the whole tree.
+    """
+    target = output_root / spec["target_path"]
+    is_url = source.startswith(("http://", "https://", "git@", "ssh://"))
+    print(f"Vendoring {spec['dependency_name']} from {source}@{ref} ...")
+    local_root = export_snapshot(source, ref, target)
+
+    vendor_config = json.loads((Path(__file__).parent / spec["redaction_config"]).read_text())
+    vendor_config["replacements"] = [r for r in vendor_config["replacements"] if "old" in r]
+    replacements = list(vendor_config["replacements"])
+    if local_root is not None and not is_url:
+        replacements = [{"old": str(local_root), "new": "/home/user/project"}] + replacements
+
+    changed = apply_replacements(target, replacements, set(vendor_config["skip_extensions"]))
+    print(f"  Rewrote {changed} file(s) in vendored {spec['dependency_name']}.")
+
+    for r in apply_renames(target, vendor_config.get("renames", [])):
+        print(f"  Renamed asset: {r}")
+
+    protected = vendor_config.get("protected_substrings", [])
+    missing = verify_protected(target, protected)
+    if missing:
+        print(f"  !! WARNING: protected strings missing in vendored {spec['dependency_name']}: {missing}", file=sys.stderr)
+
+    return replacements, protected
+
+
+def regenerate_lock(root: Path) -> bool:
+    """Rebuild uv.lock (excluded from the snapshot -- see exclude_paths)
+    against the now-vendored dependency graph.
+
+    Required, not advisory: a stale or missing lock referencing the old git
+    source means `uv sync`/`uv run` fails in the delivered snapshot, which
+    defeats the entire point of vendoring rather than just leaving a broken
+    dependency -- main() treats a failure here as fatal, same as a leak.
+    """
+    cmd = ["uv", "lock"]
+    try:
+        result = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
+    except FileNotFoundError:
+        print("`uv` not found on PATH -- cannot regenerate uv.lock.", file=sys.stderr)
+        return False
+    if result.returncode != 0:
+        print(f"`uv lock` failed against the anonymized snapshot:\n{result.stderr}", file=sys.stderr)
+        return False
+    return True
+
+
 def verify_protected(root: Path, protected_substrings: list[str]) -> list[str]:
     """Return the list of protected strings that did NOT survive -- should be empty."""
     missing = []
@@ -298,6 +371,13 @@ def main() -> None:
     parser.add_argument("--output", required=True, help="Destination directory for the anonymized snapshot")
     parser.add_argument("--zip", action="store_true", help="Also produce <output>.zip")
     parser.add_argument("--force", action="store_true", help="Overwrite --output if it already exists and is non-empty")
+    parser.add_argument(
+        "--vendor", action="append", default=[], metavar="NAME=SOURCE[#REF]",
+        help="Vendor a dependency locally (repeatable) instead of leaving its real git URL in "
+             "the snapshot. NAME must match a 'dependency_name' in the config's "
+             "vendor_dependencies. REF defaults to HEAD. "
+             "Example: --vendor wildintel-trapper-sdk=../wildintel-trapper-sdk#v0.1.0",
+    )
     args = parser.parse_args()
 
     output = Path(args.output).resolve()
@@ -333,6 +413,35 @@ def main() -> None:
     for r in renamed:
         print(f"Renamed asset: {r}")
 
+    vendor_args = {}
+    for raw in args.vendor:
+        name, _, rest = raw.partition("=")
+        vsource, _, vref = rest.partition("#")
+        vendor_args[name] = (vsource, vref or "HEAD")
+
+    vendor_replacements: list[dict] = []
+    vendor_protected: list[str] = []
+    for spec in config.get("vendor_dependencies", []):
+        dep_name = spec["dependency_name"]
+        if dep_name not in vendor_args:
+            print(
+                f"Warning: config declares '{dep_name}' as a vendor dependency but no "
+                f"--vendor {dep_name}=... was given -- its real git URL stays in the snapshot.",
+                file=sys.stderr,
+            )
+            continue
+        vsource, vref = vendor_args[dep_name]
+        v_repl, v_prot = vendor_dependency(output, spec, vsource, vref)
+        vendor_replacements.extend(v_repl)
+        vendor_protected.extend(v_prot)
+
+    if vendor_replacements:
+        print("Regenerating uv.lock against the vendored dependency ...")
+        if not regenerate_lock(output):
+            print("\n!! FAILED: could not regenerate uv.lock -- the snapshot would not `uv sync`/`uv run`.", file=sys.stderr)
+            sys.exit(1)
+        print("uv.lock regenerated.")
+
     if build_local_docs(output):
         print("Built backend/site/ so the in-app Help button (/docs/) resolves to the local, anonymized manual.")
 
@@ -361,7 +470,11 @@ def main() -> None:
     # in the tree. Unlike everything above, this is not advisory -- a
     # non-empty result means the snapshot actually leaks and must not be
     # shipped, so it aborts before zipping and before the success message.
-    leaks = verify_no_leaks(output, replacements, config["protected_substrings"])
+    leaks = verify_no_leaks(
+        output,
+        replacements + vendor_replacements,
+        config["protected_substrings"] + vendor_protected,
+    )
     if leaks:
         print(f"\n!! FAILED: {len(leaks)} real value(s) from the redaction map survived in the output:", file=sys.stderr)
         for needle, file in leaks:
