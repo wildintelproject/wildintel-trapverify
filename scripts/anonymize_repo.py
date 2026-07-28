@@ -10,6 +10,15 @@ wildintel-trapper-sdk git dependency in pyproject.toml) are deliberately
 left untouched -- see "protected_substrings" in the config -- and the script
 verifies they survived intact before finishing.
 
+This script and its own config are excluded from the snapshot outright
+(`exclude_paths`), rather than relying on the substitution pass to redact
+its own rule definitions when it encounters itself as one more file in the
+tree -- config.json's real values are literal JSON data there, not prose,
+and self-redaction is order-dependent and not guaranteed. As a final safety
+net, `verify_no_leaks()` hard-fails the whole run (non-zero exit, no zip
+produced) if any of the redaction map's real values are found anywhere in
+the output regardless.
+
 The replacement list can only ever narrow what it matches (longer, more
 specific strings), never widen it, so it cannot be "smart" about phrasing it
 has never seen. Treat its output as a strong first pass, not a guarantee:
@@ -75,6 +84,70 @@ def load_config() -> dict:
 
 def is_probably_binary(data: bytes) -> bool:
     return b"\x00" in data[:8192]
+
+
+def exclude_paths(root: Path, paths: list[str]) -> list[str]:
+    """Delete files that must never ship inside the snapshot -- the
+    anonymization tooling itself, whose config contains the real identity
+    (org/repo URL, etc.) as literal data, not prose. Relying on the
+    substitution pass to redact its own rule definitions when it encounters
+    them as one more file in the tree is fragile (order-dependent, breaks
+    silently if a rule is ever added that doesn't happen to self-match) --
+    deleting them outright removes the whole risk class instead.
+    """
+    removed = []
+    for rel in paths:
+        p = root / rel
+        if p.exists():
+            p.unlink()
+            removed.append(rel)
+            parent = p.parent
+            if parent != root and not any(parent.iterdir()):
+                parent.rmdir()
+    return removed
+
+
+def strip_sections(root: Path, specs: list[dict]) -> list[str]:
+    """Remove a markdown section (heading line through, but not including,
+    the next '## ' heading, or EOF) that documents the anonymization process
+    itself -- shipping a description of how/why a copy was anonymized is a
+    weaker version of the same leak `exclude_paths` fixes for the tooling.
+    """
+    stripped = []
+    for spec in specs:
+        path = root / spec["file"]
+        if not path.exists():
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        heading = spec["heading"] + "\n"
+        try:
+            start = next(i for i, line in enumerate(lines) if line == heading)
+        except StopIteration:
+            continue
+        end = len(lines)
+        for i in range(start + 1, len(lines)):
+            if lines[i].startswith("## "):
+                end = i
+                break
+        path.write_text("".join(lines[:start] + lines[end:]), encoding="utf-8")
+        stripped.append(f"{spec['file']} ({spec['heading']})")
+    return stripped
+
+
+def strip_lines(root: Path, specs: list[dict]) -> list[str]:
+    """Remove single lines (e.g. a CHANGELOG bullet) that reference the
+    anonymization process by name."""
+    stripped = []
+    for spec in specs:
+        path = root / spec["file"]
+        if not path.exists():
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        kept = [line for line in lines if spec["contains"] not in line]
+        if len(kept) != len(lines):
+            path.write_text("".join(kept), encoding="utf-8")
+            stripped.append(f"{spec['file']} (line containing {spec['contains']!r})")
+    return stripped
 
 
 def apply_replacements(root: Path, replacements: list[dict], skip_extensions: set[str]) -> int:
@@ -163,6 +236,37 @@ def verify_protected(root: Path, protected_substrings: list[str]) -> list[str]:
     return missing
 
 
+def verify_no_leaks(root: Path, replacements: list[dict], protected_substrings: list[str]) -> list[tuple[str, str]]:
+    """Hard gate: none of the redaction map's own `old` (real) values should
+    survive anywhere in the final tree -- e.g. because a file containing them
+    verbatim (not just in prose) was missed by exclude_paths/strip_sections,
+    the actual leak this whole safety net exists for. protected_substrings
+    are exempt: those are third-party dependency references that are
+    *supposed* to survive untouched.
+
+    Returns a list of (old_value, file) for every leak found -- empty means
+    clean. Unlike verify_protected (soft, printed as a warning),
+    main() treats a non-empty result here as a hard failure.
+    """
+    leaks = []
+    for rule in replacements:
+        needle = rule["old"]
+        if not needle or needle in protected_substrings:
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                data = path.read_bytes()
+            except OSError:
+                continue
+            if is_probably_binary(data):
+                continue
+            if needle.encode("utf-8") in data:
+                leaks.append((needle, str(path.relative_to(root))))
+    return leaks
+
+
 def scan_report(root: Path, patterns: list[str]) -> list[tuple[str, int, str, str]]:
     compiled = [re.compile(p) for p in patterns]
     hits = []
@@ -208,6 +312,10 @@ def main() -> None:
     print(f"Exporting {args.ref} from {args.source} (git archive, no history) ...")
     local_repo_root = export_snapshot(args.source, args.ref, output)
 
+    excluded = exclude_paths(output, config.get("exclude_paths", []))
+    for e in excluded:
+        print(f"Excluded from snapshot: {e}")
+
     replacements = list(config["replacements"])
     if local_repo_root is not None and not args.source.startswith(("http://", "https://", "git@", "ssh://")):
         replacements = [{"old": str(local_repo_root), "new": "/home/user/project"}] + replacements
@@ -215,6 +323,11 @@ def main() -> None:
     skip_extensions = set(config["skip_extensions"])
     changed = apply_replacements(output, replacements, skip_extensions)
     print(f"Rewrote {changed} file(s) with the redaction map.")
+
+    for s in strip_sections(output, config.get("strip_sections", [])):
+        print(f"Stripped section: {s}")
+    for s in strip_lines(output, config.get("strip_lines", [])):
+        print(f"Stripped line: {s}")
 
     renamed = apply_renames(output, config["renames"])
     for r in renamed:
@@ -242,6 +355,19 @@ def main() -> None:
         else:
             f.write("No leftover matches found by the report patterns.\n")
     print(f"\n{len(hits)} potential leftover(s) flagged for manual review -- see {report_path}")
+
+    # Hard gate, checked last (after every other pass had a chance to fix
+    # things): none of the redaction map's real values may survive anywhere
+    # in the tree. Unlike everything above, this is not advisory -- a
+    # non-empty result means the snapshot actually leaks and must not be
+    # shipped, so it aborts before zipping and before the success message.
+    leaks = verify_no_leaks(output, replacements, config["protected_substrings"])
+    if leaks:
+        print(f"\n!! FAILED: {len(leaks)} real value(s) from the redaction map survived in the output:", file=sys.stderr)
+        for needle, file in leaks:
+            print(f"  - {needle!r} in {file}", file=sys.stderr)
+        print(f"\nNot zipping. Fix the leak(s) above (likely a missing entry in exclude_paths/strip_sections/strip_lines) and re-run.", file=sys.stderr)
+        sys.exit(1)
 
     if args.zip:
         archive_path = shutil.make_archive(str(output), "zip", root_dir=output)

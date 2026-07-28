@@ -6,6 +6,23 @@
     "https://github.com/wildintelproject/wildintelproject-trapper-sdk"
   ],
 
+  "_exclude_comment": "Files that must never ship inside the snapshot: this tooling's own config contains the real org/repo URL as literal JSON data (not prose), so self-redaction when the substitution pass encounters it as one more file in the tree isn't reliable -- delete it outright instead.",
+  "exclude_paths": [
+    "scripts/anonymize_repo.py",
+    "scripts/anonymize_repo.config.json",
+    "docs/_snippets/anonymize-repo.md"
+  ],
+
+  "strip_sections": [
+    { "file": "backend/docs/developer.md", "heading": "## Anonymized snapshot for double-blind review" },
+    { "file": "docs/developer-manual.md", "heading": "## 11. Anonymized Snapshot for Double-Blind Review" }
+  ],
+
+  "strip_lines": [
+    { "file": "docs/developer-manual.md", "contains": "Anonymized Snapshot for Double-Blind Review](#11-anonymized-snapshot-for-double-blind-review)" },
+    { "file": "CHANGELOG.md", "contains": "scripts/anonymize_repo.py" }
+  ],
+
   "replacements": [
     { "_section": "author identity" },
     { "old": "Iñaki Josep Fernández de V", "new": "Anonymous Author" },
