@@ -853,6 +853,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#vendoring-sibling-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vendoring sibling dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#reviewing-before-you-submit" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1448,6 +1459,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#vendoring-sibling-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vendoring sibling dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#reviewing-before-you-submit" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1717,7 +1739,7 @@
 <a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>│   └── workflows/
 <a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>│       ├── docs.yml            # Deploy MkDocs to GitHub Pages
 <a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>│       └── release.yml         # Build Linux packages + Windows installer
-<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>├── cli.py                      # Project management CLI (uv run cli …)
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>├── manage.py                   # Project management CLI (uv run cli …)
 <a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>├── pyproject.toml
 <a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>├── docker-compose.yml
 <a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>├── Caddyfile                   # Reverse proxy config (production)
@@ -2021,9 +2043,10 @@
 <p>All HTTP calls go through <code>frontend/src/api.ts</code>. The base URL is <code>/api</code> in production (same origin) and <code>http://localhost:8765/api</code> in development (configured in <code>vite.config.ts</code> via proxy).</p>
 <hr />
 <h2 id="11-anonymized-snapshot-for-double-blind-review">11. Anonymized Snapshot for Double-Blind Review</h2>
-<p><code>scripts/anonymize_repo.py</code> (repo root) exports a clean copy of the codebase for double-blind submission: no git history, no author metadata, and author names/emails, this repo's own GitHub URLs, project branding, and funding/grant identifiers stripped out via a literal find/replace map. Third-party dependencies (e.g. <code>wildintel-trapper-sdk</code>) are deliberately left untouched so the export still builds.</p>
+<p><code>scripts/anonymize_repo.py</code> (repo root) exports a clean copy of the codebase for double-blind submission: no git history, no author metadata, and author names/emails, this repo's own GitHub URLs, project branding, and funding/grant identifiers stripped out via a literal find/replace map. Genuinely external dependencies (fastapi, pandas, ...) are left alone. <code>wildintel-trapper-sdk</code> is not treated as external -- it's another WildINTEL repo, so its real git URL would out the org just as much as anything else here -- see "Vendoring sibling dependencies" below.</p>
 <h3 id="generating-it">Generating it</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>python<span class="w"> </span>scripts/anonymize_repo.py<span class="w"> </span>--ref<span class="w"> </span>development<span class="w"> </span>--output<span class="w"> </span>../anon-snapshot<span class="w"> </span>--zip
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>python<span class="w"> </span>scripts/anonymize_repo.py<span class="w"> </span>--ref<span class="w"> </span>development<span class="w"> </span>--output<span class="w"> </span>../anon-snapshot<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--vendor<span class="w"> </span>wildintel-trapper-sdk<span class="o">=</span>../wildintel-trapper-sdk#v0.1.0<span class="w"> </span>--zip
 </code></pre></div>
 <table>
 <thead>
@@ -2046,6 +2069,10 @@
 <td>Destination directory (required)</td>
 </tr>
 <tr>
+<td><code>--vendor NAME=SOURCE[#REF]</code></td>
+<td>Vendor a dependency locally instead of leaving its real git URL in the snapshot (repeatable). See below.</td>
+</tr>
+<tr>
 <td><code>--zip</code></td>
 <td>Also produce <code>&lt;output&gt;.zip</code></td>
 </tr>
@@ -2056,12 +2083,14 @@
 </tbody>
 </table>
 <p>Under the hood: <code>git archive</code> extracts the chosen ref with no <code>.git/</code> at all (history and commit authorship are gone by construction, not by scrubbing), then the redaction map in <code>scripts/anonymize_repo.config.json</code> is applied to every text file, a couple of brand-carrying asset files are renamed, and <code>backend/mkdocs.yml</code> is built into <code>backend/site/</code> so the in-app Help button — repointed at the local <code>/docs/</code> mount instead of the public docs site — still resolves to something.</p>
+<h3 id="vendoring-sibling-dependencies">Vendoring sibling dependencies</h3>
+<p><code>wildintel-trapper-sdk</code> is depended on via a real git URL in <code>pyproject.toml</code>'s <code>[tool.uv.sources]</code> -- since it's another WildINTEL repo, not a package like <code>fastapi</code>, that URL is as identifying as anything else, but it can't just be text-substituted like a doc mention: the dependency has to actually resolve for <code>uv sync</code>/<code>uv run</code> to work. <code>--vendor wildintel-trapper-sdk=&lt;path-or-url&gt;[#ref]</code> exports and anonymizes a real copy of it too, under <code>vendor/anon-trapper-sdk/</code> (its own redaction map is <code>scripts/anonymize_trapper_sdk.config.json</code> -- author identity, brand, and funding sections are duplicated from the main config on purpose, since they're the same facts about the same org; keep them in sync if either changes), rewrites <code>[tool.uv.sources]</code> to point at that local path, and regenerates <code>uv.lock</code> against it. If <code>--vendor wildintel-trapper-sdk=...</code> is omitted, the run prints a warning and the real git URL stays in the snapshot -- don't submit that copy.</p>
 <h3 id="reviewing-before-you-submit">Reviewing before you submit</h3>
 <p>The run prints a summary and writes <code>&lt;output&gt;.report.txt</code> listing every line that still matches a "might still be identifying" pattern (emails, leftover <code>wildintel</code> mentions, absolute home paths, grant-ID shapes). This is a first pass, not a guarantee — always:</p>
 <ol>
-<li>Read the report; most hits are expected noise (the protected <code>wildintel-trapper-sdk</code> dependency line, third-party JS library copyrights bundled by mkdocs-material).</li>
+<li>Read the report; most hits are expected noise (third-party JS library copyrights bundled by mkdocs-material, <code>example.com</code> placeholder emails already substituted in).</li>
 <li>Check <code>img/*.png</code>/<code>*.webp</code> screenshots by eye — the script only rewrites text, never image pixels, so a browser tab title, OS username in a file dialog, or window titlebar baked into a screenshot survives untouched.</li>
-<li>If you edit <code>scripts/anonymize_repo.config.json</code> to add redaction rules, avoid bracket/brace-wrapped replacement values (<code>[LIKE THIS]</code>) — they can parse as YAML flow sequences if the value ever lands as a bare scalar (e.g. <code>name: [PROJECT] website</code> breaks <code>mkdocs.yml</code>).</li>
+<li>If you edit <code>scripts/anonymize_repo.config.json</code> or <code>scripts/anonymize_trapper_sdk.config.json</code> to add redaction rules, avoid bracket/brace-wrapped replacement values (<code>[LIKE THIS]</code>) — they can parse as YAML flow sequences if the value ever lands as a bare scalar (e.g. <code>name: [PROJECT] website</code> breaks <code>mkdocs.yml</code>). Test fixtures are a common place to find real names/emails that comments and prose-focused searches miss -- see the <code>pedro.garcia@dci.uhu.es</code>-style entries already in <code>anonymize_trapper_sdk.config.json</code> for the kind of thing to look for.</li>
 </ol>
 <h3 id="running-the-anonymized-copy">Running the anonymized copy</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unzip<span class="w"> </span>anon-snapshot.zip<span class="w"> </span>-d<span class="w"> </span>anon-test<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>anon-test
@@ -2069,6 +2098,7 @@
 <a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>uv<span class="w"> </span>run<span class="w"> </span>cli<span class="w"> </span>dev
 </code></pre></div>
 <p>Confirm the Help button opens the local (anonymized) manual rather than a dead link, and that no page title, footer, or copyright string still shows the real project name.</p>
+<p>If <code>uv run cli</code> prints the wrong help text (e.g. some other package's CLI instead of this one) after re-running the script against the same <code>--output</code> path, that's <code>uv</code>'s own build cache reusing a stale wheel for that local path -- <code>uv sync --reinstall-package &lt;name&gt;</code> (the anonymized <code>name</code> from <code>pyproject.toml</code>) forces a rebuild. A reviewer unzipping to a fresh path of their own shouldn't hit this.</p>
 <h3 id="submitting-it">Submitting it</h3>
 <ul>
 <li>If the venue accepts a <strong>file upload</strong> (OpenReview, CMT, etc.), submit <code>&lt;output&gt;.zip</code> directly as supplementary material — nothing is exposed publicly.</li>
