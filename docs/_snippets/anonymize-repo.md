@@ -40,6 +40,8 @@ uv run cli dev
 
 Confirm the Help button opens the local (anonymized) manual rather than a dead link, and that no page title, footer, or copyright string still shows the real project name.
 
+If `uv run cli` prints the wrong help text (e.g. some other package's CLI instead of this one) after re-running the script against the same `--output` path, that's `uv`'s own build cache reusing a stale wheel for that local path -- `uv sync --reinstall-package <name>` (the anonymized `name` from `pyproject.toml`) forces a rebuild. A reviewer unzipping to a fresh path of their own shouldn't hit this.
+
 ### Submitting it
 
 - If the venue accepts a **file upload** (OpenReview, CMT, etc.), submit `<output>.zip` directly as supplementary material — nothing is exposed publicly.

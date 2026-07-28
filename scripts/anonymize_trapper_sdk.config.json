@@ -18,6 +18,11 @@
     { "old": "jorge.garcia@dci.uhu.es", "new": "anonymous@example.com" },
     { "old": "jorga.garcia@dci.uhu.es", "new": "anonymous@example.com" },
     { "old": "\"username\": \"wildintel\"", "new": "\"username\": \"testuser\"" },
+    { "old": "result.username == \"wildintel\"", "new": "result.username == \"testuser\"" },
+    { "old": "\"first_name\": \"Wild\"", "new": "\"first_name\": \"Test\"" },
+    { "old": "\"last_name\": \"Intel\"", "new": "\"last_name\": \"User\"" },
+    { "old": "\"name\": \"Wild Intel\"", "new": "\"name\": \"Test User\"" },
+    { "old": "result.name == \"Wild Intel\"", "new": "result.name == \"Test User\"" },
     { "old": "/home/ijfviana/Documentos/Programacion/trapper-project/trapper_api_client", "new": "/home/user/project" },
     { "old": "ijfviana", "new": "anonymous" },
 
