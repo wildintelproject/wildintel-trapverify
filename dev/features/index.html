@@ -524,10 +524,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sampling-period-and-sequence-construction" class="md-nav__link">
+  <a href="#sampling-occasion-and-detection-event-construction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sampling period and sequence construction
+        Sampling occasion and detection event construction
       
     </span>
   </a>
@@ -675,10 +675,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sampling-period-and-sequence-construction" class="md-nav__link">
+  <a href="#sampling-occasion-and-detection-event-construction" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sampling period and sequence construction
+        Sampling occasion and detection event construction
       
     </span>
   </a>
@@ -782,25 +782,25 @@
 <li><strong>Site resolution</strong> — uses <code>locationID</code> when present; falls back to <code>deploymentID</code>, so both survey designs are supported.</li>
 </ul>
 <hr />
-<h2 id="sampling-period-and-sequence-construction">Sampling period and sequence construction</h2>
+<h2 id="sampling-occasion-and-detection-event-construction">Sampling occasion and detection event construction</h2>
 <ul>
-<li><strong>Configurable sampling periods</strong> — divides the study window into fixed-length windows (<code>occasion_days</code>, default 5 days) per deployment. The number of periods adapts automatically to the study duration.</li>
-<li><strong>Sequence grouping</strong> — consecutive frames at the same location separated by less than <code>gap_seconds</code> (default 60 s) are grouped into a single reviewable sequence.</li>
-<li><strong>Confidence ranking</strong> — within each site × period × species cell, sequences are ranked by the maximum <code>classificationProbability</code> across their frames, so round 1 always shows the most likely true detection.</li>
+<li><strong>Configurable sampling occasions</strong> — divides the study window into fixed-length windows (<code>occasion_days</code>, default 5 days) per deployment. The number of occasions adapts automatically to the study duration.</li>
+<li><strong>Detection event grouping</strong> — consecutive frames at the same location separated by less than <code>gap_seconds</code> (default 60 s) are grouped into a single reviewable detection event.</li>
+<li><strong>Confidence ranking</strong> — within each site × occasion × species cell, detection events are ranked by the maximum <code>classificationProbability</code> across their frames, so round 1 always shows the most likely true detection.</li>
 <li><strong>Score filtering</strong> — frames below <code>min_score</code> (default 0.5) are excluded from the candidate manifest, avoiding the lowest-confidence noise.</li>
 </ul>
 <hr />
 <h2 id="review-gallery">Review gallery</h2>
 <ul>
-<li><strong>One card per cell</strong> — each site × period combination is shown as a single card; the expert makes one decision per card per round.</li>
-<li><strong>Frame navigation</strong> — arrows step through the individual frames of a sequence; the progress badge shows "Frame N / M".</li>
-<li><strong>Sequence counter</strong> — the badge "Sequence N / M" shows which ranked sequence is currently displayed and how many are available.</li>
+<li><strong>One card per cell</strong> — each site × occasion combination is shown as a single card; the expert makes one decision per card per round.</li>
+<li><strong>Frame navigation</strong> — arrows step through the individual frames of a detection event; the progress badge shows "Frame N / M".</li>
+<li><strong>Detection event counter</strong> — the badge "Detection event N / M" shows which ranked detection event is currently displayed and how many are available.</li>
 <li><strong>Burst context mode</strong> — when enabled, all frames of the physical burst are shown (not only those labelled as the target species), so the expert can see the animal entering and leaving the scene. Context frames are visually dimmed and do not affect the decision.</li>
 <li><strong>Lightbox</strong> — click any image to open it full-screen with:<ul>
 <li>Mouse-wheel zoom and drag-to-pan</li>
 <li>Brightness and contrast controls</li>
 <li>Tonal inversion (useful for night-vision / near-infrared images)</li>
-<li>Left / right arrows to move between periods without closing</li>
+<li>Left / right arrows to move between occasions without closing</li>
 </ul>
 </li>
 <li><strong>Keyboard navigation</strong> — arrow keys advance frames; <code>C</code> confirms, <code>R</code> rejects (configurable).</li>
@@ -809,8 +809,8 @@
 <hr />
 <h2 id="iterative-review-logic">Iterative review logic</h2>
 <ul>
-<li><strong>Round-based flow</strong> — in round 1, only rank-1 sequences are presented. Confirming a sequence closes its cell. Rejecting it makes the rank-2 sequence appear in round 2.</li>
-<li><strong>Automatic cell closure</strong> — once a sequence is confirmed, the cell disappears from the gallery; no further review is needed for it.</li>
+<li><strong>Round-based flow</strong> — in round 1, only rank-1 detection events are presented. Confirming a detection event closes its cell. Rejecting it makes the rank-2 detection event appear in round 2.</li>
+<li><strong>Automatic cell closure</strong> — once a detection event is confirmed, the cell disappears from the gallery; no further review is needed for it.</li>
 <li><strong>Convergence</strong> — the review depth is bounded by <code>total_iterations</code>; in practice most cells resolve in 1-2 rounds.</li>
 <li><strong>Session persistence</strong> — the active session (config + all decisions) is saved to disk and restored automatically when the server restarts.</li>
 </ul>
@@ -862,7 +862,7 @@
 <tbody>
 <tr>
 <td><code>camera_operation.csv</code></td>
-<td>Active days per site × period</td>
+<td>Active days per site × occasion</td>
 </tr>
 <tr>
 <td><code>dethist_naive_{sp}.csv</code></td>
