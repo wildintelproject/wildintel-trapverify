@@ -49,9 +49,9 @@ These parameters are set through the setup wizard in the web interface when crea
 | `target_species` | `string[]` | — | Scientific names exactly as they appear in `observations.csv` |
 | `study_start` | `YYYY-MM-DD` | — | Start of the study window |
 | `study_end` | `YYYY-MM-DD` | — | End of the study window |
-| `occasion_days` | `int` | `5` | Duration of each sampling period in days |
-| `gap_seconds` | `int` | `60` | Images separated by less than this (in seconds) belong to the same sequence |
-| `total_iterations` | `int` | `100000` | Maximum review depth per site × period × species cell |
+| `occasion_days` | `int` | `5` | Duration of each sampling occasion in days |
+| `gap_seconds` | `int` | `60` | Images separated by less than this (in seconds) belong to the same detection event |
+| `total_iterations` | `int` | `100000` | Maximum review depth per site × occasion × species cell |
 | `min_score` | `float [0-1]` | `0.5` | Minimum classification confidence to be included as a candidate |
 
 ---
@@ -132,7 +132,7 @@ The active session persists across server restarts. On startup, the last session
 │                                       updated for confirmed observations
 │
 └── occupancy_inputs/                   inputs for occupancy models
-    ├── camera_operation.csv            active days per site × sampling period
+    ├── camera_operation.csv            active days per site × sampling occasion
     ├── dethist_naive_<species>.csv     1/0/NA — classifier-based
     ├── dethist_verified_<species>.csv  1/0/NA — expert-verified
     ├── verification_summary.csv        per-species combos, detections, false positives, ψ_obs
@@ -141,7 +141,7 @@ The active session persists across server restarts. On startup, the last session
 
 ### Detection history format
 
-`dethist_*.csv` files have one row per location and one column per sampling period (`occ1`, `occ2`, …):
+`dethist_*.csv` files have one row per location and one column per sampling occasion (`occ1`, `occ2`, …):
 
 | siteID | occ1 | occ2 | occ3 |
 |--------|:----:|:----:|:----:|
@@ -150,4 +150,4 @@ The active session persists across server restarts. On startup, the last session
 
 - **1** — species detected (naive: by classifier; verified: confirmed by expert)
 - **0** — camera active but no detection
-- **NA** — camera inactive during that period
+- **NA** — camera inactive during that occasion

@@ -23,7 +23,7 @@ def _detect_deepfaune_columns(df: pd.DataFrame) -> tuple[str, str]:
 
     predictionbase/scorebase (DeepFaune's per-image base classifier) takes
     priority over top1/score when both are present, matching the reference
-    R tool: it is the confident per-image call, not the sequence-aggregated
+    R tool: it is the confident per-image call, not the detection-event-aggregated
     "prediction".
     """
     cols = set(df.columns)

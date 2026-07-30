@@ -88,7 +88,7 @@ Current session state.
 
 ### `POST /api/setup`
 
-Create a new session: loads CamtrapDP, builds the sampling-period matrix, and generates the candidate manifest. Initial output files (`camtrap_dp_verified/`, `occupancy_inputs/`) are generated immediately.
+Create a new session: loads CamtrapDP, builds the sampling-occasion matrix, and generates the candidate manifest. Initial output files (`camtrap_dp_verified/`, `occupancy_inputs/`) are generated immediately.
 
 **Body**
 ```json
@@ -145,7 +145,7 @@ List all target species with progress statistics and thumbnail URLs.
 
 ### `GET /api/species/{species_safe}/events`
 
-Pending sequences for a species in a given round.
+Pending detection events for a species in a given round.
 
 **Path parameters**
 
@@ -180,7 +180,7 @@ Pending sequences for a species in a given round.
 ```
 
 !!! note "`rank` and `totalSeqs`"
-    `rank` indicates which sequence is being shown (1 = highest confidence). `totalSeqs` is the total number of available sequences for that cell, allowing the UI to show "Sequence 1 / 3".
+    `rank` indicates which detection event is being shown (1 = highest confidence). `totalSeqs` is the total number of available detection events for that cell, allowing the UI to show "Detection event 1 / 3".
 
 ---
 
@@ -257,7 +257,7 @@ Manually rejected `mediaID`s (excluded from future rounds).
 
 ### `POST /api/reject`
 
-Reject the entire sequence that contains the given frame.
+Reject the entire detection event that contains the given frame.
 
 **Body** `{ "mediaId": "m0000003" }`
 

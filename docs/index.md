@@ -18,7 +18,7 @@ Architecture overview, development setup, configuration reference, build system 
 
 ### [Features](features.md)
 
-Detailed description of data ingestion, sampling period construction, review gallery, iterative review logic and verified output formats.
+Detailed description of data ingestion, sampling occasion construction, review gallery, iterative review logic and verified output formats.
 
 ### [About](about.md)
 

@@ -2,7 +2,7 @@
 Results aggregation for CamTrap Verify.
 
 Computes confirmed / rejected / unverified counts at the period (site-occasion)
-and sequence (burst) level, for the active session.
+and detection event (burst) level, for the active session.
 """
 import json
 import logging
@@ -44,7 +44,7 @@ def compute_results() -> dict:
 
     Returns:
         Dict with session paths, global counts, and per-species breakdowns
-        at both the period and sequence granularity.
+        at both the period and detection event granularity.
     """
     candidates = session_service.get_candidates()
     if candidates is None:
@@ -114,7 +114,7 @@ def compute_results() -> dict:
         for c in [grp["status"].value_counts().to_dict()]
     ]
 
-    # ── Sequence-level stats ──────────────────────────────────────────────────
+    # ── Detection event-level stats ─────────────────────────────────────────────
     seqs = (
         candidates
         .groupby(["site_occasion_key", "species_safe", "burst_id"])

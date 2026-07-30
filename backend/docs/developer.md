@@ -21,7 +21,7 @@ This guide covers setting up a development environment, running the test suite, 
 backend/
 ├── src/                            application source code
 │   ├── main.py                     REST endpoints (FastAPI)
-│   ├── camtrap_workflow.py         sampling periods, sequences, ranking, exports
+│   ├── camtrap_workflow.py         sampling occasions, detection events, ranking, exports
 │   ├── settings.py                 pydantic-settings config (reads .env)
 │   └── app_entry.py                PyInstaller entry point (desktop binary)
 ├── manage.py                       Typer management CLI (uv run cli)

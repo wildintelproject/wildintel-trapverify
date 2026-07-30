@@ -722,7 +722,7 @@ def build_candidates(
     (excludes) any individual frame whose own classification probability falls
     below ``min_score`` -- mirroring ``to_camtrapdp()``'s per-frame threshold --
     assigns each surviving frame to a sampling occasion (fixed-width breaks of
-    ``occasion_days``), groups frames into sequences (bursts separated by more
+    ``occasion_days``), groups frames into detection events (bursts separated by more
     than ``gap_seconds``), and ranks bursts by maximum classification
     probability within each site × occasion × species cell (rank 1 = highest
     confidence).
@@ -793,7 +793,7 @@ def build_candidates(
     # Demote frames whose own classification score falls below min_score, mirroring
     # to_camtrapdp()'s per-frame threshold: a frame with no score at all is never
     # demoted (only a known low score excludes it), and this runs before burst
-    # grouping, so a demoted frame no longer counts toward a burst's gap sequence.
+    # grouping, so a demoted frame no longer counts toward a burst's gap-based grouping.
     if min_score > 0:
         target_prob = pd.to_numeric(target_obs["classificationProbability"], errors="coerce")
         target_obs = target_obs[~(target_prob.notna() & (target_prob < min_score))]
@@ -1273,7 +1273,7 @@ def export_verified_camtrapdp(
     package is never missing the file outright; callers can check
     ``datapackage.json``'s ``wildintelGenerated.fabricatedFields`` to warn the
     user which parts are placeholders. In ``observations.csv`` the
-    representative observation of each confirmed sequence is updated:
+    representative observation of each confirmed detection event is updated:
     ``classificationMethod='human'``,
     ``classificationProbability=1.0``, ``classifiedBy``, and
     ``classificationTimestamp`` (UTC). When ``extended_confirmation=True`` all
@@ -1547,12 +1547,12 @@ def build_review_effort(
 ) -> None:
     """Generate ``review_effort.csv``, replicating R's ``review_effort()``.
 
-    Measures how many sequences the expert actually inspected:
+    Measures how many detection events the expert actually inspected:
 
-    * **Confirmed cells**: cost = rank of the confirmed sequence (expert stopped
+    * **Confirmed cells**: cost = rank of the confirmed detection event (expert stopped
       at the first "yes").
     * **Rejected cells**: cost = maximum rank available (expert exhausted all
-      sequences without confirming).
+      detection events without confirming).
 
     Also reports percentages relative to the full candidate set and the original
     classified archive.

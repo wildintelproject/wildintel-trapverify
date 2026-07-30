@@ -12,9 +12,9 @@ The tool is designed for researchers who work with camera-trap data formatted in
 
 Classical manual verification requires an expert to review every single image — an impractical task when a season's dataset contains tens of thousands of frames. CamTrap Verify turns the problem around:
 
-- It groups images into **sequences** (bursts of closely spaced frames) and ranks them by **classification confidence**.
-- In round 1, the expert only sees the highest-confidence sequence per site × sampling-period × species cell. A single confirmation closes that cell — no further review needed.
-- Rejected sequences trigger round 2 with the next-lowest-confidence sequence for the same cell.
+- It groups images into **detection events** (bursts of closely spaced frames) and ranks them by **classification confidence**.
+- In round 1, the expert only sees the highest-confidence detection event per site × sampling-occasion × species cell. A single confirmation closes that cell — no further review needed.
+- Rejected detection events trigger round 2 with the next-lowest-confidence detection event for the same cell.
 - The process converges quickly: in practice, most cells are resolved in one or two rounds.
 
 This means experts spend time on the images that *matter* — those on the boundary between true detections and false positives — rather than re-confirming obviously correct classifications.

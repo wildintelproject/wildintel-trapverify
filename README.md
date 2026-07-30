@@ -14,7 +14,7 @@
 
 **CamTrap Verify** is an open-source web application designed to help ecologists and wildlife researchers review and validate species detections produced by AI classifiers or citizen-science platforms. It consumes any directory in [CamtrapDP v1.0](https://camtrap-dp.tdwg.org/) format and guides the expert through a structured, iterative review workflow that minimises the total number of images that need to be inspected.
 
-In each round, the tool presents the **highest-confidence sequence** not yet reviewed for every combination of site × sampling period × species. Confirming a sequence closes that cell; rejecting it queues the next-best sequence for the following round. This ensures that expert effort is always directed where it matters most — without having to look at every single image.
+In each round, the tool presents the **highest-confidence detection event** not yet reviewed for every combination of site × sampling occasion × species. Confirming a detection event closes that cell; rejecting it queues the next-best detection event for the following round. This ensures that expert effort is always directed where it matters most — without having to look at every single image.
 
 Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP package with confirmed observations tagged as human classifications, together with detection histories and camera-operation matrices ready to feed directly into species occupancy models.
 
@@ -28,8 +28,8 @@ Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP pac
 - Generic CSV importer with configurable column mapping and interactive species-name editor for any AI classifier output
 
 **Review workflow**
-- Iterative review by rounds: for each site × sampling-period × species cell, the highest-confidence detection sequence is always shown first
-- Confirming a sequence closes the cell; rejecting it queues the next-best sequence in the following round, minimising total expert effort
+- Iterative review by rounds: for each site × sampling-occasion × species cell, the highest-confidence detection event is always shown first
+- Confirming a detection event closes the cell; rejecting it queues the next-best detection event in the following round, minimising total expert effort
 - Optional full-event mode: shows all frames from the same deployment captured between the first and last detection of the target species, including frames not labelled as that species
 - Optional extended confirmation: marks all observations in the confirmed burst — not just the highest-confidence frame — as human-verified in the output
 

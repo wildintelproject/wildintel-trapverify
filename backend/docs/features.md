@@ -9,24 +9,24 @@
 
 ---
 
-## Sampling period and sequence construction
+## Sampling occasion and detection event construction
 
-- **Configurable sampling periods** — divides the study window into fixed-length windows (`occasion_days`, default 5 days) per deployment. The number of periods adapts automatically to the study duration.
-- **Sequence grouping** — consecutive frames at the same location separated by less than `gap_seconds` (default 60 s) are grouped into a single reviewable sequence.
-- **Confidence ranking** — within each site × period × species cell, sequences are ranked by the maximum `classificationProbability` across their frames, so round 1 always shows the most likely true detection.
+- **Configurable sampling occasions** — divides the study window into fixed-length windows (`occasion_days`, default 5 days) per deployment. The number of occasions adapts automatically to the study duration.
+- **Detection event grouping** — consecutive frames at the same location separated by less than `gap_seconds` (default 60 s) are grouped into a single reviewable detection event.
+- **Confidence ranking** — within each site × occasion × species cell, detection events are ranked by the maximum `classificationProbability` across their frames, so round 1 always shows the most likely true detection.
 - **Score filtering** — frames below `min_score` (default 0.5) are excluded from the candidate manifest, avoiding the lowest-confidence noise.
 
 ---
 
 ## Review gallery
 
-- **One card per cell** — each site × period combination is shown as a single card; the expert makes one decision per card per round.
-- **Frame navigation** — arrows step through the individual frames of a sequence; the progress badge shows "Frame N / M".
-- **Sequence counter** — the badge "Sequence N / M" shows which ranked sequence is currently displayed and how many are available.
+- **One card per cell** — each site × occasion combination is shown as a single card; the expert makes one decision per card per round.
+- **Frame navigation** — arrows step through the individual frames of a detection event; the progress badge shows "Frame N / M".
+- **Detection event counter** — the badge "Detection event N / M" shows which ranked detection event is currently displayed and how many are available.
 - **Lightbox** — click any image to open it full-screen with:
     - Mouse-wheel zoom and drag-to-pan
     - Tonal inversion (useful for night-vision / near-infrared images)
-    - Left / right arrows to move between periods without closing
+    - Left / right arrows to move between occasions without closing
 - **Keyboard navigation** — arrow keys advance frames; `C` confirms, `R` rejects (configurable).
 - **Per-species progress bars** — a coloured badge on each species card shows the current round; the bar fills as cells are resolved.
 
@@ -34,8 +34,8 @@
 
 ## Iterative review logic
 
-- **Round-based flow** — in round 1, only rank-1 sequences are presented. Confirming a sequence closes its cell. Rejecting it makes the rank-2 sequence appear in round 2.
-- **Automatic cell closure** — once a sequence is confirmed, the cell disappears from the gallery; no further review is needed for it.
+- **Round-based flow** — in round 1, only rank-1 detection events are presented. Confirming a detection event closes its cell. Rejecting it makes the rank-2 detection event appear in round 2.
+- **Automatic cell closure** — once a detection event is confirmed, the cell disappears from the gallery; no further review is needed for it.
 - **Convergence** — the review depth is bounded by `total_iterations`; in practice most cells resolve in 1-2 rounds.
 - **Session persistence** — the active session (config + all decisions) is saved to disk and restored automatically when the server restarts.
 
@@ -56,7 +56,7 @@
 
     | File | Description |
     |------|-------------|
-    | `camera_operation.csv` | Active days per site × period |
+    | `camera_operation.csv` | Active days per site × occasion |
     | `dethist_naive_<sp>.csv` | Detection history from the classifier (1 / 0 / NA) |
     | `dethist_verified_<sp>.csv` | Detection history after human verification |
     | `verification_summary.csv` | Per-species: combos, detections, false positives, ψ_obs |

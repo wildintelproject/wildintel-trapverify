@@ -286,7 +286,7 @@ export default function ResultsPage() {
         </div>
       )}
 
-      {/* Sequences */}
+      {/* Detection events */}
       <h5 className="text-base font-semibold mb-3">{t('results.seq_title')}</h5>
       <StatsCards
         confirmed={results.seq_confirmed}

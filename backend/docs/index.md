@@ -11,21 +11,21 @@ CamtrapDP directory
   (deployments + media + observations)
            │
            ▼
-   Sampling periods  (site × period × species)
+   Sampling occasions  (site × occasion × species)
            │
            ▼
    Review gallery ──► Confirm / Reject
            │
            ▼
-   Round 2: next lowest-confidence sequence
+   Round 2: next lowest-confidence detection event
            │
            ▼
   camtrap_dp_verified/  +  occupancy_inputs/
 ```
 
 1. **Ingest** any [CamtrapDP v1.0](https://camtrap-dp.tdwg.org/) directory produced by an AI classifier or citizen-science platform.
-2. **Build** a matrix of sampling periods (fixed time windows per location) and group consecutive images into **sequences**, ranked by detection confidence.
-3. **Serve** a web gallery where the expert confirms or rejects each sequence — with zoom, pan, tonal inversion, and keyboard navigation.
+2. **Build** a matrix of sampling occasions (fixed time windows per location) and group consecutive images into **detection events**, ranked by detection confidence.
+3. **Serve** a web gallery where the expert confirms or rejects each detection event — with zoom, pan, tonal inversion, and keyboard navigation.
 4. **Export** outputs ready for occupancy models: naive vs. verified detection histories, camera-operation matrix, and per-species summary.
 
 ---

@@ -46,8 +46,8 @@ Select the species you want to verify. Only species present in `observations.csv
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| Sampling period duration | 5 days | Length of each occupancy occasion |
-| Sequence gap | 60 s | Images separated by less than this belong to the same sequence |
+| Sampling occasion duration | 5 days | Length of each occupancy occasion |
+| Detection event gap | 60 s | Images separated by less than this belong to the same detection event |
 | Minimum score | 0.5 | Classification confidence threshold; frames below this are ignored |
 
 Click **Start verification**. The backend builds the candidate manifest and creates the output directory. This may take a few seconds for large datasets.
@@ -62,10 +62,10 @@ The index page shows one card per target species, with a progress bar and a roun
 
 | Colour | Meaning |
 |--------|---------|
-| Green | Round 1 — highest-confidence sequences |
+| Green | Round 1 — highest-confidence detection events |
 | Yellow | Round 2 |
 | Orange | Round 3 |
-| Red | Round 4+ — lowest-confidence sequences |
+| Red | Round 4+ — lowest-confidence detection events |
 
 Click a species card to open its gallery.
 
@@ -73,12 +73,12 @@ Click a species card to open its gallery.
 
 ## 4. The gallery
 
-The gallery groups cards by **location**. Each card represents one **site × sampling-period** combination and shows the current round's top-ranked sequence.
+The gallery groups cards by **location**. Each card represents one **site × sampling-occasion** combination and shows the current round's top-ranked detection event.
 
 ### Within a card
 
-- The **"Sequence N / M"** badge tells you which ranked sequence you are looking at and how many are available for this period.
-- The **"Frame N / M"** counter shows your position within the current sequence.
+- The **"Detection event N / M"** badge tells you which ranked detection event you are looking at and how many are available for this occasion.
+- The **"Frame N / M"** counter shows your position within the current detection event.
 - Use the `‹` and `›` arrows (or keyboard arrow keys) to navigate frames.
 - Click the image or the zoom button to open the **lightbox**.
 
@@ -89,7 +89,7 @@ The gallery groups cards by **location**. Each card represents one **site × sam
 | Zoom in/out | Mouse wheel |
 | Pan | Click and drag |
 | Invert colours | Toggle button (useful for IR images) |
-| Next / previous period | Left / right arrows |
+| Next / previous occasion | Left / right arrows |
 | Close | `Esc` or click outside |
 
 ### Making decisions
@@ -97,7 +97,7 @@ The gallery groups cards by **location**. Each card represents one **site × sam
 For each card, choose:
 
 - **Confirm** — the species is present; the cell is marked as a detection (1) and will not appear again.
-- **Reject** — false positive; in the next round, the rank-2 sequence will be shown for this cell.
+- **Reject** — false positive; in the next round, the rank-2 detection event will be shown for this cell.
 
 !!! warning "All cards must be decided before saving"
     The **Save decisions** button is enabled only when every visible card has been confirmed or rejected.
@@ -108,7 +108,7 @@ Click **Save decisions** to commit the round. The backend regenerates the output
 
 ## 5. Subsequent rounds
 
-After saving, confirmed cells disappear. Cards for rejected cells reappear in round 2 showing the next-ranked sequence. Repeat the process until a species shows **Complete** — meaning no more candidate sequences remain.
+After saving, confirmed cells disappear. Cards for rejected cells reappear in round 2 showing the next-ranked detection event. Repeat the process until a species shows **Complete** — meaning no more candidate detection events remain.
 
 ---
 
@@ -134,7 +134,7 @@ Once all species are complete, navigate to the **Results** tab. You will see:
 │   ├── media.csv
 │   └── observations.csv               confirmed obs flagged as "human"
 └── occupancy_inputs/
-    ├── camera_operation.csv            active days per site × period
+    ├── camera_operation.csv            active days per site × occasion
     ├── dethist_naive_<species>.csv     classifier-based detection history
     ├── dethist_verified_<species>.csv  expert-verified detection history
     ├── verification_summary.csv        per-species ψ_obs naive vs. verified

@@ -21,7 +21,7 @@
    - [Step 4 — Parameters](#step-4--parameters)
 6. [Species Index](#6-species-index)
 7. [Image Gallery](#7-image-gallery)
-   - [Reviewing Sequences](#reviewing-sequences)
+   - [Reviewing Detection Events](#reviewing-detection-events)
    - [Fullscreen Lightbox](#fullscreen-lightbox)
    - [Image Controls](#image-controls)
    - [Keyboard Shortcuts](#keyboard-shortcuts)
@@ -33,30 +33,30 @@
 
 ## 1. Overview
 
-CamTrap Verify helps experts determine whether a species was present at a given location during a study period. To do this, it divides the study period into fixed-length windows called **sampling periods** (e.g. 5-day blocks). Within each sampling period, images from the same camera are grouped into **sequences** — bursts of consecutive frames taken less than N seconds apart. The question the expert answers is therefore always the same: *"Is this species present at this site during this sampling period?"*
+CamTrap Verify helps experts determine whether a species was present at a given location during a study period. To do this, it divides the study period into fixed-length windows called **sampling occasions** (e.g. 5-day blocks). Within each sampling occasion, images from the same camera are grouped into **detection events** — bursts of consecutive frames taken less than N seconds apart. The question the expert answers is therefore always the same: *"Is this species present at this site during this sampling occasion?"*
 
-To minimise the total number of images that need to be inspected, CamTrap Verify works in **rounds**. In each round, for every combination of site × sampling period × species, the tool presents the **sequence with the highest detection confidence** that has not yet been reviewed.
+To minimise the total number of images that need to be inspected, CamTrap Verify works in **rounds**. In each round, for every combination of site × sampling occasion × species, the tool presents the **detection event with the highest detection confidence** that has not yet been reviewed.
 
-- **Confirming** a sequence closes that cell — the species is considered present at that site during that period.
-- **Rejecting** a sequence queues the next-best sequence for the following round.
+- **Confirming** a detection event closes that cell — the species is considered present at that site during that occasion.
+- **Rejecting** a detection event queues the next-best detection event for the following round.
 
 This guarantees that expert effort is always directed where it matters most, without reviewing every single image.
 
 ```mermaid
 flowchart TD
-    A([CamtrapDP data]) --> B[Divide study period\ninto N-day sampling periods]
-    B --> C[Group images per site into\nsequences / bursts]
-    C --> D[Rank sequences by\nmax detection confidence\nwithin each cell]
+    A([CamtrapDP data]) --> B[Divide study period\ninto N-day sampling occasions]
+    B --> C[Group images per site into\ndetection events / bursts]
+    C --> D[Rank detection events by\nmax detection confidence\nwithin each cell]
 
-    D --> E{All site × period\n× species cells\nresolved?}
+    D --> E{All site × occasion\n× species cells\nresolved?}
 
-    E -- No --> F[Round N — present\nhighest-confidence unreviewed\nsequence per cell]
+    E -- No --> F[Round N — present\nhighest-confidence unreviewed\ndetection event per cell]
     F --> G{Expert\ndecision}
 
     G -- Confirmed --> H[Cell closed\n✓ species present]
-    G -- Rejected --> I{More sequences\navailable for\nthis cell?}
+    G -- Rejected --> I{More detection events\navailable for\nthis cell?}
 
-    I -- Yes --> J[Queue next sequence\nfor Round N+1]
+    I -- Yes --> J[Queue next detection event\nfor Round N+1]
     I -- No --> K[Cell unresolved\n— no more candidates]
 
     H --> E
@@ -301,13 +301,13 @@ These control how the data is segmented into reviewable units.
 
 | Parameter | Default | Description |
 |---|---|---|
-| **Sampling period duration (days)** | 5 | Groups images at a location into windows of N days. The number of periods adapts automatically to the study duration. |
-| **Gap between sequences (seconds)** | 60 | Images less than N seconds apart at the same site belong to the same sequence. |
+| **Sampling occasion duration (days)** | 5 | Groups images at a location into windows of N days. The number of occasions adapts automatically to the study duration. |
+| **Gap between detection events (seconds)** | 60 | Images less than N seconds apart at the same site belong to the same detection event. |
 | **Minimum detection score** | 0.5 | Detections below this confidence threshold are excluded from the candidate set. |
 
 #### Confirmation parameters
 
-These control what is recorded in the output when an expert confirms a sequence.
+These control what is recorded in the output when an expert confirms a detection event.
 
 ![Setup — Step 4: Confirmation parameters](./img/user_manual/setup-step4-confirmation.png)
 *Confirmation parameters section.*
@@ -332,7 +332,7 @@ After setup (or when resuming a session), you arrive at the **Species Index** �
 An information panel at the top shows the session parameters:
 
 ![Session info panel](./img/user_manual/species-index-info.png)
-*Info panel showing date range, sampling period, gap and minimum score.*
+*Info panel showing date range, sampling occasion, gap and minimum score.*
 
 Each **species card** displays:
 
@@ -340,8 +340,8 @@ Each **species card** displays:
 *A species card showing thumbnail strip, progress bar and round badge.*
 
 - A thumbnail strip with representative images.
-- The number of sampling periods with confirmed detections.
-- A progress bar and percentage of reviewed periods.
+- The number of sampling occasions with confirmed detections.
+- A progress bar and percentage of reviewed occasions.
 - A badge: **Complete** (green) or **Round N** (grey) indicating the current review round.
 
 Click any card to open the Image Gallery for that species.
@@ -355,30 +355,30 @@ The header shows overall progress and two action buttons:
 
 ## 7. Image Gallery
 
-The Image Gallery is the main review screen. It shows all sampling periods for a single species, grouped by location.
+The Image Gallery is the main review screen. It shows all sampling occasions for a single species, grouped by location.
 
 ![Image gallery overview](./img/user_manual/gallery-overview.png)
-*Gallery showing sampling period cards grouped by site.*
+*Gallery showing sampling occasion cards grouped by site.*
 
 The header shows:
 - The species name and current round badge.
-- Overall progress (periods reviewed / total).
+- Overall progress (occasions reviewed / total).
 - A **← Back** button to return to the Species Index.
 
 A blue info box below the header explains the round logic:
 
-> *In round N, each sampling period is represented by the sequence with the highest detection confidence among those not yet reviewed.*
+> *In round N, each sampling occasion is represented by the detection event with the highest detection confidence among those not yet reviewed.*
 
-### Reviewing Sequences
+### Reviewing Detection Events
 
-Each **sampling period card** shows:
+Each **sampling occasion card** shows:
 
-![Sampling period card](./img/user_manual/gallery-card.png)
-*A sampling period card with image carousel and decision buttons.*
+![Sampling occasion card](./img/user_manual/gallery-card.png)
+*A sampling occasion card with image carousel and decision buttons.*
 
-- Location and period number.
-- Confidence range of the sequences in this period.
-- A carousel of the images in the current sequence, with left/right arrows to browse frames.
+- Location and occasion number.
+- Confidence range of the detection events in this occasion.
+- A carousel of the images in the current detection event, with left/right arrows to browse frames.
 - Two decision buttons: **✓ Confirmed** and **✗ Rejected**.
 
 If **Show all event frames** is enabled, all frames from the same deployment captured between the first and last detection of the target species are shown in the carousel, including those not labelled as that species. These frames appear dimmed and do not affect the decision.
@@ -394,8 +394,8 @@ Click any image thumbnail to open the lightbox for a closer look.
 
 The lightbox shows:
 - The full-size image with zoom and pan support.
-- Navigation arrows to browse frames within the sequence.
-- The location and sampling period in the title bar.
+- Navigation arrows to browse frames within the detection event.
+- The location and sampling occasion in the title bar.
 - Decision buttons and image adjustment controls in the toolbar.
 
 ### Image Controls
@@ -410,7 +410,7 @@ The lightbox toolbar provides several controls to improve image visibility:
 | ⊘ **Reset image** | Restore brightness, contrast and rotation to defaults. |
 | **Invert colours** | Toggle colour inversion — useful for night-vision images. |
 
-All adjustments reset automatically when you move to a different sequence or close the lightbox.
+All adjustments reset automatically when you move to a different detection event or close the lightbox.
 
 ### Keyboard Shortcuts
 
@@ -418,27 +418,27 @@ While the lightbox is open:
 
 | Key | Action |
 |---|---|
-| `Y` | Confirm the current sequence |
-| `N` | Reject the current sequence |
-| `←` `→` | Navigate between frames in the sequence |
+| `Y` | Confirm the current detection event |
+| `N` | Reject the current detection event |
+| `←` `→` | Navigate between frames in the detection event |
 
-After a decision, the lightbox automatically advances to the next undecided sequence.
+After a decision, the lightbox automatically advances to the next undecided detection event.
 
 ### Saving Decisions
 
-Once you have reviewed the sequences, click **💾 Save decisions** (floating button, bottom-right).
+Once you have reviewed the detection events, click **💾 Save decisions** (floating button, bottom-right).
 
 ![Save button](./img/user_manual/gallery-save.png)
 *Floating action buttons: Confirm all, Save decisions.*
 
-- If all sequences have been decided, the session advances to the next round (if any periods were rejected) or marks the species as **Complete**.
-- If some sequences are still undecided, a warning is shown.
+- If all detection events have been decided, the session advances to the next round (if any occasions were rejected) or marks the species as **Complete**.
+- If some detection events are still undecided, a warning is shown.
 
-The **✓✓ Confirm all** button marks every undecided sequence in the current view as confirmed in one click.
+The **✓✓ Confirm all** button marks every undecided detection event in the current view as confirmed in one click.
 
 ### Completed Species
 
-When all periods for a species have been decided, the gallery shows a **Complete** badge and locks the view.
+When all occasions for a species have been decided, the gallery shows a **Complete** badge and locks the view.
 
 ![Completed species](./img/user_manual/gallery-completed.png)
 *Completed species with the lock icon and edit mode toggle.*
@@ -464,8 +464,8 @@ Click it to open the **Results** page, which summarises the entire review.
 The page shows:
 
 - **Output directory** — path to the generated files, with a copy button and a shortcut to open the folder.
-- **By sampling period** — confirmed / rejected / unreviewed counts with percentages.
-- **By sequence** — the same breakdown at sequence level.
+- **By sampling occasion** — confirmed / rejected / unreviewed counts with percentages.
+- **By detection event** — the same breakdown at detection event level.
 - A **per-species table** with detailed counts.
 
 A **← Back** button in the header returns to the Species Index.
@@ -479,7 +479,7 @@ Each session is saved in a timestamped subfolder inside the output directory (e.
 | File | Description |
 |---|---|
 | `config.json` | Session configuration: data directory, date range, parameters. |
-| `candidate_manifest.csv` | Full list of candidate sequences generated at setup. |
+| `candidate_manifest.csv` | Full list of candidate detection events generated at setup. |
 | `rejected_media.json` | IDs of media files rejected during the review. |
 | `decisions/` | Per-species per-round decision CSVs, named `decisions_{species}_iter{N}.csv` (e.g. `decisions_Vulpes_vulpes_iter1.csv`). |
 
@@ -495,8 +495,8 @@ Each session is saved in a timestamped subfolder inside the output directory (e.
 
 | File | Description |
 |---|---|
-| `camera_operation.csv` | Camera operation matrix (sites × sampling periods). |
+| `camera_operation.csv` | Camera operation matrix (sites × sampling occasions). |
 | `dethist_naive_{sp}.csv` | Naive detection history per species (AI detections, not human-validated). One file per species. |
 | `dethist_verified_{sp}.csv` | Verified detection history per species (confirmed by expert). One file per species. |
 | `verification_summary.csv` | Per-species summary: confirmed, rejected and unreviewed counts. |
-| `review_effort.csv` | Total review effort: number of sequences and images inspected. |
+| `review_effort.csv` | Total review effort: number of detection events and images inspected. |
