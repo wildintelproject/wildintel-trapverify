@@ -17,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `setup.ps1`: PowerShell equivalent of `setup.sh` for Windows -- checks Docker, installs `uv` if missing, runs `uv sync`, and installs frontend dependencies via `npm`.
 - `uv run cli docs pdf` (and `backend docs pdf` / `frontend docs pdf`): builds the documentation as a single PDF via `mkdocs-with-pdf`/WeasyPrint, only when explicitly requested (`ENABLE_PDF_EXPORT=1`) so normal `docs serve`/`docs build` don't pay the render cost.
 
+#### Changed
+- Renamed "sampling period" to "sampling occasion" and "sequence" to "detection event" throughout the UI, documentation, and translations (en/es/de/pl), matching the occupancy-modeling vocabulary already used internally. Updated the corresponding user-manual screenshots.
+
 #### Fixed
 - `deployments.csv`/`media.csv`/`observations.csv` are now located via the `path` each resource declares in `datapackage.json` (resolved relative to its own directory) before falling back to the `{name}.csv`/`{name}.csv.gz` naming convention. Packages using non-standard file names, or shipping only gzip-compressed tables (e.g. some Trapper exports), previously failed to load even though the descriptor already pointed at the right files.
 - `uv run cli` (and every subcommand) silently ran `wildintel-trapper-sdk`'s own management CLI instead of this project's: both installed a top-level module literally named `cli`, and since the dependency installs non-editably (a physical `cli.py` in `site-packages/`) while this project installs editably (a meta-path finder, checked after the standard one), the dependency's always won. Renamed this project's own script `cli.py` → `manage.py` (`[project.scripts]` still exposes it as the `cli` command, only the underlying module name changed) so the two can never collide again.
