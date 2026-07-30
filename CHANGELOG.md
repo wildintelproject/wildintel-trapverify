@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Upcoming release
 
+## Released 
+
+**Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
+
+### [0.4.1](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.4.0...v0.4.1) - 2026-07-30
+
 #### Added
 - `scripts/anonymize_repo.py`: exports an anonymized snapshot of the repo (via `git archive`, so no commit history or author metadata) for double-blind review. Strips author names/emails, this repo's own GitHub URLs, project branding, and funding/grant identifiers using the redaction map in `scripts/anonymize_repo.config.json`; genuinely external dependencies (fastapi, pandas, ...) are left alone, but `wildintel-trapper-sdk` -- another WildINTEL repo, not a third-party package -- is vendored and anonymized locally too via `--vendor wildintel-trapper-sdk=<path>#<ref>` (`scripts/anonymize_trapper_sdk.config.json`), with `uv.lock` regenerated against the vendored copy so the exported app still builds and runs. The tooling's own config (which would otherwise contain the real org/repo URL as literal data) is excluded from the snapshot outright rather than relying on self-redaction, and a hard `verify_no_leaks()` gate aborts the run (no zip produced) if any real value from either redaction map is found anywhere in the output. Also rebuilds `backend/site/` so the in-app Help button, repointed at the local `/docs/` mount, still resolves to a (now-anonymized) manual instead of leaking the public docs site.
 - `setup.ps1`: PowerShell equivalent of `setup.sh` for Windows -- checks Docker, installs `uv` if missing, runs `uv sync`, and installs frontend dependencies via `npm`.
@@ -24,9 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `deployments.csv`/`media.csv`/`observations.csv` are now located via the `path` each resource declares in `datapackage.json` (resolved relative to its own directory) before falling back to the `{name}.csv`/`{name}.csv.gz` naming convention. Packages using non-standard file names, or shipping only gzip-compressed tables (e.g. some Trapper exports), previously failed to load even though the descriptor already pointed at the right files.
 - `uv run cli` (and every subcommand) silently ran `wildintel-trapper-sdk`'s own management CLI instead of this project's: both installed a top-level module literally named `cli`, and since the dependency installs non-editably (a physical `cli.py` in `site-packages/`) while this project installs editably (a meta-path finder, checked after the standard one), the dependency's always won. Renamed this project's own script `cli.py` → `manage.py` (`[project.scripts]` still exposes it as the `cli` command, only the underlying module name changed) so the two can never collide again.
 
-## Released 
-
-**Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
+**Full Changelog:** [`v0.4.0...v0.4.1`](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.4.0...v0.4.1)
 
 ### [0.4.0](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.3.0...v0.4.0) - 2026-07-27
 
