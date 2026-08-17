@@ -94,7 +94,12 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
     skipped, since those are fetched on demand via the image proxy and are
     not expected to exist locally).
     """
-    from camtrap_workflow import find_flat_search_ambiguities, resolve_camtrapdp_resource, resolve_media_path
+    from camtrap_workflow import (
+        find_flat_search_ambiguities,
+        is_remote_path,
+        resolve_camtrapdp_resource,
+        resolve_media_path,
+    )
 
     p = Path(camtrap_dir)
     med_path = resolve_camtrapdp_resource(p, "media")
@@ -121,8 +126,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
         if pd.isna(fp_raw) or str(fp_raw) == "":
             continue
         fp = str(fp_raw)
-        is_remote = fp.startswith("http://") or fp.startswith("https://")
-        if is_remote and not image_base_dir:
+        if is_remote_path(fp) and not image_base_dir:
             continue
         total += 1
         file_path = resolve_media_path(

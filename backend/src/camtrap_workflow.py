@@ -387,6 +387,12 @@ def clear_media_caches() -> None:
     _flat_image_index.cache_clear()
 
 
+def is_remote_path(file_path: str) -> bool:
+    """True if a media record's ``filePath`` is a remote HTTP(S) URL rather
+    than a local (absolute or relative) path."""
+    return file_path.startswith("http://") or file_path.startswith("https://")
+
+
 def resolve_media_path(
     file_path: str,
     deployment_id: str,
@@ -1145,7 +1151,7 @@ def get_events(
             fp = str(row["filePath"])
             img_url = (
                 f'/api/proxy-image?url={quote(fp, safe="")}'
-                if fp.startswith("http")
+                if is_remote_path(fp)
                 else f'/api/image/{row["mediaID"]}'
             )
             row_is_ctx = bool(row.get("is_context", False))
@@ -1220,7 +1226,7 @@ def get_review_events(
             fp = str(row["filePath"])
             img_url = (
                 f'/api/proxy-image?url={quote(fp, safe="")}'
-                if fp.startswith("http")
+                if is_remote_path(fp)
                 else f'/api/image/{row["mediaID"]}'
             )
             row_is_ctx = bool(row.get("is_context", False))
