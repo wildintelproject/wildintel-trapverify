@@ -184,8 +184,31 @@ export default function GalleryPage() {
     setDecisions((prev) => ({ ...prev, [ev.key]: d }))
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(ev.key); return s })
     if (!completed) {
-      for (let i = lbEvIdx + 1; i < events.length; i++) {
-        if (!decisionsRef.current[events[i].key]) {
+      // decisionsRef mirrors state as of the last render, so it doesn't
+      // include the decision just made above (setDecisions hasn't
+      // committed yet) -- merge it in locally, or the fallback loop below
+      // (which starts at 0, unlike the same-site one) can find the event
+      // we just decided and re-select itself instead of closing.
+      const updated = { ...decisionsRef.current, [ev.key]: d }
+
+      // Prefer the next undecided occasion at the same site (matches the
+      // Arrow Up/Down navigation), so confirming/rejecting doesn't jump to
+      // an unrelated site. Only fall back to searching the whole list once
+      // the current site has no undecided occasions left.
+      const siteIndices = events
+        .map((e, i) => ({ i, siteId: e.siteId }))
+        .filter((x) => x.siteId === ev.siteId)
+      const posInSite = siteIndices.findIndex((x) => x.i === lbEvIdx)
+      for (let p = posInSite + 1; p < siteIndices.length; p++) {
+        const i = siteIndices[p].i
+        if (!updated[events[i].key]) {
+          setLbEvIdx(i)
+          setLbIndex(0)
+          return
+        }
+      }
+      for (let i = 0; i < events.length; i++) {
+        if (!updated[events[i].key]) {
           setLbEvIdx(i)
           setLbIndex(0)
           return
