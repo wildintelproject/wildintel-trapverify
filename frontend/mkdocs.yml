@@ -71,6 +71,7 @@ plugins:
   # a normal `docs serve`/`docs build` doesn't pay that cost.
   - with-pdf:
       enabled_if_env: ENABLE_PDF_EXPORT
+      custom_template_path: ../pdf-templates
       output_path: pdf/camtrap-verify-frontend.pdf
       cover_title: CamTrap Verify — Frontend
       cover_subtitle: React frontend developer guide

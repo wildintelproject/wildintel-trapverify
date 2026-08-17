@@ -83,6 +83,7 @@ plugins:
   # a normal `docs serve`/`docs build` doesn't pay that cost.
   - with-pdf:
       enabled_if_env: ENABLE_PDF_EXPORT
+      custom_template_path: pdf-templates
       output_path: pdf/camtrap-verify.pdf
       cover_title: CamTrap Verify
       cover_subtitle: User and developer documentation

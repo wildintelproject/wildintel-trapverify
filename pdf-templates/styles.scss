@@ -1,0 +1,36 @@
+// Override mkdocs-with-pdf's built-in font stack (mkdocs_with_pdf/styles/_fonts.scss).
+//
+// That stylesheet lists 'Noto Serif JP' / 'Noto Sans JP' / 'Noto Sans Mono CJK JP'
+// as fallbacks for body/heading/code text. On systems where those exact families
+// are installed as the variable/CFF2 "VF" Noto CJK fonts (e.g. Fedora's
+// google-noto-sans-cjk-vf-fonts package), WeasyPrint fails to subset them
+// correctly -- fontTools logs "VORG table not yet updated to reflect changes in
+// VVAR table" and the resulting embedded font is corrupt ("Embedded font file
+// may be invalid" in Poppler), which renders as blank text/sections in stricter
+// PDF viewers. Loaded via `custom_template_path` (see mkdocs.yml), after
+// _fonts.scss in the same stylesheet, so these rules win on equal specificity.
+@media print {
+  html,
+  body {
+    font-family: 'DejaVu Serif', 'Liberation Serif', serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  label {
+    font-family: 'DejaVu Sans', 'Liberation Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  }
+
+  pre,
+  code,
+  var,
+  samp,
+  kbd,
+  tt {
+    font-family: 'DejaVu Sans Mono', 'Liberation Mono', 'Courier New', monospace;
+  }
+}
