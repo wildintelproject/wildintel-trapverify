@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends
 
@@ -13,6 +14,15 @@ router = APIRouter(
     dependencies=[Depends(require_candidates)],
 )
 logger = logging.getLogger(__name__)
+
+
+def _media_resolution_config() -> tuple[str, Path, bool]:
+    """Return (image_base_dir, fallback_base, flat_search) for the active
+    session, matching how /api/image/{mediaID} resolves the same fields."""
+    config = session_service.get_config()
+    image_base_dir = config.get("image_base_dir", "")
+    fallback_base = Path(image_base_dir) if image_base_dir else Path(config["camtrap_dir"]).parent
+    return image_base_dir, fallback_base, bool(config.get("flat_search", False))
 
 
 @router.get("")
@@ -43,12 +53,16 @@ def get_species_events(species_safe: str, iteration: int = 1) -> list[dict]:
     logger.info("Events requested: species=%s iteration=%d", species_safe, iteration)
     p = session_service.paths()
     p["decisions"].mkdir(parents=True, exist_ok=True)
+    image_base_dir, fallback_base, flat_search = _media_resolution_config()
     return get_events(
         session_service.get_candidates(),
         p["decisions"],
         session_service.get_rejected_media(),
         species_safe,
         iteration,
+        image_base_dir,
+        fallback_base,
+        flat_search,
     )
 
 
@@ -60,7 +74,8 @@ def get_species_review(species_safe: str) -> list[dict]:
     sp_cands = candidates[candidates["species_safe"] == species_safe]
     if sp_cands.empty:
         return []
-    return get_review_events(sp_cands, p["decisions"])
+    image_base_dir, fallback_base, flat_search = _media_resolution_config()
+    return get_review_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search)
 
 
 @router.put("/{species_safe}/decisions")

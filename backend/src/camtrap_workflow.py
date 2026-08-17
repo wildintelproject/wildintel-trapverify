@@ -463,6 +463,37 @@ def resolve_media_path(
     return p
 
 
+def gallery_frame_img_url(
+    file_path: str,
+    media_id: str,
+    deployment_id: str,
+    file_name: str,
+    image_base_dir: str,
+    fallback_base: Path,
+    flat_search: bool = False,
+) -> str:
+    """Pick the URL a gallery frame should load its image from.
+
+    A remote ``filePath`` doesn't necessarily mean the file has to be
+    fetched over the network: when ``image_base_dir`` is set, the same
+    TRAPPER-style layout ``resolve_media_path`` already knows how to find
+    (deploymentID/fileName, or flat search) may have the file downloaded
+    locally. Only proxy the remote URL when that local lookup misses --
+    otherwise reviewers without access to the remote server always get a
+    404 on data that's already on disk for exactly this reason.
+    """
+    if is_remote_path(file_path):
+        if image_base_dir:
+            local_path = resolve_media_path(
+                file_path, deployment_id, file_name, image_base_dir, fallback_base,
+                flat_search=flat_search,
+            )
+            if _exists_or_denied(local_path):
+                return f'/api/image/{media_id}'
+        return f'/api/proxy-image?url={quote(file_path, safe="")}'
+    return f'/api/image/{media_id}'
+
+
 def find_flat_search_ambiguities(med: pd.DataFrame, image_base_dir: str) -> list[dict]:
     """Find media records whose flat-search-by-fileName match would be ambiguous.
 
@@ -1096,6 +1127,9 @@ def get_events(
     rejected_media: set[str],
     species_safe: str,
     iteration: int,
+    image_base_dir: str = "",
+    fallback_base: Path = Path("."),
+    flat_search: bool = False,
 ) -> list[dict]:
     """Return pending gallery events for a species in a given verification round.
 
@@ -1109,6 +1143,13 @@ def get_events(
         rejected_media: Set of ``mediaID`` values excluded from the gallery.
         species_safe: Sanitized species name to filter by.
         iteration: Round number (equals the burst rank to show).
+        image_base_dir: User-supplied image root, forwarded to
+            :func:`gallery_frame_img_url` so a remote ``filePath`` already
+            downloaded locally is served from disk instead of the network.
+        fallback_base: Base directory for resolving relative ``filePath``
+            values when ``image_base_dir`` is not set.
+        flat_search: If True, also search ``image_base_dir`` recursively by
+            ``fileName`` when the structured path misses.
 
     Returns:
         List of event dicts with keys ``key``, ``siteId``, ``occasion``,
@@ -1149,10 +1190,9 @@ def get_events(
         frames = []
         for _, row in group.iterrows():
             fp = str(row["filePath"])
-            img_url = (
-                f'/api/proxy-image?url={quote(fp, safe="")}'
-                if is_remote_path(fp)
-                else f'/api/image/{row["mediaID"]}'
+            img_url = gallery_frame_img_url(
+                fp, str(row["mediaID"]), str(row.get("deploymentID", "")), str(row.get("fileName", "")),
+                image_base_dir, fallback_base, flat_search=flat_search,
             )
             row_is_ctx = bool(row.get("is_context", False))
             row_prob = pd.to_numeric(row.get("classificationProbability"), errors="coerce")
@@ -1182,6 +1222,9 @@ def get_events(
 def get_review_events(
     species_cands: pd.DataFrame,
     decisions_dir: Path,
+    image_base_dir: str = "",
+    fallback_base: Path = Path("."),
+    flat_search: bool = False,
 ) -> list[dict]:
     """Return all cells for a completed species with their decision status.
 
@@ -1195,6 +1238,13 @@ def get_review_events(
     Args:
         species_cands: Candidate manifest already filtered to a single species.
         decisions_dir: Directory containing decision CSVs.
+        image_base_dir: User-supplied image root, forwarded to
+            :func:`gallery_frame_img_url` so a remote ``filePath`` already
+            downloaded locally is served from disk instead of the network.
+        fallback_base: Base directory for resolving relative ``filePath``
+            values when ``image_base_dir`` is not set.
+        flat_search: If True, also search ``image_base_dir`` recursively by
+            ``fileName`` when the structured path misses.
 
     Returns:
         List of event dicts (same structure as :func:`get_events`) with an
@@ -1224,10 +1274,9 @@ def get_review_events(
         frames = []
         for _, row in group.iterrows():
             fp = str(row["filePath"])
-            img_url = (
-                f'/api/proxy-image?url={quote(fp, safe="")}'
-                if is_remote_path(fp)
-                else f'/api/image/{row["mediaID"]}'
+            img_url = gallery_frame_img_url(
+                fp, str(row["mediaID"]), str(row.get("deploymentID", "")), str(row.get("fileName", "")),
+                image_base_dir, fallback_base, flat_search=flat_search,
             )
             row_is_ctx = bool(row.get("is_context", False))
             row_prob = pd.to_numeric(row.get("classificationProbability"), errors="coerce")
