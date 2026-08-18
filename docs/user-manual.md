@@ -459,17 +459,24 @@ Once all species are complete, the **See results** button in the Species Index h
 
 Click it to open the **Results** page, which summarises the entire review.
 
+The page first shows the **output directory**:
+
+![Output directory and download](./img/user_manual/results-output.png)
+*Output directory, with copy/open-folder buttons and the Download results button.*
+
+This is the path to the generated files (see [Output Files](#output-files) below for what's inside), with a copy button, a shortcut to open the folder, and a **Download results** button to get a `.zip` of the whole session folder. If the exported package's `datapackage.json` had to be auto-generated (the source had none), a warning is shown here listing which fields are placeholders rather than derived from your data.
+
+Next comes the **review breakdown**:
+
 ![Results page](./img/user_manual/results.png)
-*Results page showing overall counts and per-species breakdown.*
+*"By sampling occasion" breakdown, with overall counts and a per-species table.*
 
-The page shows:
+This is repeated twice — **by sampling occasion** and **by detection event** — each with confirmed / rejected / unreviewed counts and percentages, followed by a per-species breakdown table.
 
-- **Output directory** — path to the generated files, with a copy button and a shortcut to open the folder.
-- **By sampling occasion** — confirmed / rejected / unreviewed counts with percentages.
-- **By detection event** — the same breakdown at detection event level.
-- A **per-species table** with detailed counts.
+Finally, when enough detection history is available, the page shows an **occupancy estimate**:
 
-A **← Back** button in the header returns to the Species Index.
+![Occupancy estimate table](./img/user_manual/results-occupancy.png)
+*Naive AI-only occupancy (ψ) and detection (p) probabilities compared against the manually verified ones, per species, with 95% confidence intervals.*
 
 ### Output Files
 
