@@ -177,6 +177,14 @@ You can navigate between steps using the **← Back** and **Next →** buttons, 
 
 ### Step 1 — Source
 
+CamTrap Verify requires you to specify where the information to be verified (images, annotations, deployments, etc.) is located. Although the data is always processed internally in CamtrapDP format, CamTrap Verify supports the following input sources: [CamtrapDP](#option-a--camtrapdp-directory), [DeepFaune](#option-b--deepfaune-csv), [custom CSV](#option-c--custom-csv), and [Trapper](#option-d--trapper-instance).
+
+> **Note:** CamTrap Verify provides a dynamic mechanism for resolving where each image is physically located. This mechanism is based on whether you define an **Images directory**.
+>
+> If you do indicate it, the resolution procedure is the following: CamTrap Verify first looks for the image at `Images directory/deploymentID/fileName`. If that exact file isn't found and **Search subfolders by file name**{: #search-subfolders-by-file-name } is enabled, it instead searches the whole Images directory recursively for a file with that name (useful when photos are all loose in one folder, as in some TRAPPER downloads). Only if neither of those finds the image does CamTrap Verify fall back to the `filePath` column in `media.csv` itself: absolute paths are used as-is, relative paths are resolved against the Images directory, and remote `http://`/`https://` URLs are fetched directly, through the application's built-in proxy (so no CORS configuration is needed on your end) — but only as a last resort, after the local lookups above have already failed.
+>
+> If you do not indicate it, there is no separate images root to look in first, so resolution relies entirely on the `filePath` column: absolute paths are used as-is, relative paths are resolved against the CamtrapDP directory itself, and remote URLs are always fetched over the network, since there is nowhere local left to check.
+
 First choose where your data comes from: **Local filesystem** or a **Trapper instance**.
 
 ![Setup — Step 1: Data source](./img/user_manual/setup-step1-source.png)
@@ -195,29 +203,25 @@ Select the folder on your machine that contains the CamtrapDP files (`deployment
 *Local directory selection. The Browse button opens a folder picker.*
 
 - **Data directory** — path to your CamtrapDP folder. Use the **📁 Browse** button or type the path manually.
-- **Images directory** *(optional)* — base directory used to resolve relative `filePath` values in `media.csv`. Leave empty to use the data directory itself (default behaviour).
+- **Images directory** *(optional)* — base directory used to resolve relative `filePath` values in `media.csv`. Leave empty to use the data directory itself (default behaviour). Filling it in enables the [**Search subfolders by file name**](#search-subfolders-by-file-name) option (see above).
+
+![Setup — Step 1: Images directory and flat search](./img/user_manual/setup-step1-flat-search.png)
+*With an Images directory set, the **Search subfolders by file name** toggle appears.*
 
 After selecting the folder, the application reads species and date ranges automatically. Click **Next →** to proceed.
 
-> **Image paths:** three formats are supported in the `filePath` column of `media.csv`:
-> - **Relative paths** — resolved relative to the **Images directory** if provided, otherwise relative to the CamtrapDP directory itself.
-> - **Absolute paths** — used as-is.
-> - **HTTP/HTTPS URLs** — fetched through the application's built-in proxy, so no CORS configuration is needed.
-
 #### Option B — DeepFaune CSV
 
-If your data comes from [DeepFaune](https://www.deepfaune.cnrs.fr/), select the **DeepFaune CSV** format. The application converts the file to CamtrapDP format automatically.
+If your data comes from [DeepFaune](https://www.deepfaune.cnrs.fr/), select the **DeepFaune CSV** format. The application converts the file to CamtrapDP format automatically. For this reason, the form only asks for a single field, **DeepFaune results file**, where you provide the path to the `.csv` file exported from DeepFaune.
 
 ![Setup — Step 1: DeepFaune import](./img/user_manual/setup-step1-deepfaune.png)
 *DeepFaune import form.*
 
-- **DeepFaune results file** — path to the `.csv` exported from DeepFaune.
-
-Click **Convert and import →**. Once the conversion is complete, the wizard drops you into the same **Data directory** / **Images directory** screen as Option A above, with **Data directory** already filled in with the converted CamtrapDP folder — fill in **Images directory** there if the paths in your DeepFaune CSV are relative.
+Once you have indicated the path, click **Convert and import →**. Once the conversion is complete, the wizard drops you into the same **Data directory** / **Images directory** screen as Option A above, with **Data directory** already filled in with the converted CamtrapDP folder — fill in **Images directory** there if the paths in your DeepFaune CSV are relative.
 
 #### Option C — Custom CSV
 
-For any other classifier that exports a CSV, choose the **Custom CSV** format. You map the columns of your file to the fields required by CamtrapDP.
+For any other classifier that exports a CSV, choose the **Custom CSV** format. You map the columns of your file to the fields required by CamtrapDP. For this reason, the form first asks for a single field, **CSV file**, where you provide the path to your classifier's `.csv` export.
 
 ![Setup — Step 1: Custom CSV import](./img/user_manual/setup-step1-csv.png)
 *Custom CSV import form.*
@@ -250,7 +254,7 @@ For each label in your CSV, enter the corresponding scientific name (e.g. `Vulpe
 
 Use **Fill known labels** to auto-fill any remaining entries that match the built-in label dictionary.
 
-Click **Convert and import →**. Once the conversion is complete, the wizard drops you into the same **Data directory** / **Images directory** screen as Option A above, with **Data directory** already filled in with the converted CamtrapDP folder — fill in **Images directory** there if the paths in your CSV are relative.
+Once you have mapped the columns and the species, click **Convert and import →**. Once the conversion is complete, the wizard drops you into the same **Data directory** / **Images directory** screen as Option A above, with **Data directory** already filled in with the converted CamtrapDP folder — fill in **Images directory** there if the paths in your CSV are relative.
 
 #### Option D — Trapper instance
 
