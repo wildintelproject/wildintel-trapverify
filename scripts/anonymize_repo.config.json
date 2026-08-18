@@ -56,12 +56,12 @@
     { "old": "wildintel-publisher", "new": "anon-publisher" },
     { "old": "      link: https://github.com/wildintelproject\n      name: WildINTEL on GitHub", "new": "      link: https://example.com/anon-org\n      name: Project on GitHub" },
 
-    { "_section": "brand / product name (no brackets/braces -- those break as bare YAML scalars, e.g. 'name: [PROJECT] website' parses as a flow sequence)" },
+    { "_section": "brand / product name (no brackets/braces -- those break as bare YAML scalars, e.g. 'name: [PROJECT] website' parses as a flow sequence). Filename rules must come before the generic 'WildINTEL' rule below, since it's a substring of 'WildINTEL_onlyCircle_25.png' and would otherwise mangle it first, leaving the specific rule nothing to match." },
+    { "old": "wildIntel_logo.webp", "new": "project_logo.webp" },
+    { "old": "WildINTEL_onlyCircle_25.png", "new": "project_icon.png" },
     { "old": "WildINTEL", "new": "AnonProject" },
     { "old": "wildintel.eu", "new": "project-website.example" },
     { "old": "wildintelGenerated", "new": "anonGenerated" },
-    { "old": "wildIntel_logo.webp", "new": "project_logo.webp" },
-    { "old": "WildINTEL_onlyCircle_25.png", "new": "project_icon.png" },
 
     { "_section": "funding acknowledgment (grant IDs are as identifying as the project name)" },
     { "old": "101052342", "new": "XXXXXXXXX" },
