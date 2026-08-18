@@ -35,12 +35,12 @@
 
 CamTrap Verify helps experts determine whether a species was present at a given location during a study period. To do this, it divides the study period into fixed-length windows called **sampling occasions** (e.g. 5-day blocks). Within each sampling occasion, images from the same camera are grouped into **detection events** — bursts of consecutive frames taken less than N seconds apart. The question the expert answers is therefore always the same: *"Is this species present at this site during this sampling occasion?"*
 
-To minimise the total number of images that need to be inspected, CamTrap Verify works in **rounds**. In each round, for every combination of site × sampling occasion × species, the tool presents the **detection event with the highest detection confidence** that has not yet been reviewed.
+To minimise the total number of images that need to be inspected, CamTrap Verify works in **rounds**. In each round, for every combination of site × sampling occasion × species, the tool presents the **detection event with the highest detection confidence** that has not yet been reviewed. The expert then decides:
 
 - **Confirming** a detection event closes that cell — the species is considered present at that site during that occasion.
 - **Rejecting** a detection event queues the next-best detection event for the following round.
 
-This guarantees that expert effort is always directed where it matters most, without reviewing every single image.
+This guarantees that expert effort is always directed where it matters most, without reviewing every single image. The diagram below summarises the process the expert follows:
 
 ```mermaid
 flowchart TD
@@ -151,20 +151,18 @@ Open your browser and navigate to the application URL (default: `http://localhos
 
 ## 4. Welcome Screen
 
-When you open the application for the first time, or when no session is active, you will see the **Welcome Screen**.
+When you open the application, you will see the **Welcome Screen**. Which buttons appear depends on your session state, not a fixed set of three:
 
 ![Welcome screen](./img/user_manual/welcome-screen.png)
-*The Welcome Screen, showing the three session buttons.*
+*The Welcome Screen. The exact buttons shown depend on whether a session is currently active and whether you have session history.*
 
-Three buttons are available:
+| Button | When it appears | Description |
+|---|---|---|
+| **Continue previous session →** | Only if a session is currently active | Resumes the session you were last working on. Shows a progress summary below the button (e.g. *3 species · 12/40 occasions reviewed · 30%*). |
+| **Open a specific session…** | Always | Opens a file browser so you can load any existing session folder. |
+| **Start verifying →** / **New session** | Always — the label depends on state | Starts the Setup Wizard to configure a session. Reads **Start verifying →** if no session is currently active, or **New session** if one is (to start a fresh one alongside it). |
 
-| Button | Description |
-|---|---|
-| **Continue previous session →** | Resumes the last session you worked on. Shows a summary (species count, progress %). |
-| **Open a specific session…** | Opens a file browser so you can load any existing session folder. |
-| **New session** | Starts the Setup Wizard to configure a brand-new session. |
-
-> If a previous session exists, **Continue previous session** displays a progress summary below the button (e.g. *3 species · 12/40 periods reviewed · 30%*).
+Below the buttons, a **Recent sessions** list appears if you have previously opened sessions on record, letting you jump back into any of them directly — independently of whether a session is active right now.
 
 ---
 
