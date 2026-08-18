@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Upcoming release
 
+## Released 
+
+**Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
+
+### [0.4.2](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.4.1...v0.4.2) - 2026-08-18
+
 #### Fixed
 - Gallery images whose `filePath` is a remote URL (e.g. a TRAPPER export) are now resolved locally first when an **Images directory** is set — the structured `image_base_dir/deploymentID/fileName` lookup used to only apply to local `filePath` values, so a remote-but-already-downloaded photo always hit the network proxy and 404'd for anyone without access to the source server.
 - DeepFaune and Custom CSV imports no longer bake `filePath` into an absolute path at conversion time; both now write the CSV's own relative path plus a `fileName` column and go through the same **Images directory** resolution as a plain CamtrapDP directory, instead of a separate one-shot mechanism the wizard never let you revisit.
@@ -21,9 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 #### Changed
 - User manual refreshed throughout: Setup Wizard steps 1–4, Species Index, Image Gallery and Results sections now match the current UI (updated terminology, new/removed fields, missing screenshots added), including a new explanation of how image paths are resolved and in what order.
 
-## Released 
-
-**Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
+**Full Changelog:** [`v0.4.1...v0.4.2`](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.4.1...v0.4.2)
 
 ### [0.4.1](https://github.com/wildintelproject/wildintel-trapverify/compare/v0.4.0...v0.4.1) - 2026-07-30
 
