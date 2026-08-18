@@ -12,6 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Upcoming release
 
+#### Fixed
+- Gallery images whose `filePath` is a remote URL (e.g. a TRAPPER export) are now resolved locally first when an **Images directory** is set — the structured `image_base_dir/deploymentID/fileName` lookup used to only apply to local `filePath` values, so a remote-but-already-downloaded photo always hit the network proxy and 404'd for anyone without access to the source server.
+- DeepFaune and Custom CSV imports no longer bake `filePath` into an absolute path at conversion time; both now write the CSV's own relative path plus a `fileName` column and go through the same **Images directory** resolution as a plain CamtrapDP directory, instead of a separate one-shot mechanism the wizard never let you revisit.
+- When no **Images directory** is set, relative `filePath` values now resolve by default against the directory the CSV files (`deployments.csv`/`media.csv`/`observations.csv`) are actually in, instead of its parent — for every source, not just plain CamtrapDP.
+- Confirming or rejecting a detection event in the fullscreen lightbox now advances to the next undecided occasion at the **same site**, instead of jumping to whichever site happens to come next in the underlying list — the auto-advance logic scanned the flat events array in order, which interleaves sites, unlike the Arrow Up/Down navigation, which already stayed within the current site.
+
+#### Changed
+- User manual refreshed throughout: Setup Wizard steps 1–4, Species Index, Image Gallery and Results sections now match the current UI (updated terminology, new/removed fields, missing screenshots added), including a new explanation of how image paths are resolved and in what order.
+
 ## Released 
 
 **Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
