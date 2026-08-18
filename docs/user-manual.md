@@ -333,7 +333,12 @@ After setup (or when resuming a session), you arrive at the **Species Index** �
 An information panel at the top shows the session parameters:
 
 ![Session info panel](./img/user_manual/species-index-info.png)
-*Info panel showing date range, sampling occasion, gap and minimum score.*
+*Info panel showing overall progress, the study period and the sampling occasion length.*
+
+- **Overall progress** — how many sampling occasions have been reviewed out of the total, how many are confirmed, and the percentage complete.
+- **Study period and sampling occasion length** — the date range being reviewed and the N-day window each sampling occasion spans.
+- **← Back** — return to the Welcome Screen.
+- **See results** — navigate to the Results page (only active when all species are complete).
 
 Each **species card** displays:
 
@@ -346,11 +351,6 @@ Each **species card** displays:
 - A badge: **Complete** (green) or **Round N** (grey) indicating the current review round.
 
 Click any card to open the Image Gallery for that species.
-
-The header shows overall progress and two action buttons:
-
-- **← Back** — return to the Welcome Screen.
-- **See results** — navigate to the Results page (only active when all species are complete).
 
 ---
 
