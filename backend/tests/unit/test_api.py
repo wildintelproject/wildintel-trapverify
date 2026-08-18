@@ -436,6 +436,80 @@ def test_convert_deepfaune_observations_have_correct_type(client, tmp_path):
     assert types.issubset({"animal", "blank", "human", "unclassified"})
 
 
+# ─── /api/convert/csv ──────────────────────────────────────────────────────────
+# DeepFaune is really just a fixed-column-mapping case of this same converter
+# -- same expectations apply: filePath unresolved, fileName written.
+
+def _write_custom_csv(path):
+    pd.DataFrame({
+        "path":  ["relative/dir/f1.jpg", "relative/dir/f2.jpg"],
+        "when":  ["2025-11-02 10:00:00", "2025-11-02 10:00:30"],
+        "class": ["red deer", "empty"],
+        "conf":  ["0.92", "0.10"],
+        "loc":   ["SITE_A", "SITE_A"],
+    }).to_csv(path, index=False)
+
+def _custom_csv_body(csv_path, **overrides):
+    body = {
+        "csv_path": str(csv_path),
+        "col_filename": "path",
+        "col_datetime": "when",
+        "col_label": "class",
+        "col_score": "conf",
+        "col_site": "loc",
+        "species_map": {"red deer": "Cervus elaphus"},
+    }
+    body.update(overrides)
+    return body
+
+def test_convert_csv_returns_camtrap_dir(client, tmp_path):
+    csv = tmp_path / "results.csv"
+    _write_custom_csv(csv)
+    resp = client.post("/api/convert/csv", json=_custom_csv_body(csv))
+    assert resp.status_code == 200
+    assert "camtrap_dir" in resp.json()
+
+def test_convert_csv_creates_camtrapdp_files(client, tmp_path):
+    csv = tmp_path / "results.csv"
+    _write_custom_csv(csv)
+    resp = client.post("/api/convert/csv", json=_custom_csv_body(csv))
+    out = Path(resp.json()["camtrap_dir"])
+    assert (out / "deployments.csv").exists()
+    assert (out / "media.csv").exists()
+    assert (out / "observations.csv").exists()
+
+def test_convert_csv_missing_file_400(client, tmp_path):
+    resp = client.post("/api/convert/csv", json=_custom_csv_body(tmp_path / "nope.csv"))
+    assert resp.status_code == 400
+
+def test_convert_csv_missing_columns_400(client, tmp_path):
+    csv = tmp_path / "bad.csv"
+    pd.DataFrame({"col_a": [1], "col_b": [2]}).to_csv(csv, index=False)
+    resp = client.post("/api/convert/csv", json=_custom_csv_body(csv))
+    assert resp.status_code == 400
+
+def test_convert_csv_filepath_not_resolved(client, tmp_path):
+    """filePath in the generated media.csv is the raw col_filename value --
+    locating the images is resolve_media_path()'s job at review time via
+    image_base_dir, not this conversion's."""
+    csv = tmp_path / "results.csv"
+    _write_custom_csv(csv)
+    resp = client.post("/api/convert/csv", json=_custom_csv_body(csv))
+    out = Path(resp.json()["camtrap_dir"])
+    med = pd.read_csv(out / "media.csv")
+    assert med.iloc[0]["filePath"] == "relative/dir/f1.jpg"
+    assert med.iloc[0]["fileName"] == "f1.jpg"
+
+def test_convert_csv_maps_species_via_species_map(client, tmp_path):
+    csv = tmp_path / "results.csv"
+    _write_custom_csv(csv)
+    resp = client.post("/api/convert/csv", json=_custom_csv_body(csv))
+    out = Path(resp.json()["camtrap_dir"])
+    obs = pd.read_csv(out / "observations.csv")
+    animal_row = obs[obs["observationType"] == "animal"]
+    assert animal_row.iloc[0]["scientificName"] == "Cervus elaphus"
+
+
 # ─── /api/state ───────────────────────────────────────────────────────────────
 
 def test_get_state_no_session(client):

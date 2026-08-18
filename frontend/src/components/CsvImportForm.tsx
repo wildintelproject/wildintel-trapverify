@@ -27,7 +27,6 @@ export default function CsvImportForm({ onConverted, onBack }: Props) {
   const { t } = useTranslation()
 
   const [csvPath,      setCsvPath]      = useState('')
-  const [imageBaseDir, setImageBaseDir] = useState('')
   const [headers,      setHeaders]      = useState<string[]>([])
   const [cols,         setCols]         = useState({ filename: '', datetime: '', label: '', score: '', site: '' })
   const [labels,       setLabels]       = useState<string[]>([])
@@ -36,7 +35,7 @@ export default function CsvImportForm({ onConverted, onBack }: Props) {
   const [loadingLbl,   setLoadingLbl]   = useState(false)
   const [converting,   setConverting]   = useState(false)
   const [error,        setError]        = useState<string | null>(null)
-  const [picker,       setPicker]       = useState<'csv' | 'imgdir' | null>(null)
+  const [picker,       setPicker]       = useState<'csv' | null>(null)
 
   useEffect(() => {
     if (!csvPath) { setHeaders([]); setCols({ filename: '', datetime: '', label: '', score: '', site: '' }); setLabels([]); setSpeciesMap({}); return }
@@ -69,7 +68,6 @@ export default function CsvImportForm({ onConverted, onBack }: Props) {
         col_score:     cols.score  || null,
         col_site:      cols.site   || null,
         species_map:   speciesMap,
-        image_base_dir: imageBaseDir || null,
       })
       onConverted(camtrap_dir)
     } catch (e) {
@@ -121,22 +119,6 @@ export default function CsvImportForm({ onConverted, onBack }: Props) {
         {headers.length > 0 && !loadingHdr && (
           <p className={hintClass}>{t('setup.csv_headers_found', { n: headers.length })}</p>
         )}
-      </div>
-
-      {/* ── Directorio de imágenes ── */}
-      <div className="mb-5">
-        <label className={labelClass}>
-          {t('setup.csv_imgdir_label')}{' '}
-          <span className="text-zinc-400 font-normal">{t('setup.label_output_optional')}</span>
-        </label>
-        <div className="flex">
-          <input className={inputClass} placeholder={t('setup.csv_imgdir_placeholder')}
-            value={imageBaseDir} onChange={e => setImageBaseDir(e.target.value)} />
-          <button type="button" className={browseBtn} onClick={() => setPicker('imgdir')}>
-            {t('setup.browse')}
-          </button>
-        </div>
-        <p className={hintClass}>{t('setup.csv_imgdir_hint')}</p>
       </div>
 
       {/* ── Mapeo de columnas ── */}
@@ -291,13 +273,6 @@ export default function CsvImportForm({ onConverted, onBack }: Props) {
           showFiles fileExt=".csv"
           title={t('setup.csv_file_picker_title')}
           onSelect={path => { setCsvPath(path); setPicker(null) }}
-          onClose={() => setPicker(null)}
-        />
-      )}
-      {picker === 'imgdir' && (
-        <DirectoryPicker
-          title={t('setup.csv_imgdir_picker_title')}
-          onSelect={path => { setImageBaseDir(path); setPicker(null) }}
           onClose={() => setPicker(null)}
         />
       )}

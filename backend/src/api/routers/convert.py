@@ -105,7 +105,6 @@ class CsvConvertRequest(BaseModel):
     col_score: str | None = None
     col_site: str | None = None
     species_map: dict[str, str] = {}
-    image_base_dir: str | None = None
 
 
 @router.post("/csv")
@@ -126,7 +125,6 @@ def convert_csv(req: CsvConvertRequest) -> dict:
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = Path.home() / "Documents" / "camtrap_verify" / "conversions" / f"csv_{ts}"
-    image_base = Path(req.image_base_dir) if req.image_base_dir else None
 
     try:
         generic_csv_to_camtrapdp(
@@ -138,7 +136,6 @@ def convert_csv(req: CsvConvertRequest) -> dict:
             col_score=req.col_score,
             col_site=req.col_site,
             species_map=req.species_map,
-            image_base_dir=image_base,
         )
     except Exception as exc:
         logger.exception("Error converting custom CSV: %s", exc)

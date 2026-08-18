@@ -155,34 +155,14 @@ export default function SetupPage({ onSetup, ready }: Props) {
     }
   }
 
+  // Both DeepFaune and Custom CSV write filePath unresolved (see
+  // deepfaune_to_camtrapdp / generic_csv_to_camtrapdp) -- conversion just
+  // produces a plain CamtrapDP directory, so after it the wizard drops into
+  // the same "CamtrapDP directory" panel as Option A instead of jumping to
+  // Species: camtrap_dir is pre-filled, image_base_dir is left for the user
+  // to fill in explicitly (not pre-filled), and resolve_media_path takes it
+  // from there exactly like a CamtrapDP directory picked directly.
   async function afterConversion(camtrap_dir: string) {
-    set('camtrap_dir', camtrap_dir)
-    setInspecting(true)
-    try {
-      const info = await api.inspectDir(camtrap_dir)
-      if (info.species.length) {
-        setAvailableSpecies(info.species)
-        setSelectedSpecies(new Set(info.species))
-      }
-      setDatapackageErrors(info.datapackage_errors)
-      if (info.study_start && info.study_end) {
-        set('study_start', info.study_start)
-        set('study_end', info.study_end)
-        setDataRange({ min: info.study_start, max: info.study_end })
-      }
-    } catch { /* continúa manualmente */ }
-    finally { setInspecting(false) }
-    setStepError(null)
-    setStep(1)
-  }
-
-  // DeepFaune's filePath is written unresolved (see deepfaune_to_camtrapdp),
-  // so after conversion the wizard drops into the same "CamtrapDP directory"
-  // panel as Option A -- image_base_dir stays a single, dynamic field
-  // resolved at review time (resolve_media_path), not something baked into
-  // the CSV during conversion. camtrap_dir is pre-filled; image_base_dir is
-  // left for the user to fill in explicitly (not pre-filled).
-  async function afterDeepfauneConversion(camtrap_dir: string) {
     set('camtrap_dir', camtrap_dir)
     setInspecting(true)
     try {
@@ -212,7 +192,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         form.min_score,
       )
       setDeepfauneColumnsInfo({ label_col, score_col })
-      await afterDeepfauneConversion(camtrap_dir)
+      await afterConversion(camtrap_dir)
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : t('setup.err_unknown'))
     } finally {

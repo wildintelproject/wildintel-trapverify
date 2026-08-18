@@ -153,7 +153,6 @@ export const api = {
     col_score?: string | null
     col_site?: string | null
     species_map: Record<string, string>
-    image_base_dir?: string | null
   }) => post<{ camtrap_dir: string }>('/api/convert/csv', body),
 
   openFolder: () =>

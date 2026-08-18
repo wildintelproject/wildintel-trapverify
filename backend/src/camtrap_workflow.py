@@ -663,9 +663,15 @@ def generic_csv_to_camtrapdp(
     col_score: Optional[str] = None,
     col_site: Optional[str] = None,
     species_map: Optional[dict] = None,
-    image_base_dir: Optional[Path] = None,
 ) -> Path:
-    """Convert any classifier CSV to CamtrapDP using user-defined column mapping."""
+    """Convert any classifier CSV to CamtrapDP using user-defined column mapping.
+
+    ``filePath`` is written as the ``col_filename`` column value as-is (only
+    backslashes normalised to forward slashes) -- see ``deepfaune_to_camtrapdp``
+    for why: locating the images is ``resolve_media_path()``'s job at review
+    time via ``image_base_dir``, same as any other CamtrapDP directory, not
+    something this conversion bakes in once and for all.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     if species_map is None:
         species_map = {}
@@ -676,16 +682,11 @@ def generic_csv_to_camtrapdp(
         "undefined": "unclassified", "unknown": "unclassified",
     }
 
-    def abs_path(p: str) -> str:
-        p = p.replace("\\", "/")
-        if image_base_dir and not (p.startswith("/") or (len(p) > 1 and p[1] == ":")):
-            p = str(image_base_dir / p)
-        return str(Path(p).resolve())
-
     def site_from_path(p: str) -> str:
         return re.sub(r"^R\d+-", "", Path(p).parent.name)
 
-    paths = df[col_filename].astype(str).apply(abs_path)
+    paths = df[col_filename].astype(str).str.replace("\\", "/", regex=False)
+    file_names = paths.apply(lambda p: Path(p).name)
     sites = (
         df[col_site].astype(str)
         if col_site and col_site in df.columns
@@ -724,6 +725,7 @@ def generic_csv_to_camtrapdp(
         "deploymentID": list(sites),
         "timestamp":    list(timestamps),
         "filePath":     list(paths),
+        "fileName":     list(file_names),
     }).to_csv(out_dir / "media.csv", index=False)
     pd.DataFrame({
         "observationID":             obs_ids,

@@ -19,6 +19,7 @@ from camtrap_workflow import (
     export_verified_camtrapdp,
     find_datapackage,
     find_flat_search_ambiguities,
+    generic_csv_to_camtrapdp,
     get_events,
     get_review_events,
     load_all_decisions,
@@ -1225,6 +1226,80 @@ def test_deepfaune_row_count_matches_input(tmp_path):
     out = deepfaune_to_camtrapdp(_minimal_deepfaune_df(), DEEPFAUNE_LABEL_MAP, tmp_path / "out")
     obs = pd.read_csv(out / "observations.csv")
     assert len(obs) == 2
+
+
+# ─── generic_csv_to_camtrapdp ─────────────────────────────────────────────────
+# DeepFaune is really just a fixed-column-mapping case of this same converter
+# -- same expectations apply: filePath unresolved, fileName written.
+
+def _minimal_custom_df() -> pd.DataFrame:
+    return pd.DataFrame({
+        "path":  ["relative/dir/frame1.jpg", "relative/dir/frame2.jpg"],
+        "when":  ["2025-11-02 10:00:00", "2025-11-02 10:00:30"],
+        "class": ["red deer", "empty"],
+        "conf":  ["0.92", "0.10"],
+        "loc":   ["SITE_A", "SITE_A"],
+    })
+
+def test_generic_csv_creates_three_files(tmp_path):
+    out = generic_csv_to_camtrapdp(
+        _minimal_custom_df(), tmp_path / "out",
+        col_filename="path", col_datetime="when", col_label="class",
+        col_score="conf", col_site="loc",
+    )
+    assert (out / "deployments.csv").exists()
+    assert (out / "media.csv").exists()
+    assert (out / "observations.csv").exists()
+
+def test_generic_csv_filepath_written_as_is(tmp_path):
+    out = generic_csv_to_camtrapdp(
+        _minimal_custom_df(), tmp_path / "out",
+        col_filename="path", col_datetime="when", col_label="class",
+        col_score="conf", col_site="loc",
+    )
+    med = pd.read_csv(out / "media.csv")
+    assert med.iloc[0]["filePath"] == "relative/dir/frame1.jpg"
+
+def test_generic_csv_writes_file_name_column(tmp_path):
+    out = generic_csv_to_camtrapdp(
+        _minimal_custom_df(), tmp_path / "out",
+        col_filename="path", col_datetime="when", col_label="class",
+        col_score="conf", col_site="loc",
+    )
+    med = pd.read_csv(out / "media.csv")
+    assert med.iloc[0]["fileName"] == "frame1.jpg"
+
+def test_generic_csv_maps_species_via_species_map(tmp_path):
+    out = generic_csv_to_camtrapdp(
+        _minimal_custom_df(), tmp_path / "out",
+        col_filename="path", col_datetime="when", col_label="class",
+        col_score="conf", col_site="loc",
+        species_map={"red deer": "Cervus elaphus"},
+    )
+    obs = pd.read_csv(out / "observations.csv")
+    animal_row = obs[obs["observationType"] == "animal"]
+    assert animal_row.iloc[0]["scientificName"] == "Cervus elaphus"
+
+def test_generic_csv_non_animal_label_blank(tmp_path):
+    out = generic_csv_to_camtrapdp(
+        _minimal_custom_df(), tmp_path / "out",
+        col_filename="path", col_datetime="when", col_label="class",
+        col_score="conf", col_site="loc",
+    )
+    obs = pd.read_csv(out / "observations.csv")
+    blank_row = obs[obs["observationType"] == "blank"]
+    assert not blank_row.empty
+    assert pd.isna(blank_row.iloc[0]["scientificName"])
+
+def test_generic_csv_derives_site_from_path_when_no_col_site(tmp_path):
+    df = _minimal_custom_df().drop(columns=["loc"])
+    out = generic_csv_to_camtrapdp(
+        df, tmp_path / "out",
+        col_filename="path", col_datetime="when", col_label="class",
+        col_score="conf",
+    )
+    dep = pd.read_csv(out / "deployments.csv")
+    assert "dir" in dep["deploymentID"].values
 
 
 # ─── build_candidates: burst context ─────────────────────────────────────────

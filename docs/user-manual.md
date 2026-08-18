@@ -250,7 +250,7 @@ For each label in your CSV, enter the corresponding scientific name (e.g. `Vulpe
 
 Use **Fill known labels** to auto-fill any remaining entries that match the built-in label dictionary.
 
-Click **Convert and import →** to convert and proceed.
+Click **Convert and import →**. Once the conversion is complete, the wizard drops you into the same **Data directory** / **Images directory** screen as Option A above, with **Data directory** already filled in with the converted CamtrapDP folder — fill in **Images directory** there if the paths in your CSV are relative.
 
 #### Option D — Trapper instance
 
