@@ -51,6 +51,7 @@
     { "old": "https://github.com/wildintelproject/wildintel-trapverify", "new": "https://github.com/anon-org/anon-repo" },
     { "old": "wildintelproject/wildintel-trapverify", "new": "anon-org/anon-repo" },
     { "old": "wildintel-trapverify", "new": "anon-repo" },
+    { "old": "wildintel-camtrap-verify-", "new": "anon-tool-" },
     { "old": "wildintel-project", "new": "anon-project" },
     { "old": "wildintel-publisher", "new": "anon-publisher" },
     { "old": "      link: https://github.com/wildintelproject\n      name: WildINTEL on GitHub", "new": "      link: https://example.com/anon-org\n      name: Project on GitHub" },
