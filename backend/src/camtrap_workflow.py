@@ -431,7 +431,7 @@ def resolve_media_path(
         image_base_dir: User-supplied image root, or ``""`` if not set.
         fallback_base: Base directory used to resolve a relative
             ``file_path`` when ``image_base_dir`` is not set (normally
-            ``camtrap_dir.parent``).
+            ``camtrap_dir`` itself).
         flat_search: If True, search ``image_base_dir`` recursively by
             ``fileName`` when the structured path misses. Defaults to False.
 
@@ -569,7 +569,6 @@ def deepfaune_to_camtrapdp(
     df: pd.DataFrame,
     species_map: dict,
     out_dir: Path,
-    image_base_dir: Optional[Path] = None,
     label_col: str = "top1",
     score_col: str = "score",
     min_score: float = 0.0,
@@ -581,12 +580,19 @@ def deepfaune_to_camtrapdp(
     appropriate CamtrapDP ``observationType`` values. Rows below ``min_score``
     are included but with ``scientificName=None``.
 
+    ``filePath`` is written as the ``filename`` column value as-is (only
+    backslashes normalised to forward slashes) -- it is not resolved or
+    made absolute here. Locating the actual image files is left entirely to
+    ``resolve_media_path()``, exactly like a CamtrapDP directory picked
+    directly in Step 1: the caller sets ``image_base_dir`` on the session
+    (structured ``image_base_dir/deploymentID/fileName`` lookup, or flat
+    search by ``fileName``), rather than this conversion baking a base
+    directory into the CSV once and for all.
+
     Args:
         df: DeepFaune results DataFrame (one row per image).
         species_map: Mapping from DeepFaune label (lowercase) to scientific name.
         out_dir: Destination directory for the CamtrapDP files.
-        image_base_dir: Base directory prepended to relative ``filename`` paths.
-            If ``None``, paths are used as-is.
         label_col: Column in ``df`` holding the predicted label. Defaults to
             ``'top1'``.
         score_col: Column in ``df`` holding the confidence score. Defaults to
@@ -604,16 +610,11 @@ def deepfaune_to_camtrapdp(
         "humain": "human", "undefined": "unclassified",
     }
 
-    def abs_path(p: str) -> str:
-        p = p.replace("\\", "/")
-        if image_base_dir and not (p.startswith("/") or (len(p) > 1 and p[1] == ":")):
-            p = str(image_base_dir / p)
-        return str(Path(p).resolve())
-
     def site_from_path(p: str) -> str:
         return re.sub(r"^R\d+-", "", Path(p).parent.name)
 
-    paths = df["filename"].astype(str).apply(abs_path)
+    paths = df["filename"].astype(str).str.replace("\\", "/", regex=False)
+    file_names = paths.apply(lambda p: Path(p).name)
     sites = df["site"].astype(str) if "site" in df.columns else paths.apply(site_from_path)
     labels = df[label_col].astype(str).str.lower().str.strip()
     scores = pd.to_numeric(df.get(score_col, pd.Series([None] * len(df))), errors="coerce")
@@ -640,7 +641,8 @@ def deepfaune_to_camtrapdp(
     pd.DataFrame({"deploymentID": unique_sites, "locationID": unique_sites,
                   "locationName": unique_sites}).to_csv(out_dir / "deployments.csv", index=False)
     pd.DataFrame({"mediaID": media_ids, "deploymentID": list(sites),
-                  "timestamp": list(timestamps), "filePath": list(paths)}).to_csv(
+                  "timestamp": list(timestamps), "filePath": list(paths),
+                  "fileName": list(file_names)}).to_csv(
         out_dir / "media.csv", index=False)
     pd.DataFrame({
         "observationID": obs_ids, "deploymentID": list(sites), "mediaID": media_ids,

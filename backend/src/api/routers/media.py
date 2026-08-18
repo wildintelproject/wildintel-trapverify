@@ -26,7 +26,7 @@ def serve_image(media_id: str) -> FileResponse:
 
     config = session_service.get_config()
     image_base_dir = config.get("image_base_dir", "")
-    fallback_base = Path(image_base_dir) if image_base_dir else Path(config["camtrap_dir"]).parent
+    fallback_base = Path(image_base_dir) if image_base_dir else Path(config["camtrap_dir"])
     file_path = resolve_media_path(
         str(row.iloc[0]["filePath"]),
         str(row.iloc[0].get("deploymentID", "")),

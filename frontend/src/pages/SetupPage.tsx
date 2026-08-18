@@ -65,12 +65,12 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const [localFormat, setLocalFormat] = useState<'camtrapdp' | 'deepfaune' | 'csv' | null>(null)
-  const [deepfauneForm, setDeepfauneForm] = useState({ csvPath: '', imageBaseDir: '' })
+  const [deepfauneForm, setDeepfauneForm] = useState({ csvPath: '' })
   const [converting, setConverting] = useState(false)
   const [convertError, setConvertError] = useState<string | null>(null)
   const [deepfauneColumnsInfo, setDeepfauneColumnsInfo] = useState<{ label_col: string; score_col: string } | null>(null)
   const [datapackageErrors, setDatapackageErrors] = useState<string[] | null>(null)
-  const [picker, setPicker] = useState<'camtrap_dir' | 'img_base_dir' | 'df_csv' | 'df_imgdir' | 'output_dir' | null>(null)
+  const [picker, setPicker] = useState<'camtrap_dir' | 'img_base_dir' | 'df_csv' | 'output_dir' | null>(null)
   const [inspecting, setInspecting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
@@ -149,9 +149,6 @@ export default function SetupPage({ onSetup, ready }: Props) {
     } else if (picker === 'df_csv') {
       setDeepfauneForm(f => ({ ...f, csvPath: path }))
       setPicker(null)
-    } else if (picker === 'df_imgdir') {
-      setDeepfauneForm(f => ({ ...f, imageBaseDir: path }))
-      setPicker(null)
     } else if (picker === 'output_dir') {
       set('output_dir', path)
       setPicker(null)
@@ -179,17 +176,43 @@ export default function SetupPage({ onSetup, ready }: Props) {
     setStep(1)
   }
 
+  // DeepFaune's filePath is written unresolved (see deepfaune_to_camtrapdp),
+  // so after conversion the wizard drops into the same "CamtrapDP directory"
+  // panel as Option A -- image_base_dir stays a single, dynamic field
+  // resolved at review time (resolve_media_path), not something baked into
+  // the CSV during conversion. camtrap_dir is pre-filled; image_base_dir is
+  // left for the user to fill in explicitly (not pre-filled).
+  async function afterDeepfauneConversion(camtrap_dir: string) {
+    set('camtrap_dir', camtrap_dir)
+    setInspecting(true)
+    try {
+      const info = await api.inspectDir(camtrap_dir)
+      if (info.species.length) {
+        setAvailableSpecies(info.species)
+        setSelectedSpecies(new Set(info.species))
+      }
+      setDatapackageErrors(info.datapackage_errors)
+      if (info.study_start && info.study_end) {
+        set('study_start', info.study_start)
+        set('study_end', info.study_end)
+        setDataRange({ min: info.study_start, max: info.study_end })
+      }
+    } catch { /* continúa manualmente */ }
+    finally { setInspecting(false) }
+    setStepError(null)
+    setLocalFormat('camtrapdp')
+  }
+
   async function handleDeepfauneConvert() {
     setConverting(true)
     setConvertError(null)
     try {
       const { camtrap_dir, label_col, score_col } = await api.convertDeepfaune(
         deepfauneForm.csvPath,
-        deepfauneForm.imageBaseDir || null,
         form.min_score,
       )
       setDeepfauneColumnsInfo({ label_col, score_col })
-      await afterConversion(camtrap_dir)
+      await afterDeepfauneConversion(camtrap_dir)
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : t('setup.err_unknown'))
     } finally {
@@ -912,26 +935,6 @@ export default function SetupPage({ onSetup, ready }: Props) {
             <p className={hintClass}>{t('setup.deepfaune_csv_hint')}</p>
           </div>
 
-          <div className="mb-6">
-            <label className={labelClass}>
-              {t('setup.deepfaune_imgdir_label')}{' '}
-              <span className="text-zinc-400 font-normal">{t('setup.label_output_optional')}</span>
-            </label>
-            <div className="flex">
-              <input
-                className={`${inputClass} rounded-r-none`}
-                placeholder={t('setup.deepfaune_imgdir_placeholder')}
-                value={deepfauneForm.imageBaseDir}
-                onChange={(e) => setDeepfauneForm(f => ({ ...f, imageBaseDir: e.target.value }))}
-              />
-              <button type="button" className={browseBtn}
-                onClick={() => setPicker('df_imgdir')}>
-                {t('setup.browse')}
-              </button>
-            </div>
-            <p className={hintClass}>{t('setup.deepfaune_imgdir_hint')}</p>
-          </div>
-
           <div className="flex items-center justify-between gap-2">
             <button type="button" className={btnOutline} onClick={goBack}>
               {t('setup.back')}
@@ -1205,7 +1208,6 @@ export default function SetupPage({ onSetup, ready }: Props) {
             picker === 'camtrap_dir' ? form.camtrap_dir || undefined
             : picker === 'img_base_dir' ? form.image_base_dir || undefined
             : picker === 'df_csv' ? deepfauneForm.csvPath || undefined
-            : picker === 'df_imgdir' ? deepfauneForm.imageBaseDir || undefined
             : picker === 'output_dir' ? form.output_dir || undefined
             : undefined
           }
@@ -1214,7 +1216,6 @@ export default function SetupPage({ onSetup, ready }: Props) {
           title={
             picker === 'img_base_dir' ? t('setup.img_base_dir_picker_title')
             : picker === 'df_csv' ? t('setup.deepfaune_csv_picker_title')
-            : picker === 'df_imgdir' ? t('setup.deepfaune_imgdir_picker_title')
             : picker === 'output_dir' ? t('setup.output_dir_picker_title')
             : undefined
           }

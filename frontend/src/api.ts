@@ -131,12 +131,11 @@ export const api = {
       `/api/trapper/generate/${taskId}`,
     ),
 
-  convertDeepfaune: (csvPath: string, imageBaseDir: string | null, minScore: number) =>
-    post<{ camtrap_dir: string; label_col: string; score_col: string }>('/api/convert/deepfaune', {
-      csv_path: csvPath,
-      image_base_dir: imageBaseDir || null,
-      min_score: minScore,
-    }),
+  convertDeepfaune: (csvPath: string, minScore: number) =>
+    post<{ camtrap_dir: string; label_col: string; score_col: string }>(
+      '/api/convert/deepfaune',
+      { csv_path: csvPath, min_score: minScore },
+    ),
 
   csvHeaders: (path: string) =>
     req<{ columns: string[] }>(`/api/fs/csv-headers?path=${encodeURIComponent(path)}`),

@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 class DeepfauneConvertRequest(BaseModel):
     csv_path: str
-    image_base_dir: str | None = None
     min_score: float = 0.0
 
 
@@ -75,8 +74,6 @@ def convert_deepfaune(req: DeepfauneConvertRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    image_base = Path(req.image_base_dir) if req.image_base_dir else None
-
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = Path.home() / "Documents" / "camtrap_verify" / "conversions" / f"deepfaune_{ts}"
 
@@ -85,7 +82,6 @@ def convert_deepfaune(req: DeepfauneConvertRequest) -> dict:
             df=df,
             species_map=DEEPFAUNE_LABEL_MAP,
             out_dir=out_dir,
-            image_base_dir=image_base,
             label_col=label_col,
             score_col=score_col,
             min_score=req.min_score,

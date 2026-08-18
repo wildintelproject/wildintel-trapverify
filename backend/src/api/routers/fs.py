@@ -89,7 +89,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
     If that misses and flat_search is enabled, fileName is looked up anywhere
     under image_base_dir (see resolve_media_path). Falls back to the previous
     rule (filePath resolved against image_base_dir if given, otherwise
-    against the parent of camtrap_dir) when nothing above matched, or when
+    against camtrap_dir itself) when nothing above matched, or when
     image_base_dir is not set (in which case remote filePath values are
     skipped, since those are fetched on demand via the image proxy and are
     not expected to exist locally).
@@ -116,7 +116,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
     file_names = med["fileName"]
     dep_ids = med.get("deploymentID", pd.Series(dtype=str)).fillna("")
     file_paths = med.get("filePath", pd.Series(dtype=str))
-    fallback_base = Path(image_base_dir) if image_base_dir else p.parent
+    fallback_base = Path(image_base_dir) if image_base_dir else p
 
     total = 0
     missing = 0

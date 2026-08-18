@@ -195,12 +195,12 @@ Select the folder on your machine that contains the CamtrapDP files (`deployment
 *Local directory selection. The Browse button opens a folder picker.*
 
 - **Data directory** — path to your CamtrapDP folder. Use the **📁 Browse** button or type the path manually.
-- **Images directory** *(optional)* — base directory used to resolve relative `filePath` values in `media.csv`. Leave empty to use the parent of the data directory (default behaviour).
+- **Images directory** *(optional)* — base directory used to resolve relative `filePath` values in `media.csv`. Leave empty to use the data directory itself (default behaviour).
 
 After selecting the folder, the application reads species and date ranges automatically. Click **Next →** to proceed.
 
 > **Image paths:** three formats are supported in the `filePath` column of `media.csv`:
-> - **Relative paths** — resolved relative to the **Images directory** if provided, otherwise relative to the parent of the CamtrapDP directory.
+> - **Relative paths** — resolved relative to the **Images directory** if provided, otherwise relative to the CamtrapDP directory itself.
 > - **Absolute paths** — used as-is.
 > - **HTTP/HTTPS URLs** — fetched through the application's built-in proxy, so no CORS configuration is needed.
 
@@ -212,9 +212,8 @@ If your data comes from [DeepFaune](https://www.deepfaune.cnrs.fr/), select the 
 *DeepFaune import form.*
 
 - **DeepFaune results file** — path to the `.csv` exported from DeepFaune.
-- **Image root directory** *(optional)* — base directory to resolve relative image paths. Leave empty if paths in the CSV are already absolute.
 
-Click **Convert and import →**. Once the conversion is complete, the wizard advances automatically to Step 2.
+Click **Convert and import →**. Once the conversion is complete, the wizard drops you into the same **Data directory** / **Images directory** screen as Option A above, with **Data directory** already filled in with the converted CamtrapDP folder — fill in **Images directory** there if the paths in your DeepFaune CSV are relative.
 
 #### Option C — Custom CSV
 

@@ -21,7 +21,7 @@ def _media_resolution_config() -> tuple[str, Path, bool]:
     session, matching how /api/image/{mediaID} resolves the same fields."""
     config = session_service.get_config()
     image_base_dir = config.get("image_base_dir", "")
-    fallback_base = Path(image_base_dir) if image_base_dir else Path(config["camtrap_dir"]).parent
+    fallback_base = Path(image_base_dir) if image_base_dir else Path(config["camtrap_dir"])
     return image_base_dir, fallback_base, bool(config.get("flat_search", False))
 
 

@@ -98,7 +98,7 @@ def test_fs_inspect_invalid_datapackage_json_is_non_blocking(client, camtrap_dir
 # ─── /api/fs/check-images ─────────────────────────────────────────────────────
 
 def test_check_images_all_missing_by_default(client, camtrap_dir):
-    """Without image_base_dir, relative filePaths resolve against camtrap_dir's parent — none exist."""
+    """Without image_base_dir, relative filePaths resolve against camtrap_dir itself — none exist."""
     resp = client.get("/api/fs/check-images", params={"camtrap_dir": str(camtrap_dir)})
     assert resp.status_code == 200
     data = resp.json()
@@ -351,6 +351,18 @@ def test_convert_deepfaune_returns_camtrap_dir(client, tmp_path):
     resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
     assert resp.status_code == 200
     assert "camtrap_dir" in resp.json()
+
+def test_convert_deepfaune_filepath_not_resolved(client, tmp_path):
+    """filePath in the generated media.csv is the raw filename column value
+    -- locating the images is resolve_media_path()'s job at review time via
+    image_base_dir, not this conversion's."""
+    csv = tmp_path / "results.csv"
+    _write_deepfaune_csv(csv)
+    resp = client.post("/api/convert/deepfaune", json={"csv_path": str(csv)})
+    out = Path(resp.json()["camtrap_dir"])
+    med = pd.read_csv(out / "media.csv")
+    assert med.iloc[0]["filePath"] == "/imgs/SITE_A/f1.jpg"
+    assert med.iloc[0]["fileName"] == "f1.jpg"
 
 def test_convert_deepfaune_creates_camtrapdp_files(client, tmp_path):
     csv = tmp_path / "results.csv"
@@ -1083,9 +1095,9 @@ def test_serve_image_uses_image_base_dir(client, setup_session_with_image_base_d
     resp = client.get("/api/image/m001")
     assert resp.status_code == 200
 
-def test_serve_image_fallback_to_camtrap_parent(client, setup_session, camtrap_dir):
-    """When image_base_dir is empty, relative paths resolve against camtrap_dir.parent."""
-    imgs = camtrap_dir.parent / "img"
+def test_serve_image_fallback_to_camtrap_dir_itself(client, setup_session, camtrap_dir):
+    """When image_base_dir is empty, relative paths resolve against camtrap_dir itself."""
+    imgs = camtrap_dir / "img"
     imgs.mkdir(exist_ok=True)
     (imgs / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
     resp = client.get("/api/image/m001")

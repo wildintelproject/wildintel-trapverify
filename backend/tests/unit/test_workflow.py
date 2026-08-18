@@ -1194,7 +1194,10 @@ def test_deepfaune_detects_predictionbase_format(tmp_path):
     obs = pd.read_csv(out / "observations.csv")
     assert obs.iloc[0]["scientificName"] == "Capreolus capreolus"
 
-def test_deepfaune_image_base_dir_prepended(tmp_path):
+def test_deepfaune_filepath_written_as_is(tmp_path):
+    """filePath is no longer resolved/made absolute here -- locating the
+    files is resolve_media_path()'s job at review time, via image_base_dir,
+    same as a plain CamtrapDP directory (see gallery_frame_img_url)."""
     df = pd.DataFrame({
         "filename": ["relative/frame.jpg"],
         "date":     ["2025-11-02 10:00:00"],
@@ -1202,10 +1205,21 @@ def test_deepfaune_image_base_dir_prepended(tmp_path):
         "score":    ["0.9"],
         "site":     ["S1"],
     })
-    base = Path("/data/images")
-    out = deepfaune_to_camtrapdp(df, DEEPFAUNE_LABEL_MAP, tmp_path / "out", image_base_dir=base)
+    out = deepfaune_to_camtrapdp(df, DEEPFAUNE_LABEL_MAP, tmp_path / "out")
     med = pd.read_csv(out / "media.csv")
-    assert "relative/frame.jpg" in med.iloc[0]["filePath"] or "/data/images" in med.iloc[0]["filePath"]
+    assert med.iloc[0]["filePath"] == "relative/frame.jpg"
+
+def test_deepfaune_writes_file_name_column(tmp_path):
+    df = pd.DataFrame({
+        "filename": ["relative/dir/frame.jpg"],
+        "date":     ["2025-11-02 10:00:00"],
+        "top1":     ["fox"],
+        "score":    ["0.9"],
+        "site":     ["S1"],
+    })
+    out = deepfaune_to_camtrapdp(df, DEEPFAUNE_LABEL_MAP, tmp_path / "out")
+    med = pd.read_csv(out / "media.csv")
+    assert med.iloc[0]["fileName"] == "frame.jpg"
 
 def test_deepfaune_row_count_matches_input(tmp_path):
     out = deepfaune_to_camtrapdp(_minimal_deepfaune_df(), DEEPFAUNE_LABEL_MAP, tmp_path / "out")
