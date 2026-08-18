@@ -1338,12 +1338,12 @@
 <hr />
 <h2 id="1-overview">1. Overview</h2>
 <p>CamTrap Verify helps experts determine whether a species was present at a given location during a study period. To do this, it divides the study period into fixed-length windows called <strong>sampling occasions</strong> (e.g. 5-day blocks). Within each sampling occasion, images from the same camera are grouped into <strong>detection events</strong> — bursts of consecutive frames taken less than N seconds apart. The question the expert answers is therefore always the same: <em>"Is this species present at this site during this sampling occasion?"</em></p>
-<p>To minimise the total number of images that need to be inspected, CamTrap Verify works in <strong>rounds</strong>. In each round, for every combination of site × sampling occasion × species, the tool presents the <strong>detection event with the highest detection confidence</strong> that has not yet been reviewed.</p>
+<p>To minimise the total number of images that need to be inspected, CamTrap Verify works in <strong>rounds</strong>. In each round, for every combination of site × sampling occasion × species, the tool presents the <strong>detection event with the highest detection confidence</strong> that has not yet been reviewed. The expert then decides:</p>
 <ul>
 <li><strong>Confirming</strong> a detection event closes that cell — the species is considered present at that site during that occasion.</li>
 <li><strong>Rejecting</strong> a detection event queues the next-best detection event for the following round.</li>
 </ul>
-<p>This guarantees that expert effort is always directed where it matters most, without reviewing every single image.</p>
+<p>This guarantees that expert effort is always directed where it matters most, without reviewing every single image. The diagram below summarises the process the expert follows:</p>
 <pre class="mermaid"><code>flowchart TD
     A([CamtrapDP data]) --&gt; B[Divide study period\ninto N-day sampling occasions]
     B --&gt; C[Group images per site into\ndetection events / bursts]
@@ -1427,35 +1427,36 @@
 </blockquote>
 <hr />
 <h2 id="4-welcome-screen">4. Welcome Screen</h2>
-<p>When you open the application for the first time, or when no session is active, you will see the <strong>Welcome Screen</strong>.</p>
+<p>When you open the application, you will see the <strong>Welcome Screen</strong>. Which buttons appear depends on your session state, not a fixed set of three:</p>
 <p><img alt="Welcome screen" src="../img/user_manual/welcome-screen.png" />
-<em>The Welcome Screen, showing the three session buttons.</em></p>
-<p>Three buttons are available:</p>
+<em>The Welcome Screen. The exact buttons shown depend on whether a session is currently active and whether you have session history.</em></p>
 <table>
 <thead>
 <tr>
 <th>Button</th>
+<th>When it appears</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>Continue previous session →</strong></td>
-<td>Resumes the last session you worked on. Shows a summary (species count, progress %).</td>
+<td>Only if a session is currently active</td>
+<td>Resumes the session you were last working on. Shows a progress summary below the button (e.g. <em>3 species · 12/40 occasions reviewed · 30%</em>).</td>
 </tr>
 <tr>
 <td><strong>Open a specific session…</strong></td>
+<td>Always</td>
 <td>Opens a file browser so you can load any existing session folder.</td>
 </tr>
 <tr>
-<td><strong>New session</strong></td>
-<td>Starts the Setup Wizard to configure a brand-new session.</td>
+<td><strong>Start verifying →</strong> / <strong>New session</strong></td>
+<td>Always — the label depends on state</td>
+<td>Starts the Setup Wizard to configure a session. Reads <strong>Start verifying →</strong> if no session is currently active, or <strong>New session</strong> if one is (to start a fresh one alongside it).</td>
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p>If a previous session exists, <strong>Continue previous session</strong> displays a progress summary below the button (e.g. <em>3 species · 12/40 periods reviewed · 30%</em>).</p>
-</blockquote>
+<p>Below the buttons, a <strong>Recent sessions</strong> list appears if you have previously opened sessions on record, letting you jump back into any of them directly — independently of whether a session is active right now.</p>
 <hr />
 <h2 id="5-setup-wizard">5. Setup Wizard</h2>
 <p>The Setup Wizard guides you through four steps. A step indicator at the top shows your progress.</p>
@@ -1463,6 +1464,12 @@
 <em>Step indicator showing the four stages: Source · Species · Period · Parameters.</em></p>
 <p>You can navigate between steps using the <strong>← Back</strong> and <strong>Next →</strong> buttons, or return to the Welcome Screen with <strong>← Welcome</strong>.</p>
 <h3 id="step-1-source">Step 1 — Source</h3>
+<p>CamTrap Verify requires you to specify where the information to be verified (images, annotations, deployments, etc.) is located. Although the data is always processed internally in CamtrapDP format, CamTrap Verify supports the following input sources: <a href="#option-a--camtrapdp-directory">CamtrapDP</a>, <a href="#option-b--deepfaune-csv">DeepFaune</a>, <a href="#option-c--custom-csv">custom CSV</a>, and <a href="#option-d--trapper-instance">Trapper</a>.</p>
+<blockquote>
+<p><strong>Note:</strong> CamTrap Verify provides a dynamic mechanism for resolving where each image is physically located. This mechanism is based on whether you provide a directory where the images are locally stored.</p>
+<p>If you do indicate it, the resolution procedure is the following: CamTrap Verify first looks for the image at <code>Images directory/deploymentID/fileName</code>. If that exact file is not found and <strong id="search-subfolders-by-file-name">Search subfolders by file name</strong> is enabled, it instead searches the whole Images directory recursively for a file with that name (useful when photos are all loose in one folder). Only if neither of those finds the image does CamTrap Verify fall back to the <code>filePath</code> column in <code>media.csv</code> itself: absolute paths are used as-is, relative paths are resolved against the Images directory, and remote <code>http://</code>/<code>https://</code> URLs are fetched directly, through the application's built-in proxy (so no CORS configuration is needed on your end) — but only as a last resort, after the local lookups above have already failed.</p>
+<p>If you do not indicate it, there is no separate images root to look in first, so resolution relies entirely on the <code>filePath</code> column: absolute paths are used as-is, relative paths are resolved against the CamtrapDP directory itself, and remote URLs are always fetched over the network, since there is nowhere local left to check.</p>
+</blockquote>
 <p>First choose where your data comes from: <strong>Local filesystem</strong> or a <strong>Trapper instance</strong>.</p>
 <p><img alt="Setup — Step 1: Data source" src="../img/user_manual/setup-step1-source.png" />
 <em>Data source selector.</em></p>
@@ -1475,26 +1482,18 @@
 <em>Local directory selection. The Browse button opens a folder picker.</em></p>
 <ul>
 <li><strong>Data directory</strong> — path to your CamtrapDP folder. Use the <strong>📁 Browse</strong> button or type the path manually.</li>
-<li><strong>Images directory</strong> <em>(optional)</em> — base directory used to resolve relative <code>filePath</code> values in <code>media.csv</code>. Leave empty to use the parent of the data directory (default behaviour).</li>
+<li><strong>Images directory</strong> <em>(optional)</em> — base directory used to resolve relative <code>filePath</code> values in <code>media.csv</code>. Leave empty to use the data directory itself (default behaviour). Filling it in enables the <a href="#search-subfolders-by-file-name"><strong>Search subfolders by file name</strong></a> option (see above).</li>
 </ul>
+<p><img alt="Setup — Step 1: Images directory and flat search" src="../img/user_manual/setup-step1-flat-search.png" />
+<em>With an Images directory set, the </em><em>Search subfolders by file name</em><em> toggle appears.</em></p>
 <p>After selecting the folder, the application reads species and date ranges automatically. Click <strong>Next →</strong> to proceed.</p>
-<blockquote>
-<p><strong>Image paths:</strong> three formats are supported in the <code>filePath</code> column of <code>media.csv</code>:
-- <strong>Relative paths</strong> — resolved relative to the <strong>Images directory</strong> if provided, otherwise relative to the parent of the CamtrapDP directory.
-- <strong>Absolute paths</strong> — used as-is.
-- <strong>HTTP/HTTPS URLs</strong> — fetched through the application's built-in proxy, so no CORS configuration is needed.</p>
-</blockquote>
 <h4 id="option-b-deepfaune-csv">Option B — DeepFaune CSV</h4>
-<p>If your data comes from <a href="https://www.deepfaune.cnrs.fr/">DeepFaune</a>, select the <strong>DeepFaune CSV</strong> format. The application converts the file to CamtrapDP format automatically.</p>
+<p>If your data comes from <a href="https://www.deepfaune.cnrs.fr/">DeepFaune</a>, select the <strong>DeepFaune CSV</strong> format. The application converts the file to CamtrapDP format automatically. For this reason, the form only asks for a single field, <strong>DeepFaune results file</strong>, where you provide the path to the <code>.csv</code> file exported from DeepFaune.</p>
 <p><img alt="Setup — Step 1: DeepFaune import" src="../img/user_manual/setup-step1-deepfaune.png" />
 <em>DeepFaune import form.</em></p>
-<ul>
-<li><strong>DeepFaune results file</strong> — path to the <code>.csv</code> exported from DeepFaune.</li>
-<li><strong>Image root directory</strong> <em>(optional)</em> — base directory to resolve relative image paths. Leave empty if paths in the CSV are already absolute.</li>
-</ul>
-<p>Click <strong>Convert and import →</strong>. Once the conversion is complete, the wizard advances automatically to Step 2.</p>
+<p>Once you have indicated the path, click <strong>Convert and import →</strong>. Once the conversion is complete, the wizard drops you into the same <strong>Data directory</strong> / <strong>Images directory</strong> screen as Option A above, with <strong>Data directory</strong> already filled in with the converted CamtrapDP folder — fill in <strong>Images directory</strong> there if the paths in your DeepFaune CSV are relative.</p>
 <h4 id="option-c-custom-csv">Option C — Custom CSV</h4>
-<p>For any other classifier that exports a CSV, choose the <strong>Custom CSV</strong> format. You map the columns of your file to the fields required by CamtrapDP.</p>
+<p>For any other classifier that exports a CSV, choose the <strong>Custom CSV</strong> format. You map the columns of your file to the fields required by CamtrapDP. For this reason, the form first asks for a single field, <strong>CSV file</strong>, where you provide the path to your classifier's <code>.csv</code> export.</p>
 <p><img alt="Setup — Step 1: Custom CSV import" src="../img/user_manual/setup-step1-csv.png" />
 <em>Custom CSV import form.</em></p>
 <p><strong>Column mapping</strong></p>
@@ -1544,7 +1543,7 @@
 <em>Species map table. Each detected label must be mapped to a scientific name.</em></p>
 <p>For each label in your CSV, enter the corresponding scientific name (e.g. <code>Vulpes vulpes</code>). Labels that match known DeepFaune classes are pre-filled automatically. Non-animal labels (<code>empty</code>, <code>blank</code>, <code>human</code>, etc.) are handled automatically and do not appear in the table.</p>
 <p>Use <strong>Fill known labels</strong> to auto-fill any remaining entries that match the built-in label dictionary.</p>
-<p>Click <strong>Convert and import →</strong> to convert and proceed.</p>
+<p>Once you have mapped the columns and the species, click <strong>Convert and import →</strong>. Once the conversion is complete, the wizard drops you into the same <strong>Data directory</strong> / <strong>Images directory</strong> screen as Option A above, with <strong>Data directory</strong> already filled in with the converted CamtrapDP folder — fill in <strong>Images directory</strong> there if the paths in your CSV are relative.</p>
 <h4 id="option-d-trapper-instance">Option D — Trapper instance</h4>
 <p>Connect to a <a href="https://trapper-project.readthedocs.io/">Trapper</a> installation to download a CamtrapDP package directly from the platform.</p>
 <p><img alt="Setup — Step 1: Trapper" src="../img/user_manual/setup-step1-trapper.png" />
@@ -1643,7 +1642,13 @@
 <em>Species index showing species cards with progress bars.</em></p>
 <p>An information panel at the top shows the session parameters:</p>
 <p><img alt="Session info panel" src="../img/user_manual/species-index-info.png" />
-<em>Info panel showing date range, sampling occasion, gap and minimum score.</em></p>
+<em>Info panel showing overall progress, the study period and the sampling occasion length.</em></p>
+<ul>
+<li><strong>Overall progress</strong> — how many sampling occasions have been reviewed out of the total, how many are confirmed, and the percentage complete.</li>
+<li><strong>Study period and sampling occasion length</strong> — the date range being reviewed and the N-day window each sampling occasion spans.</li>
+<li><strong>← Back</strong> — return to the Welcome Screen.</li>
+<li><strong>See results</strong> — navigate to the Results page (only active when all species are complete).</li>
+</ul>
 <p>Each <strong>species card</strong> displays:</p>
 <p><img alt="Species card" src="../img/user_manual/species-index-card.png" />
 <em>A species card showing thumbnail strip, progress bar and round badge.</em></p>
@@ -1654,11 +1659,6 @@
 <li>A badge: <strong>Complete</strong> (green) or <strong>Round N</strong> (grey) indicating the current review round.</li>
 </ul>
 <p>Click any card to open the Image Gallery for that species.</p>
-<p>The header shows overall progress and two action buttons:</p>
-<ul>
-<li><strong>← Back</strong> — return to the Welcome Screen.</li>
-<li><strong>See results</strong> — navigate to the Results page (only active when all species are complete).</li>
-</ul>
 <hr />
 <h2 id="7-image-gallery">7. Image Gallery</h2>
 <p>The Image Gallery is the main review screen. It shows all sampling occasions for a single species, grouped by location.</p>
@@ -1753,7 +1753,7 @@
 <p>After a decision, the lightbox automatically advances to the next undecided detection event.</p>
 <h3 id="saving-decisions">Saving Decisions</h3>
 <p>Once you have reviewed the detection events, click <strong>💾 Save decisions</strong> (floating button, bottom-right).</p>
-<p><img alt="Save button" src="./img/user_manual/gallery-save.png" />
+<p><img alt="Save button" src="../img/user_manual/gallery-save.png" />
 <em>Floating action buttons: Confirm all, Save decisions.</em></p>
 <ul>
 <li>If all detection events have been decided, the session advances to the next round (if any occasions were rejected) or marks the species as <strong>Complete</strong>.</li>
@@ -1762,7 +1762,7 @@
 <p>The <strong>✓✓ Confirm all</strong> button marks every undecided detection event in the current view as confirmed in one click.</p>
 <h3 id="completed-species">Completed Species</h3>
 <p>When all occasions for a species have been decided, the gallery shows a <strong>Complete</strong> badge and locks the view.</p>
-<p><img alt="Completed species" src="./img/user_manual/gallery-completed.png" />
+<p><img alt="Completed species" src="../img/user_manual/gallery-completed.png" />
 <em>Completed species with the lock icon and edit mode toggle.</em></p>
 <ul>
 <li>Click 🔓 to enter <strong>edit mode</strong> and correct any decisions.</li>
@@ -1775,16 +1775,17 @@
 <p><img alt="See results button enabled" src="../img/user_manual/results-button-enabled.png" />
 <em>The "See results" button turns green when all species have been reviewed.</em></p>
 <p>Click it to open the <strong>Results</strong> page, which summarises the entire review.</p>
+<p>The page first shows the <strong>output directory</strong>:</p>
+<p><img alt="Output directory and download" src="../img/user_manual/results-output.png" />
+<em>Output directory, with copy/open-folder buttons and the Download results button.</em></p>
+<p>This is the path to the generated files (see <a href="#output-files">Output Files</a> below for what's inside), with a copy button, a shortcut to open the folder, and a <strong>Download results</strong> button to get a <code>.zip</code> of the whole session folder. If the exported package's <code>datapackage.json</code> had to be auto-generated (the source had none), a warning is shown here listing which fields are placeholders rather than derived from your data.</p>
+<p>Next comes the <strong>review breakdown</strong>:</p>
 <p><img alt="Results page" src="../img/user_manual/results.png" />
-<em>Results page showing overall counts and per-species breakdown.</em></p>
-<p>The page shows:</p>
-<ul>
-<li><strong>Output directory</strong> — path to the generated files, with a copy button and a shortcut to open the folder.</li>
-<li><strong>By sampling occasion</strong> — confirmed / rejected / unreviewed counts with percentages.</li>
-<li><strong>By detection event</strong> — the same breakdown at detection event level.</li>
-<li>A <strong>per-species table</strong> with detailed counts.</li>
-</ul>
-<p>A <strong>← Back</strong> button in the header returns to the Species Index.</p>
+<em>"By sampling occasion" breakdown, with overall counts and a per-species table.</em></p>
+<p>This is repeated twice — <strong>by sampling occasion</strong> and <strong>by detection event</strong> — each with confirmed / rejected / unreviewed counts and percentages, followed by a per-species breakdown table.</p>
+<p>Finally, when enough detection history is available, the page shows an <strong>occupancy estimate</strong>:</p>
+<p><img alt="Occupancy estimate table" src="../img/user_manual/results-occupancy.png" />
+<em>Naive AI-only occupancy (ψ) and detection (p) probabilities compared against the manually verified ones, per species, with 95% confidence intervals.</em></p>
 <h3 id="output-files">Output Files</h3>
 <p>Each session is saved in a timestamped subfolder inside the output directory (e.g. <code>~/Documents/camtrap_verify/20260629_143021/</code>). The folder contains:</p>
 <p><strong>Session files (root)</strong></p>
