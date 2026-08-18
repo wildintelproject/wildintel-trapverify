@@ -896,6 +896,39 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#building-the-pdf-manual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building the PDF manual
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-installable-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building installable packages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#assembling-a-full-review-bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assembling a full review bundle
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1502,6 +1535,39 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#building-the-pdf-manual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building the PDF manual
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-installable-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building installable packages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#assembling-a-full-review-bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assembling a full review bundle
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2080,6 +2146,26 @@
 <td><code>--force</code></td>
 <td>Overwrite <code>--output</code> if it already exists</td>
 </tr>
+<tr>
+<td><code>--pdf</code></td>
+<td>Also render the anonymized docs into a single PDF manual. See "Building the PDF manual" below.</td>
+</tr>
+<tr>
+<td><code>--packages-repo OWNER/NAME</code></td>
+<td>Push the snapshot to a private scratch GitHub repo, tag it, and wait for its Release workflow to build installable packages, then download them. See "Building installable packages" below.</td>
+</tr>
+<tr>
+<td><code>--packages-create</code></td>
+<td>Create <code>--packages-repo</code> (private) first if it doesn't already exist</td>
+</tr>
+<tr>
+<td><code>--packages-tag TAG</code></td>
+<td>Tag to push/release under in <code>--packages-repo</code> (default: <code>--ref</code>, if it looks like <code>vX.Y.Z</code>)</td>
+</tr>
+<tr>
+<td><code>--bundle</code></td>
+<td>Assemble the snapshot, PDF, and packages into a single directory at <code>--output</code>, with an auto-generated <code>README.md</code>. See "Assembling a full review bundle" below.</td>
+</tr>
 </tbody>
 </table>
 <p>Under the hood: <code>git archive</code> extracts the chosen ref with no <code>.git/</code> at all (history and commit authorship are gone by construction, not by scrubbing), then the redaction map in <code>scripts/anonymize_repo.config.json</code> is applied to every text file, a couple of brand-carrying asset files are renamed, and <code>backend/mkdocs.yml</code> is built into <code>backend/site/</code> so the in-app Help button — repointed at the local <code>/docs/</code> mount instead of the public docs site — still resolves to something.</p>
@@ -2104,6 +2190,33 @@
 <li>If the venue accepts a <strong>file upload</strong> (OpenReview, CMT, etc.), submit <code>&lt;output&gt;.zip</code> directly as supplementary material — nothing is exposed publicly.</li>
 <li>If the venue requires an <strong>anonymous code link</strong> (e.g. <code>anonymous.4open.science</code>), that expects a git remote, not a zip — push the exported snapshot to a <strong>brand-new account/repo with no connection to your real GitHub identity</strong>. Never push it to the same account or org that hosts this repo; that alone would deanonymize it.</li>
 </ul>
+<h3 id="building-the-pdf-manual">Building the PDF manual</h3>
+<p><code>--pdf</code> runs the same <code>ENABLE_PDF_EXPORT=1 mkdocs build</code> pipeline as <code>manage.py docs pdf</code> for a real release, just pointed at the already-anonymized <code>mkdocs.yml</code>/<code>docs/</code> in the snapshot (<code>uv sync</code> first, to install the <code>dev</code> group's <code>mkdocs-with-pdf</code>/WeasyPrint). The resulting PDF ends up at <code>&lt;output&gt;.manual.pdf</code> (or <code>manual.pdf</code> inside the bundle with <code>--bundle</code>); the transient <code>site/</code> build directory it's rendered into is deleted afterwards rather than shipped as part of the source snapshot. A build failure only prints a warning — it never aborts the rest of the run.</p>
+<h3 id="building-installable-packages">Building installable packages</h3>
+<p><code>--packages-repo OWNER/NAME</code> pushes the finished snapshot (which already carries this repo's own <code>.github/workflows/release.yml</code>, redacted like everything else) to that repo's <code>development</code> branch, tags it (<code>--packages-tag</code>, or <code>--ref</code> if that looks like <code>vX.Y.Z</code>), and waits for the Release workflow — the exact same one this repo ships with — to build <code>.deb</code>/<code>.rpm</code>/<code>.AppImage</code>/<code>.exe</code>×2/<code>.dmg</code> and publish them as release assets, then downloads them.</p>
+<p><strong>This is not the anonymous code link you submit to a venue.</strong> <code>OWNER/NAME</code> must be a <strong>private</strong>, throwaway scratch repo under an account you control — it exists purely as free GitHub Actions compute to produce binaries, and is never made public or referenced anywhere in the submission. <code>--packages-create</code> creates it (always <code>--private</code>) if it doesn't exist yet; reuse the same repo across versions rather than creating a new one each time.</p>
+<p>If a dependency was vendored (<code>--vendor</code>), <code>backend/Dockerfile.build</code>'s Linux package build needs <code>vendor/</code> copied into its Docker build context — the real repo never has a <code>vendor/</code> directory, so that <code>COPY</code> line only ever gets added to the exported snapshot, never to the real <code>Dockerfile.build</code> (which would then fail to build normally).</p>
+<h3 id="assembling-a-full-review-bundle">Assembling a full review bundle</h3>
+<p><code>--bundle</code> changes what <code>--output</code> means: instead of <em>being</em> the snapshot, it becomes a directory containing everything this run produced --</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>&lt;output&gt;/
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>├── snapshot/               # the anonymized source tree
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>├── snapshot.zip
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>├── snapshot.report.txt
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>├── manual.pdf              # only if --pdf
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>├── packages/                # only if --packages-repo
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>│   ├── camtrap-verify_&lt;version&gt;_amd64.deb
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>│   ├── camtrap-verify-&lt;version&gt;-1.x86_64.rpm
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>│   ├── camtrap-verify-&lt;version&gt;-linux-x86_64.AppImage
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>│   ├── camtrap-verify-&lt;version&gt;-windows-x64.exe
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>│   ├── camtrap-verify-installer-&lt;version&gt;-windows-x64.exe
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>│   └── camtrap-verify-&lt;version&gt;-macos-arm64.dmg
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>└── README.md                # auto-generated, describes the above
+</code></pre></div>
+<p>Full example, producing everything needed for a v0.4.2 double-blind review bundle in one command:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>python<span class="w"> </span>scripts/anonymize_repo.py<span class="w"> </span>--ref<span class="w"> </span>v0.4.2<span class="w"> </span>--output<span class="w"> </span>../anon-bundle-v0.4.2<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span>--vendor<span class="w"> </span>wildintel-trapper-sdk<span class="o">=</span>../wildintel-trapper-sdk#v0.1.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>--pdf<span class="w"> </span>--packages-repo<span class="w"> </span>yourname/anon-ci-build-tmp<span class="w"> </span>--bundle<span class="w"> </span>--zip
+</code></pre></div>
 <hr />
 <h2 id="12-contributing">12. Contributing</h2>
 <ol>
@@ -2116,9 +2229,9 @@
 </ol>
 <h3 id="commit-style">Commit style</h3>
 <p>Follow <a href="https://www.conventionalcommits.org/">Conventional Commits</a>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>feat: add brightness control to lightbox
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>fix: correct auto-advance index after decision
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>docs: update configuration table
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>feat: add brightness control to lightbox
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>fix: correct auto-advance index after decision
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>docs: update configuration table
 </code></pre></div>
 <hr />
 <h2 id="13-releasing-a-new-version">13. Releasing a New Version</h2>
@@ -2132,13 +2245,13 @@
   fix it up on <code>development</code> now if it's missing anything or needs wording changes.</li>
 </ul>
 <h3 id="2-merge-to-main">2. Merge to <code>main</code></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>git<span class="w"> </span>merge<span class="w"> </span>development
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>git<span class="w"> </span>merge<span class="w"> </span>development
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
 </code></pre></div>
 <h3 id="3-tag-and-push">3. Tag and push</h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>git<span class="w"> </span>tag<span class="w"> </span>vX.Y.Z
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>git<span class="w"> </span>tag<span class="w"> </span>vX.Y.Z
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
 </code></pre></div>
 <p>Pushing a <code>v*</code> tag triggers the <code>release.yml</code> workflow automatically. It will:</p>
 <ul>
