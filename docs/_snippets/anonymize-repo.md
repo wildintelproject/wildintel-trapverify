@@ -15,6 +15,11 @@ python scripts/anonymize_repo.py --ref development --output ../anon-snapshot \
 | `--vendor NAME=SOURCE[#REF]` | Vendor a dependency locally instead of leaving its real git URL in the snapshot (repeatable). See below. |
 | `--zip` | Also produce `<output>.zip` |
 | `--force` | Overwrite `--output` if it already exists |
+| `--pdf` | Also render the anonymized docs into a single PDF manual. See "Building the PDF manual" below. |
+| `--packages-repo OWNER/NAME` | Push the snapshot to a private scratch GitHub repo, tag it, and wait for its Release workflow to build installable packages, then download them. See "Building installable packages" below. |
+| `--packages-create` | Create `--packages-repo` (private) first if it doesn't already exist |
+| `--packages-tag TAG` | Tag to push/release under in `--packages-repo` (default: `--ref`, if it looks like `vX.Y.Z`) |
+| `--bundle` | Assemble the snapshot, PDF, and packages into a single directory at `--output`, with an auto-generated `README.md`. See "Assembling a full review bundle" below. |
 
 Under the hood: `git archive` extracts the chosen ref with no `.git/` at all (history and commit authorship are gone by construction, not by scrubbing), then the redaction map in `scripts/anonymize_repo.config.json` is applied to every text file, a couple of brand-carrying asset files are renamed, and `backend/mkdocs.yml` is built into `backend/site/` so the in-app Help button — repointed at the local `/docs/` mount instead of the public docs site — still resolves to something.
 
@@ -46,3 +51,43 @@ If `uv run cli` prints the wrong help text (e.g. some other package's CLI instea
 
 - If the venue accepts a **file upload** (OpenReview, CMT, etc.), submit `<output>.zip` directly as supplementary material — nothing is exposed publicly.
 - If the venue requires an **anonymous code link** (e.g. `anonymous.4open.science`), that expects a git remote, not a zip — push the exported snapshot to a **brand-new account/repo with no connection to your real GitHub identity**. Never push it to the same account or org that hosts this repo; that alone would deanonymize it.
+
+### Building the PDF manual
+
+`--pdf` runs the same `ENABLE_PDF_EXPORT=1 mkdocs build` pipeline as `manage.py docs pdf` for a real release, just pointed at the already-anonymized `mkdocs.yml`/`docs/` in the snapshot (`uv sync` first, to install the `dev` group's `mkdocs-with-pdf`/WeasyPrint). The resulting PDF ends up at `<output>.manual.pdf` (or `manual.pdf` inside the bundle with `--bundle`); the transient `site/` build directory it's rendered into is deleted afterwards rather than shipped as part of the source snapshot. A build failure only prints a warning — it never aborts the rest of the run.
+
+### Building installable packages
+
+`--packages-repo OWNER/NAME` pushes the finished snapshot (which already carries this repo's own `.github/workflows/release.yml`, redacted like everything else) to that repo's `development` branch, tags it (`--packages-tag`, or `--ref` if that looks like `vX.Y.Z`), and waits for the Release workflow — the exact same one this repo ships with — to build `.deb`/`.rpm`/`.AppImage`/`.exe`×2/`.dmg` and publish them as release assets, then downloads them.
+
+**This is not the anonymous code link you submit to a venue.** `OWNER/NAME` must be a **private**, throwaway scratch repo under an account you control — it exists purely as free GitHub Actions compute to produce binaries, and is never made public or referenced anywhere in the submission. `--packages-create` creates it (always `--private`) if it doesn't exist yet; reuse the same repo across versions rather than creating a new one each time.
+
+If a dependency was vendored (`--vendor`), `backend/Dockerfile.build`'s Linux package build needs `vendor/` copied into its Docker build context — the real repo never has a `vendor/` directory, so that `COPY` line only ever gets added to the exported snapshot, never to the real `Dockerfile.build` (which would then fail to build normally).
+
+### Assembling a full review bundle
+
+`--bundle` changes what `--output` means: instead of *being* the snapshot, it becomes a directory containing everything this run produced --
+
+```
+<output>/
+├── snapshot/               # the anonymized source tree
+├── snapshot.zip
+├── snapshot.report.txt
+├── manual.pdf              # only if --pdf
+├── packages/                # only if --packages-repo
+│   ├── camtrap-verify_<version>_amd64.deb
+│   ├── camtrap-verify-<version>-1.x86_64.rpm
+│   ├── camtrap-verify-<version>-linux-x86_64.AppImage
+│   ├── camtrap-verify-<version>-windows-x64.exe
+│   ├── camtrap-verify-installer-<version>-windows-x64.exe
+│   └── camtrap-verify-<version>-macos-arm64.dmg
+└── README.md                # auto-generated, describes the above
+```
+
+Full example, producing everything needed for a v0.4.2 double-blind review bundle in one command:
+
+```bash
+python scripts/anonymize_repo.py --ref v0.4.2 --output ../anon-bundle-v0.4.2 \
+  --vendor wildintel-trapper-sdk=../wildintel-trapper-sdk#v0.1.0 \
+  --pdf --packages-repo yourname/anon-ci-build-tmp --bundle --zip
+```

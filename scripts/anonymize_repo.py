@@ -37,6 +37,25 @@ exports and anonymizes a real (redacted) copy of it too, under vendor/, and
 the main config's replacement rules rewrite [tool.uv.sources] to a local
 path pointing at it; uv.lock is then regenerated against the vendored copy.
 
+Two more artifacts can optionally be produced from the anonymized snapshot:
+
+  --pdf                  Render the anonymized docs to a single PDF manual
+                          (same `mkdocs`/WeasyPrint pipeline as a real release).
+  --packages-repo O/R     Push the snapshot to a private scratch GitHub repo
+                          (O/R = owner/name; must already carry this repo's own
+                          .github/workflows/, which the snapshot does by
+                          default), tag it, and wait for its Release workflow
+                          to build .deb/.rpm/.AppImage/.exe/.dmg, then download
+                          them. --packages-create creates O/R (private) first
+                          if it doesn't exist yet. This is NOT the anonymous
+                          code link submitted to a venue -- see "Submitting
+                          it" in docs/_snippets/anonymize-repo.md -- it's
+                          throwaway CI compute under an account you control.
+
+--bundle turns --output from "the snapshot itself" into a single directory
+containing snapshot/ (+ .zip/.report.txt), manual.pdf (if --pdf), packages/
+(if --packages-repo), and an auto-generated README.md explaining it all.
+
 Usage:
     python scripts/anonymize_repo.py --output /path/to/anon-snapshot
     python scripts/anonymize_repo.py --ref main --output ../anon-snapshot --zip
@@ -44,14 +63,19 @@ Usage:
         --ref main --output /tmp/anon-snapshot
     python scripts/anonymize_repo.py --output ../anon-snapshot \\
         --vendor wildintel-trapper-sdk=../wildintel-trapper-sdk#v0.1.0
+    python scripts/anonymize_repo.py --ref v0.4.2 --output ../anon-bundle-v0.4.2 \\
+        --vendor wildintel-trapper-sdk=../wildintel-trapper-sdk#v0.1.0 \\
+        --pdf --packages-repo yourname/anon-ci-build-tmp --bundle
 """
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).parent / "anonymize_repo.config.json"
@@ -287,6 +311,267 @@ def regenerate_lock(root: Path) -> bool:
     return True
 
 
+def patch_dockerfile_for_vendor(root: Path) -> bool:
+    """When a dependency was vendored under vendor/ (see vendor_dependency()),
+    backend/Dockerfile.build's Linux package build needs that directory copied
+    into the Docker build context too -- it only copies pyproject.toml/uv.lock/
+    backend/ by default, since the real repo never has a vendor/ directory to
+    begin with (the real pyproject.toml points at a git URL, not a local path).
+
+    Patching this unconditionally in the *real* Dockerfile.build would break
+    normal, non-anonymized builds -- COPY of a path that doesn't exist in the
+    build context is a hard Docker error -- so this only ever touches the
+    already-exported snapshot copy, and only when vendoring actually happened.
+    """
+    dockerfile = root / "backend" / "Dockerfile.build"
+    if not dockerfile.exists():
+        return False
+    text = dockerfile.read_text(encoding="utf-8")
+    if "COPY vendor/ ./vendor/" in text:
+        return True
+    marker = "COPY pyproject.toml uv.lock ./\nCOPY backend/ ./"
+    if marker not in text:
+        print(
+            "Warning: backend/Dockerfile.build doesn't match the expected COPY layout -- "
+            "couldn't patch it to include vendor/ in the Linux build context.",
+            file=sys.stderr,
+        )
+        return False
+    dockerfile.write_text(
+        text.replace(marker, "COPY pyproject.toml uv.lock ./\nCOPY vendor/ ./vendor/\nCOPY backend/ ./"),
+        encoding="utf-8",
+    )
+    return True
+
+
+def build_pdf(root: Path) -> Path | None:
+    """Render root/mkdocs.yml (the combined user + developer manual) to a
+    single PDF via WeasyPrint, the same `ENABLE_PDF_EXPORT=1 mkdocs build`
+    pipeline `manage.py docs pdf` uses for a real release -- just pointed at
+    the already-anonymized docs tree. Returns the built PDF's path, or None
+    if the build failed (a warning is printed either way; this never aborts
+    the whole run, same as build_local_docs()).
+    """
+    mkdocs_cfg = root / "mkdocs.yml"
+    if not mkdocs_cfg.exists():
+        return None
+    print("Building anonymized PDF manual (uv sync + mkdocs build) ...")
+    sync = subprocess.run(["uv", "sync"], cwd=root, capture_output=True, text=True)
+    if sync.returncode != 0:
+        print(f"Warning: `uv sync` failed, cannot build the PDF manual:\n{sync.stderr}", file=sys.stderr)
+        return None
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    env["ENABLE_PDF_EXPORT"] = "1"
+    result = subprocess.run(
+        ["uv", "run", "mkdocs", "build", "--config-file", "mkdocs.yml"],
+        cwd=root, capture_output=True, text=True, env=env,
+    )
+    if result.returncode != 0:
+        print(f"Warning: PDF build failed:\n{result.stderr}", file=sys.stderr)
+        return None
+    pdf_dir = root / "site" / "pdf"
+    candidates = sorted(pdf_dir.glob("*.pdf")) if pdf_dir.exists() else []
+    if not candidates:
+        print("Warning: PDF build reported success but produced no PDF file.", file=sys.stderr)
+        return None
+    return candidates[0]
+
+
+def _run_ok(cmd: list[str], cwd: Path | None = None) -> bool:
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Command failed: {' '.join(cmd)}\n{result.stderr}", file=sys.stderr)
+        return False
+    return True
+
+
+def _replace_git_worktree(clone_dir: Path, source: Path) -> None:
+    """Replace every tracked/untracked file in clone_dir (except .git/) with
+    the contents of source -- used to push a fresh anonymized snapshot into
+    the scratch packages repo each run, overwriting whatever was there
+    before (e.g. a previous version's snapshot)."""
+    for item in clone_dir.iterdir():
+        if item.name == ".git":
+            continue
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+    for item in source.iterdir():
+        dst = clone_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, dst)
+        else:
+            shutil.copy2(item, dst)
+
+
+def _ensure_packages_repo(repo: str, create: bool) -> bool:
+    exists = subprocess.run(["gh", "repo", "view", repo], capture_output=True, text=True).returncode == 0
+    if exists:
+        return True
+    if not create:
+        print(f"Error: {repo} does not exist and --packages-create was not given.", file=sys.stderr)
+        return False
+    print(f"Creating private scratch repo {repo} ...")
+    return _run_ok(["gh", "repo", "create", repo, "--private", "--description", "temp build"])
+
+
+def _find_release_run(repo: str, tag: str, timeout_s: int = 120) -> str | None:
+    """Poll `gh run list` for the Release workflow run triggered by pushing
+    `tag` -- GitHub Actions can take a few seconds to register a run after
+    the push lands, so this retries instead of checking just once."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            ["gh", "run", "list", "--repo", repo, "--workflow", "release.yml",
+             "--branch", tag, "--limit", "1", "--json", "databaseId"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout or "[]")
+            if data:
+                return str(data[0]["databaseId"])
+        time.sleep(5)
+    return None
+
+
+def build_packages(root: Path, repo: str, tag: str, create: bool) -> Path | None:
+    """Push the anonymized snapshot at `root` (which already carries this
+    repo's own `.github/workflows/` -- release.yml included -- redacted like
+    everything else) to `repo`'s `development` branch, tag it `tag`, and wait
+    for the Release workflow to build .deb/.rpm/.AppImage/.exe/.dmg and
+    publish them as GitHub Release assets. Downloads those assets to a fresh
+    temp directory and returns its path, or None if any step failed.
+
+    `repo` (OWNER/NAME) must be a private, throwaway scratch repo under an
+    account you control, used purely as free GitHub Actions compute -- it is
+    NOT the anonymous code link submitted to a venue, which has its own,
+    stricter "brand new identity-less account" requirement (see the
+    "Submitting it" section of docs/_snippets/anonymize-repo.md). This
+    function only ever creates a *private* repo and never touches that real
+    submission link.
+    """
+    if not _ensure_packages_repo(repo, create):
+        return None
+
+    print(f"Pushing anonymized snapshot to {repo} (branch development, tag {tag}) ...")
+    with tempfile.TemporaryDirectory() as tmp:
+        clone_dir = Path(tmp) / "clone"
+        if not _run_ok(["gh", "repo", "clone", repo, str(clone_dir)]):
+            return None
+        run(["git", "-C", str(clone_dir), "config", "user.name", "anonymize_repo.py"])
+        run(["git", "-C", str(clone_dir), "config", "user.email", "actions@users.noreply.github.com"])
+        run(["git", "-C", str(clone_dir), "checkout", "-B", "development"])
+
+        _replace_git_worktree(clone_dir, root)
+
+        run(["git", "-C", str(clone_dir), "add", "-A"])
+        status = run(["git", "-C", str(clone_dir), "status", "--porcelain"])
+        if status:
+            if not _run_ok(
+                ["git", "-C", str(clone_dir), "commit", "-m",
+                 "Anonymized snapshot for CI build (temporary, to be deleted)"]
+            ):
+                return None
+        if not _run_ok(["git", "-C", str(clone_dir), "push", "-f", "origin", "development"]):
+            return None
+        run(["git", "-C", str(clone_dir), "tag", "-f", tag])
+        if not _run_ok(["git", "-C", str(clone_dir), "push", "origin", tag, "--force"]):
+            return None
+
+    print(f"Pushed. Waiting for the Release workflow on tag {tag} to start ...")
+    run_id = _find_release_run(repo, tag)
+    if run_id is None:
+        print(f"Error: no Release run for tag {tag} appeared on {repo} within the timeout.", file=sys.stderr)
+        return None
+
+    print(f"Building packages (run {run_id}) -- this typically takes several minutes ...")
+    watch = subprocess.run(
+        ["gh", "run", "watch", run_id, "--repo", repo, "--interval", "20", "--exit-status"],
+        capture_output=True, text=True,
+    )
+    if watch.returncode != 0:
+        print(
+            f"Error: the Release run failed. See https://github.com/{repo}/actions/runs/{run_id}\n{watch.stdout}",
+            file=sys.stderr,
+        )
+        return None
+
+    packages_dir = Path(tempfile.mkdtemp(prefix="anon-packages-"))
+    if not _run_ok(["gh", "release", "download", tag, "--repo", repo, "--dir", str(packages_dir), "--clobber"]):
+        return None
+    return packages_dir
+
+
+def generate_readme(ref: str, has_pdf: bool, has_packages: bool) -> str:
+    lines = [
+        f"# Anonymized snapshot — {ref}",
+        "",
+        "Contents of this directory, generated by `scripts/anonymize_repo.py` for",
+        "double-blind review.",
+        "",
+        "## Contents",
+        "",
+        "- **`snapshot/`** (+ `snapshot.zip`, `snapshot.report.txt`)",
+        "  The anonymized source tree: full codebase, docs, and any vendored",
+        "  dependency under `snapshot/vendor/` (also redacted) instead of a real",
+        "  git URL. No git history, no author metadata -- exported via `git archive`.",
+        "  `snapshot.report.txt` lists every string the tool's own scan flagged as",
+        "  a possible leftover -- read it before submitting anything.",
+    ]
+    if has_pdf:
+        lines += [
+            "",
+            "- **`manual.pdf`**",
+            "  User + developer documentation, rendered from the anonymized docs tree.",
+        ]
+    if has_packages:
+        lines += [
+            "",
+            "- **`packages/`**",
+            "  Built, installable packages (.deb/.rpm/.AppImage/.exe/.dmg) compiled",
+            "  from the anonymized source tree above.",
+        ]
+    lines += [
+        "",
+        "**This is a strong first pass, not a guarantee.** Read `snapshot.report.txt`",
+        "and skim the source diff against the real repository before submitting",
+        "anything for review.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def assemble_bundle(
+    output: Path,
+    zip_path: Path | None,
+    report_path: Path,
+    pdf_path: Path | None,
+    packages_dir: Path | None,
+    ref: str,
+) -> None:
+    """Reorganize everything this run produced into a single directory at
+    `output`: output/snapshot/ (+ .zip/.report.txt siblings renamed to match),
+    output/manual.pdf, output/packages/, output/README.md. `output` currently
+    *is* the exported snapshot tree; this moves it aside into a temp bundle
+    directory being assembled, then swaps that into place at `output`.
+    """
+    bundle_tmp = Path(tempfile.mkdtemp(prefix="anon-bundle-", dir=str(output.parent)))
+    shutil.move(str(output), str(bundle_tmp / "snapshot"))
+    if zip_path is not None and zip_path.exists():
+        shutil.move(str(zip_path), str(bundle_tmp / "snapshot.zip"))
+    if report_path.exists():
+        shutil.move(str(report_path), str(bundle_tmp / "snapshot.report.txt"))
+    if pdf_path is not None:
+        shutil.move(str(pdf_path), str(bundle_tmp / "manual.pdf"))
+    if packages_dir is not None:
+        shutil.move(str(packages_dir), str(bundle_tmp / "packages"))
+    (bundle_tmp / "README.md").write_text(
+        generate_readme(ref, pdf_path is not None, packages_dir is not None), encoding="utf-8"
+    )
+    shutil.move(str(bundle_tmp), str(output))
+
+
 def verify_protected(root: Path, protected_substrings: list[str]) -> list[str]:
     """Return the list of protected strings that did NOT survive -- should be empty."""
     missing = []
@@ -378,7 +663,39 @@ def main() -> None:
              "vendor_dependencies. REF defaults to HEAD. "
              "Example: --vendor wildintel-trapper-sdk=../wildintel-trapper-sdk#v0.1.0",
     )
+    parser.add_argument("--pdf", action="store_true", help="Also build the anonymized docs into a single PDF manual")
+    parser.add_argument(
+        "--packages-repo", metavar="OWNER/NAME",
+        help="Push the snapshot to this private scratch GitHub repo, tag it, and wait for its "
+             "Release workflow to build .deb/.rpm/.AppImage/.exe/.dmg, then download them. "
+             "Requires the `gh` CLI to be authenticated.",
+    )
+    parser.add_argument(
+        "--packages-create", action="store_true",
+        help="Create --packages-repo (private) first if it doesn't already exist",
+    )
+    parser.add_argument(
+        "--packages-tag",
+        help="Tag to push/release under in --packages-repo (default: --ref, if it looks like vX.Y.Z)",
+    )
+    parser.add_argument(
+        "--bundle", action="store_true",
+        help="Assemble the snapshot, manual.pdf (if --pdf), and packages/ (if --packages-repo) "
+             "into a single directory at --output, with an auto-generated README.md",
+    )
     args = parser.parse_args()
+
+    packages_tag = args.packages_tag
+    if args.packages_repo and not packages_tag:
+        if re.match(r"^v\d+\.\d+\.\d+", args.ref):
+            packages_tag = args.ref
+        else:
+            print(
+                "Error: --packages-tag is required when --ref doesn't look like a version tag "
+                "(vX.Y.Z) for --packages-repo to tag/release under.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     output = Path(args.output).resolve()
     if output.exists() and any(output.iterdir()) and not args.force:
@@ -441,6 +758,8 @@ def main() -> None:
             print("\n!! FAILED: could not regenerate uv.lock -- the snapshot would not `uv sync`/`uv run`.", file=sys.stderr)
             sys.exit(1)
         print("uv.lock regenerated.")
+        if patch_dockerfile_for_vendor(output):
+            print("Patched backend/Dockerfile.build to copy vendor/ into the Linux package build context.")
 
     if build_local_docs(output):
         print("Built backend/site/ so the in-app Help button (/docs/) resolves to the local, anonymized manual.")
@@ -482,11 +801,58 @@ def main() -> None:
         print(f"\nNot zipping. Fix the leak(s) above (likely a missing entry in exclude_paths/strip_sections/strip_lines) and re-run.", file=sys.stderr)
         sys.exit(1)
 
+    zip_path = None
     if args.zip:
-        archive_path = shutil.make_archive(str(output), "zip", root_dir=output)
-        print(f"Zipped: {archive_path}")
+        zip_path = Path(shutil.make_archive(str(output), "zip", root_dir=output))
+        print(f"Zipped: {zip_path}")
 
-    print(f"\nDone. Anonymized snapshot at: {output}")
+    pdf_path = None
+    if args.pdf:
+        pdf_path = build_pdf(output)
+        # Move the PDF out of output/site/pdf/ (and drop that whole transient
+        # docs build) right away, before --packages-repo might push `output`
+        # to a scratch repo -- it's a build artifact, not source, and pushing
+        # it would bloat/slow that push for no reason.
+        transient_site = output / "site"
+        if pdf_path is not None:
+            holder = Path(tempfile.mkdtemp(prefix="anon-manual-")) / "manual.pdf"
+            shutil.move(str(pdf_path), str(holder))
+            pdf_path = holder
+            print(f"Built PDF manual: {pdf_path}")
+        else:
+            print("PDF manual was not built (see warning above).", file=sys.stderr)
+        if transient_site.exists():
+            shutil.rmtree(transient_site)
+
+    packages_dir = None
+    if args.packages_repo:
+        packages_dir = build_packages(output, args.packages_repo, packages_tag, args.packages_create)
+        if packages_dir is not None:
+            print(f"Downloaded packages to: {packages_dir}")
+        else:
+            print("Packages were not built (see error above).", file=sys.stderr)
+
+    if args.bundle:
+        assemble_bundle(output, zip_path, report_path, pdf_path, packages_dir, args.ref)
+        print(f"\nDone. Anonymized bundle at: {output}")
+        print(f"  {output}/snapshot/  {output}/snapshot.zip  {output}/snapshot.report.txt")
+        if pdf_path is not None:
+            print(f"  {output}/manual.pdf")
+        if packages_dir is not None:
+            print(f"  {output}/packages/")
+        print(f"  {output}/README.md")
+    else:
+        print(f"\nDone. Anonymized snapshot at: {output}")
+        if pdf_path is not None:
+            final_pdf = output.parent / f"{output.name}.manual.pdf"
+            shutil.move(str(pdf_path), str(final_pdf))
+            print(f"PDF manual at: {final_pdf}")
+        if packages_dir is not None:
+            final_packages = output.parent / f"{output.name}-packages"
+            if final_packages.exists():
+                shutil.rmtree(final_packages)
+            shutil.move(str(packages_dir), str(final_packages))
+            print(f"Packages at: {final_packages}")
     print("This is a strong first pass, not a guarantee -- read the report and skim the diff before submitting.")
 
 
