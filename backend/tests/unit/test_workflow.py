@@ -1561,3 +1561,64 @@ def test_burst_context_excludes_frames_beyond_gap_seconds(camtrap_dir: Path):
     )
     ctx_ids = set(cands[cands["is_context"] == True]["mediaID"])  # noqa: E712
     assert "m_far_before" not in ctx_ids
+
+
+# ─── build_species_effort ─────────────────────────────────────────────────────
+
+def test_build_species_effort_file_columns_and_total(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import build_species_effort
+    out = tmp_path / "occ"
+    df = build_species_effort(candidates, decisions_dir, out)
+    assert (out / "effort_report.csv").exists()
+    assert list(df["species"]) == ["Vulpes vulpes", "TOTAL"]
+    for col in ("cells_detection", "cells_non_detection", "candidate_events", "events_inspected",
+                "rejections_before_confirm_max", "rejected_score_median", "confirmed_score_median"):
+        assert col in df.columns
+
+def test_build_species_effort_matches_review_effort(candidates, decisions_dir, session_config, tmp_path):
+    from camtrap_workflow import build_species_effort
+    out = tmp_path / "occ"
+    eff = build_species_effort(candidates, decisions_dir, out).iloc[0]
+    build_review_effort(candidates, decisions_dir, session_config, out)
+    glob = pd.read_csv(out / "review_effort.csv").iloc[0]
+    assert eff["cells_detection"] == glob["confirmed_cells"]
+    assert eff["cells_non_detection"] == glob["rejected_cells"]
+    assert eff["events_inspected"] == glob["images_inspected"]
+
+def test_build_species_effort_total_equals_sum(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import build_species_effort
+    df = build_species_effort(candidates, decisions_dir, tmp_path / "occ")
+    sp, tot = df.iloc[:-1], df.iloc[-1]
+    assert tot["events_inspected"] == sp["events_inspected"].sum()
+    assert tot["candidate_cells"] == sp["candidate_cells"].sum()
+
+def test_build_species_effort_rejections_and_scores(candidates, tmp_path):
+    from camtrap_workflow import build_species_effort, save_decisions
+    # confirm the rank-2 event of the first cell with >=2 events
+    cell = candidates.groupby("site_occasion_key")["rank"].max()
+    key = cell[cell >= 2].index[0]
+    sub = candidates[candidates["site_occasion_key"] == key]
+    obs = sub[sub["rank"] == 2].iloc[0]["observationID"]
+    d = tmp_path / "dec"
+    save_decisions(d, candidates, "Vulpes_vulpes", 2, [obs])
+    row = build_species_effort(candidates, d, tmp_path / "o").iloc[0]
+    assert row["rejections_before_confirm_max"] == 1
+    top = pd.to_numeric(sub[sub["rank"] == 1]["classificationProbability"]).max()
+    assert row["rejected_score_max"] == pytest.approx(round(float(top), 3))
+
+def test_build_species_effort_unfinished_cells_are_unverified(candidates, tmp_path):
+    from camtrap_workflow import build_species_effort
+    df = build_species_effort(candidates, tmp_path / "none", tmp_path / "occ",
+                              rounds_done={"Vulpes_vulpes": 0})
+    row = df.iloc[0]
+    assert row["cells_detection"] == 0 and row["cells_non_detection"] == 0
+    assert row["cells_unverified"] == row["candidate_cells"]
+    assert row["events_inspected"] == 0
+
+def test_build_species_effort_without_decisions_all_non_detection(candidates, tmp_path):
+    from camtrap_workflow import build_species_effort
+    df = build_species_effort(candidates, tmp_path / "none", tmp_path / "occ")
+    row = df.iloc[0]
+    assert row["cells_non_detection"] == row["candidate_cells"]
+    assert row["events_inspected"] == row["candidate_events"]
+    assert row["pct_events_inspected"] == 100.0

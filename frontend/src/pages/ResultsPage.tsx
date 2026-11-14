@@ -12,6 +12,24 @@ interface SpeciesRow {
   unverified: number
 }
 
+interface EffortRow {
+  species: string
+  cells_detection: number
+  cells_non_detection: number
+  cells_unverified: number
+  candidate_events: number
+  events_inspected: number
+  pct_events_inspected: number | null
+  events_inspected_in_detection_cells: number
+  events_inspected_in_non_detection_cells: number
+  rejections_before_confirm_mean: number | null
+  rejections_before_confirm_max: number | null
+  rejected_score_min: number | null
+  rejected_score_median: number | null
+  rejected_score_max: number | null
+  confirmed_score_median: number | null
+}
+
 interface Results {
   session_dir: string
   output_dir: string
@@ -25,6 +43,7 @@ interface Results {
   seq_rejected: number
   seq_unverified: number
   by_species_seqs: SpeciesRow[]
+  effort_by_species: EffortRow[]
   datapackage_generated: boolean
   datapackage_fabricated_fields: string[]
 }
@@ -156,6 +175,56 @@ export default function ResultsPage() {
                 <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">{formatP(row.p_verified)}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  const fmt = (v: number | null) => (v === null || v === undefined ? '–' : String(v))
+
+  function EffortTable({ rows }: { rows: EffortRow[] }) {
+    const th = 'text-right py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300'
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-200 dark:border-zinc-700">
+              <th className="text-left py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_species')}</th>
+              <th className={th}>{t('results.effort_col_cells_det')}</th>
+              <th className={th}>{t('results.effort_col_cells_non')}</th>
+              <th className={th}>{t('results.effort_col_cells_unv')}</th>
+              <th className={th}>{t('results.effort_col_events')}</th>
+              <th className={th}>{t('results.effort_col_inspected')}</th>
+              <th className={th}>{t('results.effort_col_pct')}</th>
+              <th className={th}>{t('results.effort_col_insp_det')}</th>
+              <th className={th}>{t('results.effort_col_insp_non')}</th>
+              <th className={th}>{t('results.effort_col_before')}</th>
+              <th className={th}>{t('results.effort_col_rej_score')}</th>
+              <th className={th}>{t('results.effort_col_conf_score')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const isTotal = r.species === 'TOTAL'
+              const td = 'py-2 px-3 text-right text-zinc-700 dark:text-zinc-300'
+              return (
+                <tr key={r.species} className={`border-b border-zinc-100 dark:border-zinc-800 ${isTotal ? 'font-semibold' : ''}`}>
+                  <td className="py-2 px-3 font-mono text-zinc-900 dark:text-zinc-100">{isTotal ? t('results.effort_total') : r.species}</td>
+                  <td className={td}>{r.cells_detection}</td>
+                  <td className={td}>{r.cells_non_detection}</td>
+                  <td className={td}>{r.cells_unverified}</td>
+                  <td className={td}>{r.candidate_events}</td>
+                  <td className={td}>{r.events_inspected}</td>
+                  <td className={td}>{fmt(r.pct_events_inspected)}</td>
+                  <td className={td}>{r.events_inspected_in_detection_cells}</td>
+                  <td className={td}>{r.events_inspected_in_non_detection_cells}</td>
+                  <td className={td}>{fmt(r.rejections_before_confirm_mean)} / {fmt(r.rejections_before_confirm_max)}</td>
+                  <td className={td}>{fmt(r.rejected_score_min)} / {fmt(r.rejected_score_median)} / {fmt(r.rejected_score_max)}</td>
+                  <td className={td}>{fmt(r.confirmed_score_median)}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -299,6 +368,17 @@ export default function ResultsPage() {
           <div className={cardHeader}>{t('results.by_species')}</div>
           <BreakdownTable rows={results.by_species_seqs} />
         </div>
+      )}
+
+      {/* Verification effort */}
+      {results.effort_by_species?.length > 0 && (
+        <>
+          <h5 className="text-base font-semibold mb-1">{t('results.effort_title')}</h5>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-3 text-sm">{t('results.effort_hint')} {t('results.effort_csv')}</p>
+          <div className={`${cardClass} mb-10`}>
+            <EffortTable rows={results.effort_by_species} />
+          </div>
+        </>
       )}
 
       {/* Occupancy */}

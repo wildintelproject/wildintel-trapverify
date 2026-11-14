@@ -508,3 +508,4 @@ Each session is saved in a timestamped subfolder inside the output directory (e.
 | `dethist_verified_{sp}.csv` | Verified detection history per species (confirmed by expert). One file per species. |
 | `verification_summary.csv` | Per-species summary: confirmed, rejected and unreviewed counts. |
 | `review_effort.csv` | Total review effort: number of detection events and images inspected. |
+| `effort_report.csv` | Effort per species and in total, in detection events and cells: cells with and without detection, events inspected in each, rejections before the first confirmation, and the scores of rejected and confirmed events. *Inspecting* an event means viewing its top-scoring photo, so `photos_inspected` equals `events_inspected`; `candidate_events` is the baseline of a full event-level review. |

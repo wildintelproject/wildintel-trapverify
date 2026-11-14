@@ -11,7 +11,7 @@ import re
 import pandas as pd
 from fastapi import HTTPException
 
-from camtrap_workflow import confirmed_keys_set
+from camtrap_workflow import build_species_effort, confirmed_keys_set
 from services import session_service
 
 logger = logging.getLogger(__name__)
@@ -153,6 +153,8 @@ def compute_results() -> dict:
         int(p_counts.get("rejected", 0)),
         int(p_counts.get("unverified", 0)),
     )
+    effort_df = build_species_effort(candidates, decisions_dir, p["occupancy_out"], iter_by_sp)
+    effort_by_species = json.loads(effort_df.to_json(orient="records"))
     datapackage_generated, datapackage_fabricated_fields = _datapackage_warning(p["camtrap_out"])
     return {
         "session_dir":     str(session_service.session_dir()),
@@ -170,4 +172,5 @@ def compute_results() -> dict:
         "seq_rejected":    int(s_counts.get("rejected", 0)),
         "seq_unverified":  int(s_counts.get("unverified", 0)),
         "by_species_seqs": by_species_seqs,
+        "effort_by_species": effort_by_species,
     }
