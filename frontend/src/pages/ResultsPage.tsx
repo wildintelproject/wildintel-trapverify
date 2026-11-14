@@ -185,49 +185,63 @@ export default function ResultsPage() {
 
   const fmt = (v: number | null) => (v === null || v === undefined ? '–' : String(v))
 
-  function EffortTable({ rows }: { rows: EffortRow[] }) {
-    const th = 'text-right py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300'
+  function EffortTable({ rows, part }: { rows: EffortRow[]; part: 'counts' | 'detail' }) {
+    const th = 'text-right py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300'
+    const td = 'py-2 px-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap'
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-200 dark:border-zinc-700">
-              <th className="text-left py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_species')}</th>
-              <th className={th}>{t('results.effort_col_cells_det')}</th>
-              <th className={th}>{t('results.effort_col_cells_non')}</th>
-              <th className={th}>{t('results.effort_col_cells_unv')}</th>
-              <th className={th}>{t('results.effort_col_events')}</th>
-              <th className={th}>{t('results.effort_col_inspected')}</th>
-              <th className={th}>{t('results.effort_col_pct')}</th>
-              <th className={th}>{t('results.effort_col_photos')}</th>
-              <th className={th}>{t('results.effort_col_photos_insp')}</th>
-              <th className={th}>{t('results.effort_col_insp_det')}</th>
-              <th className={th}>{t('results.effort_col_insp_non')}</th>
-              <th className={th}>{t('results.effort_col_before')}</th>
-              <th className={th}>{t('results.effort_col_rej_score')}</th>
-              <th className={th}>{t('results.effort_col_conf_score')}</th>
+              <th className="text-left py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_species')}</th>
+              {part === 'counts' ? (
+                <>
+                  <th className={th}>{t('results.effort_col_cells_det')}</th>
+                  <th className={th}>{t('results.effort_col_cells_non')}</th>
+                  <th className={th}>{t('results.effort_col_cells_unv')}</th>
+                  <th className={th}>{t('results.effort_col_events')}</th>
+                  <th className={th}>{t('results.effort_col_inspected')}</th>
+                  <th className={th}>{t('results.effort_col_pct')}</th>
+                  <th className={th}>{t('results.effort_col_photos')}</th>
+                  <th className={th}>{t('results.effort_col_photos_insp')}</th>
+                </>
+              ) : (
+                <>
+                  <th className={th}>{t('results.effort_col_insp_det')}</th>
+                  <th className={th}>{t('results.effort_col_insp_non')}</th>
+                  <th className={th}>{t('results.effort_col_before')}</th>
+                  <th className={th}>{t('results.effort_col_rej_score')}</th>
+                  <th className={th}>{t('results.effort_col_conf_score')}</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => {
               const isTotal = r.species === 'TOTAL'
-              const td = 'py-2 px-3 text-right text-zinc-700 dark:text-zinc-300'
               return (
                 <tr key={r.species} className={`border-b border-zinc-100 dark:border-zinc-800 ${isTotal ? 'font-semibold' : ''}`}>
-                  <td className="py-2 px-3 font-mono text-zinc-900 dark:text-zinc-100">{isTotal ? t('results.effort_total') : r.species}</td>
-                  <td className={td}>{r.cells_detection}</td>
-                  <td className={td}>{r.cells_non_detection}</td>
-                  <td className={td}>{r.cells_unverified}</td>
-                  <td className={td}>{r.candidate_events}</td>
-                  <td className={td}>{r.events_inspected}</td>
-                  <td className={td}>{fmt(r.pct_events_inspected)}</td>
-                  <td className={td}>{r.candidate_photos}</td>
-                  <td className={td}>{r.photos_in_inspected_events}</td>
-                  <td className={td}>{r.events_inspected_in_detection_cells}</td>
-                  <td className={td}>{r.events_inspected_in_non_detection_cells}</td>
-                  <td className={td}>{fmt(r.rejections_before_confirm_mean)} / {fmt(r.rejections_before_confirm_max)}</td>
-                  <td className={td}>{fmt(r.rejected_score_min)} / {fmt(r.rejected_score_median)} / {fmt(r.rejected_score_max)}</td>
-                  <td className={td}>{fmt(r.confirmed_score_median)}</td>
+                  <td className="py-2 px-2 font-mono text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{isTotal ? t('results.effort_total') : r.species}</td>
+                  {part === 'counts' ? (
+                    <>
+                      <td className={td}>{r.cells_detection}</td>
+                      <td className={td}>{r.cells_non_detection}</td>
+                      <td className={td}>{r.cells_unverified}</td>
+                      <td className={td}>{r.candidate_events}</td>
+                      <td className={td}>{r.events_inspected}</td>
+                      <td className={td}>{fmt(r.pct_events_inspected)}</td>
+                      <td className={td}>{r.candidate_photos}</td>
+                      <td className={td}>{r.photos_in_inspected_events}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td className={td}>{r.events_inspected_in_detection_cells}</td>
+                      <td className={td}>{r.events_inspected_in_non_detection_cells}</td>
+                      <td className={td}>{fmt(r.rejections_before_confirm_mean)} / {fmt(r.rejections_before_confirm_max)}</td>
+                      <td className={td}>{fmt(r.rejected_score_min)} / {fmt(r.rejected_score_median)} / {fmt(r.rejected_score_max)}</td>
+                      <td className={td}>{fmt(r.confirmed_score_median)}</td>
+                    </>
+                  )}
                 </tr>
               )
             })}
@@ -381,8 +395,11 @@ export default function ResultsPage() {
         <>
           <h5 className="text-base font-semibold mb-1">{t('results.effort_title')}</h5>
           <p className="text-zinc-500 dark:text-zinc-400 mb-3 text-sm">{t('results.effort_hint')} {t('results.effort_csv')}</p>
+          <div className={`${cardClass} mb-4`}>
+            <EffortTable rows={results.effort_by_species} part="counts" />
+          </div>
           <div className={`${cardClass} mb-10`}>
-            <EffortTable rows={results.effort_by_species} />
+            <EffortTable rows={results.effort_by_species} part="detail" />
           </div>
         </>
       )}
