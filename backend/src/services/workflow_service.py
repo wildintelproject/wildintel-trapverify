@@ -18,6 +18,7 @@ from camtrap_workflow import (
     build_occupancy_inputs,
     build_review_effort,
     build_species_effort,
+    rounds_completed,
     clear_media_caches,
     export_verified_camtrapdp,
     find_flat_search_ambiguities,
@@ -46,7 +47,9 @@ def rebuild_outputs() -> None:
     )
     build_occupancy_inputs(candidates, p["decisions"], config, p["occupancy_out"])
     build_review_effort(candidates, p["decisions"], config, p["occupancy_out"])
-    build_species_effort(candidates, p["decisions"], p["occupancy_out"])
+    build_species_effort(
+        candidates, p["decisions"], p["occupancy_out"], rounds_completed(p["decisions"])
+    )
     fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))
     logger.info("Output files rebuilt successfully")
 

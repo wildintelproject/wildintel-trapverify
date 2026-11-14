@@ -6,12 +6,11 @@ and detection event (burst) level, for the active session.
 """
 import json
 import logging
-import re
 
 import pandas as pd
 from fastapi import HTTPException
 
-from camtrap_workflow import build_species_effort, confirmed_keys_set
+from camtrap_workflow import build_species_effort, confirmed_keys_set, rounds_completed
 from services import session_service
 
 logger = logging.getLogger(__name__)
@@ -55,13 +54,7 @@ def compute_results() -> dict:
     decisions_dir = p["decisions"]
 
     # ── Rounds completed per species ──────────────────────────────────────────
-    iter_by_sp: dict[str, int] = {}
-    if decisions_dir.exists():
-        for f in decisions_dir.glob("*.csv"):
-            m = re.match(r"decisions_(.+)_iter(\d+)\.csv", f.name)
-            if m:
-                sp, it = m.group(1), int(m.group(2))
-                iter_by_sp[sp] = max(iter_by_sp.get(sp, 0), it)
+    iter_by_sp = rounds_completed(decisions_dir)
 
     # ── Confirmed keys and burst mapping ─────────────────────────────────────
     conf_keys = confirmed_keys_set(decisions_dir) if decisions_dir.exists() else set()

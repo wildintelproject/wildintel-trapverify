@@ -1682,6 +1682,17 @@ def build_review_effort(
     pd.DataFrame([row]).to_csv(out_dir / "review_effort.csv", index=False)
 
 
+def rounds_completed(decisions_dir: Path) -> dict[str, int]:
+    """Return ``species_safe`` -> highest completed round, from ``decisions_*_iter<N>.csv``."""
+    done: dict[str, int] = {}
+    if decisions_dir.exists():
+        for f in decisions_dir.glob("decisions_*_iter*.csv"):
+            m = re.match(r"decisions_(.+)_iter(\d+)\.csv", f.name)
+            if m:
+                done[m.group(1)] = max(done.get(m.group(1), 0), int(m.group(2)))
+    return done
+
+
 def build_species_effort(
     candidates: pd.DataFrame,
     decisions_dir: Path,
