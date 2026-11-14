@@ -20,6 +20,8 @@ interface EffortRow {
   candidate_events: number
   events_inspected: number
   pct_events_inspected: number | null
+  candidate_photos: number
+  photos_in_inspected_events: number
   events_inspected_in_detection_cells: number
   events_inspected_in_non_detection_cells: number
   rejections_before_confirm_mean: number | null
@@ -197,6 +199,8 @@ export default function ResultsPage() {
               <th className={th}>{t('results.effort_col_events')}</th>
               <th className={th}>{t('results.effort_col_inspected')}</th>
               <th className={th}>{t('results.effort_col_pct')}</th>
+              <th className={th}>{t('results.effort_col_photos')}</th>
+              <th className={th}>{t('results.effort_col_photos_insp')}</th>
               <th className={th}>{t('results.effort_col_insp_det')}</th>
               <th className={th}>{t('results.effort_col_insp_non')}</th>
               <th className={th}>{t('results.effort_col_before')}</th>
@@ -217,6 +221,8 @@ export default function ResultsPage() {
                   <td className={td}>{r.candidate_events}</td>
                   <td className={td}>{r.events_inspected}</td>
                   <td className={td}>{fmt(r.pct_events_inspected)}</td>
+                  <td className={td}>{r.candidate_photos}</td>
+                  <td className={td}>{r.photos_in_inspected_events}</td>
                   <td className={td}>{r.events_inspected_in_detection_cells}</td>
                   <td className={td}>{r.events_inspected_in_non_detection_cells}</td>
                   <td className={td}>{fmt(r.rejections_before_confirm_mean)} / {fmt(r.rejections_before_confirm_max)}</td>

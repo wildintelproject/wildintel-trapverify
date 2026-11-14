@@ -254,6 +254,8 @@
     "effort_col_events": "Zdarzenia kandydujące",
     "effort_col_inspected": "Sprawdzone zdarzenia",
     "effort_col_pct": "% zdarzeń",
+    "effort_col_photos": "Zdjęcia kandydujące",
+    "effort_col_photos_insp": "Zdjęcia w sprawdzonych zdarzeniach",
     "effort_col_insp_det": "Sprawdzone w komórkach z detekcją",
     "effort_col_insp_non": "Sprawdzone w komórkach bez detekcji",
     "effort_col_before": "Odrzucenia przed potwierdzeniem (średnia / maks.)",

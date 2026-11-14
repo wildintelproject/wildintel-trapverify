@@ -254,6 +254,8 @@
     "effort_col_events": "Candidate events",
     "effort_col_inspected": "Events inspected",
     "effort_col_pct": "% of events",
+    "effort_col_photos": "Candidate photos",
+    "effort_col_photos_insp": "Photos in inspected events",
     "effort_col_insp_det": "Inspected in detection cells",
     "effort_col_insp_non": "Inspected in non-detection cells",
     "effort_col_before": "Rejections before confirmation (mean / max)",
