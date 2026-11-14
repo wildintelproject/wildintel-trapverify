@@ -18,6 +18,7 @@ from camtrap_workflow import (
     build_occupancy_inputs,
     build_review_effort,
     build_species_effort,
+    compute_min_score_exclusions,
     rounds_completed,
     clear_media_caches,
     export_verified_camtrapdp,
@@ -47,8 +48,10 @@ def rebuild_outputs() -> None:
     )
     build_occupancy_inputs(candidates, p["decisions"], config, p["occupancy_out"])
     build_review_effort(candidates, p["decisions"], config, p["occupancy_out"])
+    exclusions = pd.read_csv(p["exclusions"]) if p["exclusions"].exists() else None
     build_species_effort(
-        candidates, p["decisions"], p["occupancy_out"], rounds_completed(p["decisions"])
+        candidates, p["decisions"], p["occupancy_out"], rounds_completed(p["decisions"]),
+        exclusions=exclusions,
     )
     fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))
     logger.info("Output files rebuilt successfully")
@@ -106,6 +109,16 @@ def run_setup(req: SetupRequest) -> dict:
 
     (sd / "config.json").write_text(json.dumps(config, indent=2))
     candidates.to_csv(sd / "candidate_manifest.csv", index=False)
+    compute_min_score_exclusions(
+        candidates, dep, med, obs,
+        target_species=req.target_species,
+        study_start=date.fromisoformat(req.study_start),
+        study_end=date.fromisoformat(req.study_end),
+        occasion_days=req.occasion_days,
+        total_iterations=req.total_iterations,
+        gap_seconds=req.gap_seconds,
+        min_score=req.min_score,
+    ).to_csv(sd / "min_score_exclusions.csv", index=False)
 
     session_service.APP_DIR.mkdir(parents=True, exist_ok=True)
     session_service.SESSION_FILE.write_text(json.dumps({"session_dir": str(sd)}))

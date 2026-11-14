@@ -1622,3 +1622,47 @@ def test_build_species_effort_without_decisions_all_non_detection(candidates, tm
     assert row["cells_non_detection"] == row["candidate_cells"]
     assert row["events_inspected"] == row["candidate_events"]
     assert row["pct_events_inspected"] == 100.0
+
+
+# ─── compute_min_score_exclusions ─────────────────────────────────────────────
+# Fixture scores: m001=0.9 m002=0.8 (A occ1 ev0), m005=0.6 (A occ1 ev1), m003=0.7 (A occ2), m004=0.85 (B occ1)
+
+def _exclusions(camtrap_dir, min_score):
+    from camtrap_workflow import build_candidates, compute_min_score_exclusions
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    kw = dict(target_species=["Vulpes vulpes"], study_start=date(2025, 11, 1),
+              study_end=date(2025, 11, 10), occasion_days=5, total_iterations=100_000,
+              gap_seconds=60)
+    kept = build_candidates(dep, med, obs, min_score=min_score, **kw)
+    return compute_min_score_exclusions(kept, dep, med, obs, min_score=min_score, **kw).iloc[0]
+
+def test_exclusions_zero_without_cutoff(camtrap_dir):
+    r = _exclusions(camtrap_dir, 0.0)
+    assert (r["excluded_photos"], r["excluded_events"], r["excluded_cells"]) == (0, 0, 0)
+
+def test_exclusions_score_equal_to_cutoff_is_kept(camtrap_dir):
+    r = _exclusions(camtrap_dir, 0.6)          # m005 scores exactly 0.6
+    assert (r["excluded_photos"], r["excluded_events"], r["excluded_cells"]) == (0, 0, 0)
+
+def test_exclusions_just_above_boundary_removes_event_not_cell(camtrap_dir):
+    r = _exclusions(camtrap_dir, 0.61)         # m005 (0.6) now below: event lost, cell A/occ1 keeps burst 0
+    assert (r["excluded_photos"], r["excluded_events"], r["excluded_cells"]) == (1, 1, 0)
+
+def test_exclusions_high_cutoff_removes_cells(camtrap_dir):
+    r = _exclusions(camtrap_dir, 0.95)         # everything below
+    assert (r["excluded_photos"], r["excluded_events"], r["excluded_cells"]) == (5, 4, 3)
+
+def test_exclusions_partial_cutoff_counts_cells(camtrap_dir):
+    r = _exclusions(camtrap_dir, 0.75)         # drops m003 (0.7) and m005 (0.6): cell A/occ2 lost
+    assert r["excluded_photos"] == 2
+    assert r["excluded_events"] == 2
+    assert r["excluded_cells"] == 1
+
+def test_effort_report_includes_exclusion_columns(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import build_species_effort
+    ex = pd.DataFrame({"species": ["Vulpes vulpes"], "excluded_photos": [4],
+                       "excluded_events": [3], "excluded_cells": [2]})
+    df = build_species_effort(candidates, decisions_dir, tmp_path / "o", exclusions=ex)
+    assert df.iloc[0]["excluded_photos"] == 4 and df.iloc[-1]["excluded_cells"] == 2
+    df2 = build_species_effort(candidates, decisions_dir, tmp_path / "o2")
+    assert df2["excluded_photos"].isna().all()

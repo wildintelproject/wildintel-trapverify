@@ -1682,6 +1682,78 @@ def build_review_effort(
     pd.DataFrame([row]).to_csv(out_dir / "review_effort.csv", index=False)
 
 
+def compute_min_score_exclusions(
+    candidates: pd.DataFrame,
+    dep: pd.DataFrame,
+    med: pd.DataFrame,
+    obs: pd.DataFrame,
+    target_species: list[str],
+    study_start: date,
+    study_end: date,
+    occasion_days: int,
+    total_iterations: int,
+    gap_seconds: int,
+    min_score: float,
+) -> pd.DataFrame:
+    """Count what the ``min_score`` cut-off removed from the review, per species.
+
+    ``build_candidates`` drops frames whose classification probability is
+    strictly below ``min_score`` (a frame scoring exactly ``min_score`` or with
+    no score is kept), so those photos can never reach the reviewer. This
+    rebuilds the candidates without the cut-off and compares them with the ones
+    actually kept (``candidates``):
+
+    * ``excluded_photos``: frames removed by the cut-off.
+    * ``excluded_events``: detection events made only of removed frames.
+    * ``excluded_cells``: site x occasion cells left with no candidate at all
+      (a true detection there cannot be recovered).
+
+    Args:
+        candidates: Candidates built *with* the cut-off.
+        dep, med, obs: Loaded CamtrapDP tables.
+        target_species, study_start, study_end, occasion_days, total_iterations,
+            gap_seconds: Same values used to build ``candidates``.
+        min_score: The cut-off. When ``<= 0`` nothing is excluded.
+
+    Returns:
+        One row per target species with ``species``, ``excluded_photos``,
+        ``excluded_events`` and ``excluded_cells`` (all 0 without a cut-off).
+    """
+    zero = pd.DataFrame({
+        "species": list(target_species),
+        "excluded_photos": 0, "excluded_events": 0, "excluded_cells": 0,
+    })
+    if min_score <= 0:
+        return zero
+    full = build_candidates(
+        dep, med, obs,
+        target_species=target_species, study_start=study_start, study_end=study_end,
+        occasion_days=occasion_days, total_iterations=total_iterations,
+        gap_seconds=gap_seconds, include_burst_context=False, min_score=0.0,
+    )
+    if full.empty:
+        return zero
+    kept = candidates
+    if not kept.empty and "is_context" in kept.columns:
+        kept = kept[~kept["is_context"].astype(bool)]
+    kept_keys = set(zip(kept["species_safe"], kept["mediaID"])) if not kept.empty else set()
+    full = full.copy()
+    full["_kept"] = [k in kept_keys for k in zip(full["species_safe"], full["mediaID"])]
+
+    rows = []
+    for sp in target_species:
+        sub = full[full["scientificName"] == sp]
+        ev = sub.groupby(["site_occasion_key", "burst_id"])["_kept"].any()
+        cell = sub.groupby("site_occasion_key")["_kept"].any()
+        rows.append({
+            "species": sp,
+            "excluded_photos": int((~sub["_kept"]).sum()),
+            "excluded_events": int((~ev).sum()),
+            "excluded_cells":  int((~cell).sum()),
+        })
+    return pd.DataFrame(rows)
+
+
 def rounds_completed(decisions_dir: Path) -> dict[str, int]:
     """Return ``species_safe`` -> highest completed round, from ``decisions_*_iter<N>.csv``."""
     done: dict[str, int] = {}
@@ -1698,6 +1770,7 @@ def build_species_effort(
     decisions_dir: Path,
     out_dir: Path,
     rounds_done: Optional[dict[str, int]] = None,
+    exclusions: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """Generate ``effort_report.csv``: verification effort per species plus a total row.
 
@@ -1720,11 +1793,16 @@ def build_species_effort(
       the confirmed one, over detection cells.
     * ``rejected_score_{min,median,max}``: score of every rejected event.
     * ``confirmed_score_{min,median,max}``: score of the confirmed event.
+    * ``excluded_photos`` / ``excluded_events`` / ``excluded_cells``: what the
+      ``min_score`` cut-off removed before review (see
+      :func:`compute_min_score_exclusions`); empty when ``exclusions`` is not given.
 
     Args:
         candidates: Full candidate manifest DataFrame.
         decisions_dir: Directory containing decision CSVs.
         out_dir: Destination directory (created if absent).
+        exclusions: Optional per-species output of
+            :func:`compute_min_score_exclusions` to include in the report.
         rounds_done: Optional ``species_safe`` -> completed rounds. When given,
             a cell with no confirmation whose events are not all inspected yet
             is ``cells_unverified`` and only events of rank <= rounds count as
@@ -1810,5 +1888,14 @@ def build_species_effort(
     if rows:
         rows.append(build_row("TOTAL", total))
     df = pd.DataFrame(rows)
+    cols = ["excluded_photos", "excluded_events", "excluded_cells"]
+    if exclusions is not None and not df.empty:
+        ex = exclusions.set_index("species")[cols]
+        for c in cols:
+            df[c] = df["species"].map(ex[c])
+            df.loc[df["species"] == "TOTAL", c] = int(ex[c].sum())
+    else:
+        for c in cols:
+            df[c] = None
     df.to_csv(out_dir / "effort_report.csv", index=False)
     return df

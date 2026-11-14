@@ -304,7 +304,16 @@ These control how the data is segmented into reviewable units.
 |---|---|---|
 | **Sampling occasion duration (days)** | 5 | Groups images at a location into windows of N days. The number of occasions adapts automatically to the study duration. |
 | **Gap between detection events (seconds)** | 60 | Images less than N seconds apart at the same site belong to the same detection event. |
-| **Minimum detection score** | 0.5 | Detections below this confidence threshold are excluded from the candidate set. |
+| **Minimum detection score** | 0.5 | Detections scoring **below** this threshold are excluded from the candidate set (a score equal to the threshold is kept, and a photo with no score is never excluded). See [When to use a minimum score](#when-to-use-a-minimum-score). |
+
+#### When to use a minimum score
+
+The cut-off trades completeness for effort. Photos below it are **never shown to the reviewer**, so a true detection scored lower than the cut-off cannot be found or recovered, and the effort savings and the verified results hold **only for candidates at or above the cut-off**.
+
+- **Use a cut-off** when the classifier produces many very low-confidence labels that are almost always wrong, and the species is well recognised by the model (so true detections rarely score low).
+- **Avoid it, or set it to 0**, for species the classifier handles poorly (for example nocturnal or partly visible animals), because their true detections are the ones most likely to fall below the cut-off. Low-confidence labels are exactly the images most worth checking.
+
+When a cut-off is active, the Results page shows a notice and a table with, per species, the photos and detection events removed and the sampling-occasion cells left with no candidate at all (the same figures are in `effort_report.csv` as `excluded_photos`, `excluded_events` and `excluded_cells`). Report them alongside any claim about effort saved.
 
 #### Confirmation parameters
 

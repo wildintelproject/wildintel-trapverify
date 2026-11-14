@@ -1264,3 +1264,30 @@ def test_effort_report_total_matches_results_when_finished(client, setup_session
     assert tot["cells_detection"] == data["confirmed"]
     assert tot["cells_non_detection"] == data["rejected"]
     assert tot["cells_unverified"] == data["unverified"]
+
+
+# ─── min_score exclusions ─────────────────────────────────────────────────────
+
+def _setup_with_min_score(client, camtrap_dir, tmp_path, min_score):
+    resp = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"),
+        "target_species": ["Vulpes vulpes"], "study_start": "2025-11-01",
+        "study_end": "2025-11-10", "occasion_days": 5, "total_iterations": 100_000,
+        "gap_seconds": 60, "min_score": min_score,
+    })
+    assert resp.status_code == 200
+    return resp.json()
+
+def test_results_report_exclusions_with_active_cutoff(client, camtrap_dir, tmp_path):
+    _setup_with_min_score(client, camtrap_dir, tmp_path, 0.75)
+    data = client.get("/api/results").json()
+    assert data["min_score"] == 0.75
+    tot = next(r for r in data["effort_by_species"] if r["species"] == "TOTAL")
+    assert tot["excluded_photos"] == 2 and tot["excluded_cells"] == 1
+
+def test_results_exclusions_zero_without_cutoff(client, camtrap_dir, tmp_path):
+    _setup_with_min_score(client, camtrap_dir, tmp_path, 0.0)
+    data = client.get("/api/results").json()
+    assert data["min_score"] == 0
+    tot = next(r for r in data["effort_by_species"] if r["species"] == "TOTAL")
+    assert (tot["excluded_photos"], tot["excluded_events"], tot["excluded_cells"]) == (0, 0, 0)

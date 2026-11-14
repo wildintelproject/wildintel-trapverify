@@ -146,7 +146,10 @@ def compute_results() -> dict:
         int(p_counts.get("rejected", 0)),
         int(p_counts.get("unverified", 0)),
     )
-    effort_df = build_species_effort(candidates, decisions_dir, p["occupancy_out"], iter_by_sp)
+    exclusions = pd.read_csv(p["exclusions"]) if p["exclusions"].exists() else None
+    effort_df = build_species_effort(
+        candidates, decisions_dir, p["occupancy_out"], iter_by_sp, exclusions=exclusions,
+    )
     effort_by_species = json.loads(effort_df.to_json(orient="records"))
     datapackage_generated, datapackage_fabricated_fields = _datapackage_warning(p["camtrap_out"])
     return {
@@ -166,4 +169,5 @@ def compute_results() -> dict:
         "seq_unverified":  int(s_counts.get("unverified", 0)),
         "by_species_seqs": by_species_seqs,
         "effort_by_species": effort_by_species,
+        "min_score":       float((session_service.get_config() or {}).get("min_score", 0) or 0),
     }
