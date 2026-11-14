@@ -1680,3 +1680,135 @@ def build_review_effort(
         "pct_of_archive":          pct(inspected, total_media),
     }
     pd.DataFrame([row]).to_csv(out_dir / "review_effort.csv", index=False)
+
+
+def rounds_completed(decisions_dir: Path) -> dict[str, int]:
+    """Return ``species_safe`` -> highest completed round, from ``decisions_*_iter<N>.csv``."""
+    done: dict[str, int] = {}
+    if decisions_dir.exists():
+        for f in decisions_dir.glob("decisions_*_iter*.csv"):
+            m = re.match(r"decisions_(.+)_iter(\d+)\.csv", f.name)
+            if m:
+                done[m.group(1)] = max(done.get(m.group(1), 0), int(m.group(2)))
+    return done
+
+
+def build_species_effort(
+    candidates: pd.DataFrame,
+    decisions_dir: Path,
+    out_dir: Path,
+    rounds_done: Optional[dict[str, int]] = None,
+) -> pd.DataFrame:
+    """Generate ``effort_report.csv``: verification effort per species plus a total row.
+
+    "Inspecting" a detection event means viewing its top-scoring photo, so
+    ``photos_inspected`` equals ``events_inspected``; ``photos_in_inspected_events``
+    counts every photo of those events for readers who review whole events.
+
+    Columns (one row per species, then ``TOTAL``):
+
+    * ``candidate_cells``, ``cells_detection``, ``cells_non_detection``,
+      ``cells_unverified``: cells = site x occasion. A cell is a detection when
+      any of its events was confirmed, a non-detection when all its events were
+      inspected and rejected, unverified while rounds remain.
+    * ``candidate_events``, ``events_inspected``, ``pct_events_inspected``:
+      the event-level baseline is a full review of ``candidate_events``.
+    * ``candidate_photos``, ``photos_inspected``, ``photos_in_inspected_events``.
+    * ``events_inspected_in_detection_cells`` / ``events_inspected_in_non_detection_cells``:
+      effort split by cell outcome.
+    * ``rejections_before_confirm_{mean,median,max}``: rejected events before
+      the confirmed one, over detection cells.
+    * ``rejected_score_{min,median,max}``: score of every rejected event.
+    * ``confirmed_score_{min,median,max}``: score of the confirmed event.
+
+    Args:
+        candidates: Full candidate manifest DataFrame.
+        decisions_dir: Directory containing decision CSVs.
+        out_dir: Destination directory (created if absent).
+        rounds_done: Optional ``species_safe`` -> completed rounds. When given,
+            a cell with no confirmation whose events are not all inspected yet
+            is ``cells_unverified`` and only events of rank <= rounds count as
+            effort. When omitted every non-confirmed cell is a non-detection.
+
+    Returns:
+        The DataFrame written to disk.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dec = load_all_decisions(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
+    conf_ids = set(dec["observationID"].dropna()) if not dec.empty else set()
+
+    cand = candidates.copy()
+    if "is_context" in cand.columns:
+        cand = cand[~cand["is_context"].astype(bool)]
+    cand["_score"] = pd.to_numeric(cand["classificationProbability"], errors="coerce")
+
+    def stats(values: list[float], prefix: str, names=("min", "median", "max")) -> dict:
+        s_ = pd.Series(values, dtype=float).dropna()
+        fn = {"min": s_.min, "median": s_.median, "max": s_.max, "mean": s_.mean}
+        return {f"{prefix}_{n}": (round(float(fn[n]()), 3) if not s_.empty else None) for n in names}
+
+    def build_row(label: str, acc: dict) -> dict:
+        n_cells = acc["det"] + acc["non"] + acc["unv"]
+        row = {
+            "species": label,
+            "candidate_cells": n_cells,
+            "cells_detection": acc["det"],
+            "cells_non_detection": acc["non"],
+            "cells_unverified": acc["unv"],
+            "candidate_events": acc["events"],
+            "events_inspected": acc["insp"],
+            "pct_events_inspected": round(100 * acc["insp"] / acc["events"], 1) if acc["events"] else None,
+            "candidate_photos": acc["photos"],
+            "photos_inspected": acc["insp"],
+            "photos_in_inspected_events": acc["photos_insp"],
+            "events_inspected_in_detection_cells": acc["insp_det"],
+            "events_inspected_in_non_detection_cells": acc["insp_non"],
+        }
+        row.update(stats(acc["before"], "rejections_before_confirm", ("mean", "median", "max")))
+        row.update(stats(acc["rej_scores"], "rejected_score"))
+        row.update(stats(acc["conf_scores"], "confirmed_score"))
+        return row
+
+    def new_acc() -> dict:
+        return {"det": 0, "non": 0, "unv": 0, "events": 0, "insp": 0, "photos": 0,
+                "photos_insp": 0, "insp_det": 0, "insp_non": 0,
+                "before": [], "rej_scores": [], "conf_scores": []}
+
+    total = new_acc()
+    rows = []
+    for sp_safe, sp_df in cand.groupby("species_safe", sort=True):
+        acc = new_acc()
+        done = None if rounds_done is None else rounds_done.get(str(sp_safe), 0)
+        for _, cell in sp_df.groupby("site_occasion_key"):
+            ev = cell.groupby("burst_id").agg(rank=("rank", "first"), score=("_score", "max"))
+            acc["events"] += len(ev)
+            acc["photos"] += len(cell)
+            conf_rank = cell.loc[cell["observationID"].isin(conf_ids), "rank"]
+            if not conf_rank.empty:
+                cr = int(conf_rank.min())
+                seen = ev[ev["rank"] <= cr]
+                before = ev[ev["rank"] < cr]
+                acc["det"] += 1
+                acc["insp_det"] += len(seen)
+                acc["before"].append(len(before))
+                acc["rej_scores"] += before["score"].dropna().tolist()
+                acc["conf_scores"] += ev[ev["rank"] == cr]["score"].dropna().tolist()
+            else:
+                seen = ev if done is None else ev[ev["rank"] <= done]
+                if len(seen) < len(ev):
+                    acc["unv"] += 1
+                else:
+                    acc["non"] += 1
+                acc["insp_non"] += len(seen)
+                acc["rej_scores"] += seen["score"].dropna().tolist()
+            acc["insp"] += len(seen)
+            acc["photos_insp"] += int(cell["burst_id"].isin(
+                cell[cell["rank"].isin(seen["rank"])]["burst_id"]).sum())
+        rows.append(build_row(sp_df["scientificName"].iloc[0], acc))
+        for k, v in acc.items():
+            total[k] = total[k] + v
+    if rows:
+        rows.append(build_row("TOTAL", total))
+    df = pd.DataFrame(rows)
+    df.to_csv(out_dir / "effort_report.csv", index=False)
+    return df

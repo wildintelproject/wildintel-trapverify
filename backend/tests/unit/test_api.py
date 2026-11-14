@@ -1231,3 +1231,36 @@ def test_serve_image_structured_precedence_over_wrong_absolute_filepath(client, 
 
     resp = client.get("/api/image/m001")
     assert resp.status_code == 200
+
+
+# ─── effort report ↔ results consistency ──────────────────────────────────────
+
+def _effort_csv(setup_session):
+    import pandas as pd
+    from pathlib import Path
+    return pd.read_csv(Path(setup_session["session_dir"]) / "occupancy_inputs" / "effort_report.csv")
+
+def test_effort_report_total_matches_results_on_partial_session(client, setup_session):
+    events = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    client.post("/api/decisions", json={
+        "species": "Vulpes_vulpes", "iteration": 1, "confirmed": [events[0]["repObsId"]],
+    })
+    csv_total = _effort_csv(setup_session).iloc[-1]       # written on save, before Results
+    data = client.get("/api/results").json()
+    tot = next(r for r in data["effort_by_species"] if r["species"] == "TOTAL")
+    assert csv_total["cells_detection"] == tot["cells_detection"] == data["confirmed"]
+    assert csv_total["cells_non_detection"] == tot["cells_non_detection"] == data["rejected"]
+    assert csv_total["cells_unverified"] == tot["cells_unverified"] == data["unverified"]
+
+def test_effort_report_total_matches_results_when_finished(client, setup_session):
+    client.post("/api/decisions", json={
+        "species": "Vulpes_vulpes", "iteration": 1, "confirmed": [],
+    })
+    client.post("/api/decisions", json={
+        "species": "Vulpes_vulpes", "iteration": 2, "confirmed": [],
+    })
+    data = client.get("/api/results").json()
+    tot = next(r for r in data["effort_by_species"] if r["species"] == "TOTAL")
+    assert tot["cells_detection"] == data["confirmed"]
+    assert tot["cells_non_detection"] == data["rejected"]
+    assert tot["cells_unverified"] == data["unverified"]

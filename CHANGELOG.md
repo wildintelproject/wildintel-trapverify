@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Upcoming release
 
+#### Added
+- **Verification effort by species**: new `effort_report.csv` in `occupancy_inputs/` (one row per species plus a `TOTAL` row) and a table on the Results page. It reports effort in detection events and cells, split by outcome: cells with and without detection, events inspected in each kind of cell, rejections before the first confirmation (mean, median, max), and the score of rejected and confirmed events (min, median, max). "Inspecting" an event means viewing its top-scoring photo; `candidate_events` is the event-level full-review baseline. Photos are reported too (candidate photos and photos in the inspected events). Cells still pending rounds are reported as unverified.
+
 ## Released 
 
 **Note:** The information in past release notes may have been superseded by newer releases. Please refer to the latest release for the most up-to-date information.
