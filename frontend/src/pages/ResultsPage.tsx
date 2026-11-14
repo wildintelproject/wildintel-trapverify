@@ -30,6 +30,9 @@ interface EffortRow {
   rejected_score_median: number | null
   rejected_score_max: number | null
   confirmed_score_median: number | null
+  excluded_photos: number | null
+  excluded_events: number | null
+  excluded_cells: number | null
 }
 
 interface Results {
@@ -46,6 +49,7 @@ interface Results {
   seq_unverified: number
   by_species_seqs: SpeciesRow[]
   effort_by_species: EffortRow[]
+  min_score: number
   datapackage_generated: boolean
   datapackage_fabricated_fields: string[]
 }
@@ -185,7 +189,7 @@ export default function ResultsPage() {
 
   const fmt = (v: number | null) => (v === null || v === undefined ? '–' : String(v))
 
-  function EffortTable({ rows, part }: { rows: EffortRow[]; part: 'counts' | 'detail' }) {
+  function EffortTable({ rows, part }: { rows: EffortRow[]; part: 'counts' | 'detail' | 'excluded' }) {
     const th = 'text-right py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300'
     const td = 'py-2 px-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap'
     return (
@@ -204,6 +208,12 @@ export default function ResultsPage() {
                   <th className={th}>{t('results.effort_col_pct')}</th>
                   <th className={th}>{t('results.effort_col_photos')}</th>
                   <th className={th}>{t('results.effort_col_photos_insp')}</th>
+                </>
+              ) : part === 'excluded' ? (
+                <>
+                  <th className={th}>{t('results.excluded_col_photos')}</th>
+                  <th className={th}>{t('results.excluded_col_events')}</th>
+                  <th className={th}>{t('results.excluded_col_cells')}</th>
                 </>
               ) : (
                 <>
@@ -232,6 +242,12 @@ export default function ResultsPage() {
                       <td className={td}>{fmt(r.pct_events_inspected)}</td>
                       <td className={td}>{r.candidate_photos}</td>
                       <td className={td}>{r.photos_in_inspected_events}</td>
+                    </>
+                  ) : part === 'excluded' ? (
+                    <>
+                      <td className={td}>{fmt(r.excluded_photos)}</td>
+                      <td className={td}>{fmt(r.excluded_events)}</td>
+                      <td className={td}>{fmt(r.excluded_cells)}</td>
                     </>
                   ) : (
                     <>
@@ -398,9 +414,21 @@ export default function ResultsPage() {
           <div className={`${cardClass} mb-4`}>
             <EffortTable rows={results.effort_by_species} part="counts" />
           </div>
-          <div className={`${cardClass} mb-10`}>
+          <div className={`${cardClass} mb-4`}>
             <EffortTable rows={results.effort_by_species} part="detail" />
           </div>
+          {results.min_score > 0 && (
+            <>
+              <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" role="note">
+                {t('results.cutoff_notice', { score: results.min_score })}
+              </div>
+              <div className={`${cardClass} mb-10`}>
+                <div className={cardHeader}>{t('results.excluded_title', { score: results.min_score })}</div>
+                <EffortTable rows={results.effort_by_species} part="excluded" />
+              </div>
+            </>
+          )}
+          {results.min_score <= 0 && <div className="mb-10" />}
         </>
       )}
 
