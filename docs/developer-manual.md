@@ -19,6 +19,7 @@ This document covers the project architecture, development setup, configuration,
 11. [Anonymized Snapshot for Double-Blind Review](#11-anonymized-snapshot-for-double-blind-review)
 12. [Contributing](#12-contributing)
 13. [Releasing a New Version](#13-releasing-a-new-version)
+14. [Simulating a Random Subsample](#14-simulating-a-random-subsample)
 
 ---
 
@@ -437,3 +438,25 @@ notes and cite it together with the version.
 If you need to backfill release notes for releases published before the
 `CHANGELOG.md` automation was set up, edit each release manually on GitHub and
 paste the corresponding section from `CHANGELOG.md`.
+
+---
+
+## 14. Simulating a Random Subsample
+
+`uv run cli simulate-random` tests, on a finished session, the claim that reviewing the same number of photos **at random** would leave most cells with a detection unresolved. It does not need the app to be running.
+
+```bash
+uv run cli simulate-random <session-folder> [--draws 1000] [--seed 42] [--output results.csv]
+```
+
+`<session-folder>` is the session directory (the one with `config.json`, `candidate_manifest.csv` and `decisions/`). The command prints a table and writes `random_subsample_simulation.csv` into the session folder (or to `--output`). The same `--seed` always gives the same result: each species has its own random stream derived from the seed and the species name, so a species' result does not depend on which others are in the session.
+
+**What is simulated**
+
+- **Photos reviewed** per species is the number of detection events inspected (inspecting an event means viewing its top-scoring photo). Each draw picks that many *candidate photos* of the species at random, without replacement.
+- **Truth** is what was confirmed in the session. A draw *finds* a cell with a detection when it contains at least one photo of the confirmed detection event of that cell. Other true events in the same cell are unknown (the workflow stops at the first confirmation), so the figure is, if anything, a lower bound for random sampling.
+- Cells with no detection cannot be found by chance, so only detection cells are compared. The targeted workflow finds 100 % of them by construction.
+
+**Output columns:** `species`, `candidate_photos`, `photos_reviewed`, `cells_with_detection`, `targeted_found`, `targeted_found_pct`, `random_found_mean`, `random_found_min`, `random_found_max`, `random_found_pct_mean`, `random_found_pct_min`, `random_found_pct_max`, `draws`, `seed`, with a final `TOTAL` row (the per-draw total is summed over species before taking the minimum and maximum). The result depends on how much was reviewed: the smaller the fraction of candidate photos inspected, the fewer detection cells a random sample finds.
+
+The logic is in `backend/src/random_subsample.py` and is unit-tested with small fixtures (`backend/tests/unit/test_random_subsample.py`). An example that builds a small session from `examples/camtrap_dp` (with an automatic stand-in reviewer, since there is no real one) and runs the simulation is in `examples/simulate_random_example.py`.
