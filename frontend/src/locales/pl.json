@@ -316,7 +316,7 @@
     "col_unverified": "Nieprzejrzane",
     "col_total": "Łącznie",
     "occupancy_title": "Oszacowanie zajętości (naiwne vs. zweryfikowane)",
-    "occupancy_hint": "Porównanie prawdopodobieństwa zajętości (ψ) i wykrycia (p) oszacowanego na podstawie nieprzejrzanych wykryć w porównaniu z ręcznie zweryfikowanymi. Przedziały to 95% przedziały ufności.",
+    "occupancy_hint": "Porównanie prawdopodobieństwa zajętości (ψ) i wykrycia (p) oszacowanego na podstawie nieprzejrzanych wykryć w porównaniu z ręcznie zweryfikowanymi. Przedziały to 95% przedziały ufności. Przedziały Walda w skali logitowej (patrz podręcznik).",
     "col_psi_naive": "ψ naiwne",
     "col_psi_verified": "ψ zweryfikowane",
     "col_p_naive": "p naiwne",

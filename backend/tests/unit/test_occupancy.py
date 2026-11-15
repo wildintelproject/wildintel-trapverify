@@ -32,7 +32,7 @@ def test_sigmoid_clamps_extreme():
 def test_fit_occu_returns_expected_keys():
     y = np.array([[1, 0], [0, 0], [1, 1]], dtype=float)
     result = fit_occu(y)
-    assert set(result.keys()) == {"psi", "psi_lo", "psi_hi", "p", "degenerate", "converged"}
+    assert set(result.keys()) == {"psi", "psi_lo", "psi_hi", "p", "p_lo", "p_hi", "degenerate", "converged"}
 
 def test_fit_occu_psi_in_unit_interval():
     y = np.array([[1, 0], [0, 0], [1, 1], [0, 1], [1, 0]], dtype=float)
@@ -214,3 +214,73 @@ def test_fit_naive_vs_verified_all_zeros_degenerate(tmp_path):
     row = fit_naive_vs_verified(tmp_path, ["Vulpes vulpes"])[0]
     assert row["degenerate_naive"] is True
     assert row["degenerate_verified"] is True
+
+
+# ─── confidence intervals: method checks ──────────────────────────────────────
+
+def _simulate(rng, n_sites, k, psi, p):
+    z = rng.random(n_sites) < psi
+    return ((rng.random((n_sites, k)) < p) * z[:, None]).astype(float)
+
+
+def test_hessian_is_exact_for_a_quadratic():
+    from occupancy_model import _hessian
+    A = np.array([[4.0, 1.0], [1.0, 3.0]])
+    H = _hessian(lambda t: 0.5 * t @ A @ t, np.array([0.3, -1.2]))
+    assert H == pytest.approx(A, abs=1e-5)
+
+
+def test_wald_interval_is_symmetric_on_the_logit_scale():
+    from occupancy_model import _logit_wald_ci, _sigmoid
+    lo, hi = _logit_wald_ci(0.4, 0.5)
+    logit = lambda q: np.log(q / (1 - q))
+    assert logit(hi) - 0.4 == pytest.approx(0.4 - logit(lo))
+    assert logit(hi) - 0.4 == pytest.approx(1.96 * 0.5)
+    assert 0 < lo < _sigmoid(0.4) < hi < 1
+
+
+def test_fit_occu_intervals_match_an_independent_hessian():
+    """SEs come from the inverse observed information: recompute it with a different step."""
+    from occupancy_model import _hessian, _logit_wald_ci, _nll
+    y = _simulate(np.random.default_rng(4), 60, 5, 0.5, 0.4)
+    r = fit_occu(y)
+    theta = np.array([np.log(r["psi"] / (1 - r["psi"])), np.log(r["p"] / (1 - r["p"]))])
+    cov = np.linalg.inv(_hessian(lambda t: _nll(t, y), theta, h=1e-3))
+    for k, (lo, hi) in enumerate((("psi_lo", "psi_hi"), ("p_lo", "p_hi"))):
+        e_lo, e_hi = _logit_wald_ci(theta[k], np.sqrt(cov[k, k]))
+        assert r[lo] == pytest.approx(e_lo, abs=5e-3) and r[hi] == pytest.approx(e_hi, abs=5e-3)
+
+
+def test_fit_occu_gives_a_confidence_interval_for_p():
+    r = fit_occu(_simulate(np.random.default_rng(1), 50, 5, 0.6, 0.4))
+    assert r["p_lo"] is not None and r["p_lo"] < r["p"] < r["p_hi"]
+
+
+def test_fit_occu_intervals_have_about_nominal_coverage():
+    """Repeated datasets from known psi and p: the 95 % intervals must contain the truth most of the time."""
+    rng = np.random.default_rng(2026)
+    psi_true, p_true, hits_psi, hits_p, n = 0.5, 0.4, 0, 0, 0
+    for _ in range(150):
+        r = fit_occu(_simulate(rng, 60, 5, psi_true, p_true))
+        if r["degenerate"] or r["psi_lo"] is None or r["p_lo"] is None:
+            continue
+        n += 1
+        hits_psi += r["psi_lo"] <= psi_true <= r["psi_hi"]
+        hits_p += r["p_lo"] <= p_true <= r["p_hi"]
+    assert n > 120
+    assert hits_psi / n > 0.88 and hits_p / n > 0.88          # nominal 0.95; Wald is a little liberal
+
+
+def test_fit_naive_vs_verified_exports_all_four_estimates_with_intervals(tmp_path):
+    rng = np.random.default_rng(9)
+    for kind, y in (("naive", _simulate(rng, 50, 5, 0.7, 0.5)), ("verified", _simulate(rng, 50, 5, 0.5, 0.5))):
+        df = pd.DataFrame(y, columns=[f"occ{i + 1}" for i in range(5)]).astype(int)
+        df.insert(0, "siteID", [f"S{i}" for i in range(len(df))])
+        df.to_csv(tmp_path / f"dethist_{kind}_Vulpes_vulpes.csv", index=False)
+    row = fit_naive_vs_verified(tmp_path, ["Vulpes vulpes"])[0]
+    out = pd.read_csv(tmp_path / "occupancy_fit.csv").iloc[0]
+    for est in ("psi_naive", "psi_verified", "p_naive", "p_verified"):
+        for suffix in ("", "_lo", "_hi"):
+            assert pd.notna(out[est + suffix]), est + suffix
+        assert out[est + "_lo"] < out[est] < out[est + "_hi"]
+    assert row["p_naive_lo"] == out["p_naive_lo"]

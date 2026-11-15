@@ -520,6 +520,20 @@ Finally, when enough detection history is available, the page shows an **occupan
 ![Occupancy estimate table](./img/user_manual/results-occupancy.png)
 *Naive AI-only occupancy (ψ) and detection (p) probabilities compared against the manually verified ones, per species, with 95% confidence intervals.*
 
+The table has four estimates per species, each with its 95 % confidence interval: **ψ** (occupancy) and **p** (detection), both **naive** (from the AI detections, as if every candidate were a real detection) and **verified** (from the detections you confirmed). Verification changes the detection histories, so it changes *p* as well as ψ. The same four estimates, with their limits, are exported in `occupancy_inputs/occupancy_fit.csv` (`psi_naive`, `psi_naive_lo`, `psi_naive_hi`, `p_naive`, `p_naive_lo`, `p_naive_hi` and the same with `_verified`).
+
+#### How the occupancy estimates are computed
+
+**The model, ψ(.)p(.).** The estimates come from a single-season occupancy model (MacKenzie et al. 2002) with one occupancy probability ψ and one detection probability *p*. The notation ψ(.)p(.) means that each of the two is a single constant value for all sites and sampling occasions: the dot "(.)" stands for "no covariates". In plain words: each site is occupied with probability ψ; if it is occupied, every sampling occasion detects the species with probability *p*, independently; if it is not occupied, it is never detected. Sampling occasions in which the camera was off are left out for that site.
+
+**Estimation.** ψ and *p* are the values that make the observed detection histories most likely (maximum likelihood). The calculation is done on the logit scale, `logit(x) = ln(x / (1 − x))`, which keeps both probabilities between 0 and 1, and is then converted back to probabilities.
+
+**Confidence intervals.** Each 95 % interval is a *Wald interval on the logit scale*: the estimate on the logit scale plus or minus 1.96 times its standard error, converted back to a probability. This is why the intervals are not symmetric around the estimate and never go outside 0–1. The standard error comes from the curvature of the likelihood at its maximum (the inverse of the observed information, computed numerically). It is the same kind of interval as the default `confint()` of the R package `unmarked`; it is *not* a profile-likelihood interval and it does not use the delta method on the probability scale. Wald intervals can be unreliable with few sites or when an estimate is close to 0 or 1.
+
+When the data do not allow a standard error to be computed (the curvature of the likelihood is flat or ill-defined, typical when ψ is estimated at the edge of 0–1), the table shows the estimate **without** an interval rather than inventing one; in `occupancy_fit.csv` the `_lo` and `_hi` cells are then empty.
+
+**"Degenerate" estimates.** When the data cannot support the model, the table shows *Degenerate* instead of a ψ value: when there are no detections at all or only detections, when the fit does not converge, when ψ is essentially 0 or 1, or when the interval for ψ is wider than 0.9. In those cases report the result at the level of detections (confirmed detection events or cells) rather than as an occupancy estimate. The implementation is in `backend/src/occupancy_model.py`.
+
 ### Output Files
 
 Each session is saved in a timestamped subfolder inside the output directory (e.g. `~/Documents/camtrap_verify/20260629_143021/`). The folder contains:
@@ -549,5 +563,6 @@ Each session is saved in a timestamped subfolder inside the output directory (e.
 | `dethist_naive_{sp}.csv` | Naive detection history per species (AI detections, not human-validated). One file per species. |
 | `dethist_verified_{sp}.csv` | Verified detection history per species (confirmed by expert). One file per species. |
 | `verification_summary.csv` | Per-species summary: confirmed, rejected and unreviewed counts. |
+| `occupancy_fit.csv` | Occupancy fit per species: naive and verified ψ and *p*, each with its 95 % confidence limits (see [How the occupancy estimates are computed](#how-the-occupancy-estimates-are-computed)). |
 | `review_effort.csv` | Total review effort: number of detection events and images inspected. |
 | `effort_report.csv` | Effort per species and in total, in detection events and cells: cells with and without detection, events inspected in each, rejections before the first confirmation, and the scores of rejected and confirmed events. *Inspecting* an event means viewing its top-scoring photo, so `photos_inspected` equals `events_inspected`; `candidate_events` is the baseline of a full event-level review. |

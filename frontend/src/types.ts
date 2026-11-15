@@ -56,11 +56,15 @@ export interface OccupancyRow {
   psi_naive_lo: number | null
   psi_naive_hi: number | null
   p_naive: number | null
+  p_naive_lo?: number | null
+  p_naive_hi?: number | null
   degenerate_naive: boolean
   psi_verified: number | null
   psi_verified_lo: number | null
   psi_verified_hi: number | null
   p_verified: number | null
+  p_verified_lo?: number | null
+  p_verified_hi?: number | null
   degenerate_verified: boolean
 }
 

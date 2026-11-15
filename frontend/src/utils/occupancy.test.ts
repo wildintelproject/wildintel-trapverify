@@ -27,4 +27,12 @@ describe('formatP', () => {
   it('renders a dash when p is null', () => {
     expect(formatP(null)).toBe('—')
   })
+
+  it('shows the confidence interval of p when given', () => {
+    expect(formatP(0.4567, 0.31, 0.6123)).toBe('0.457 [0.310, 0.612]')
+  })
+
+  it('shows only the estimate when the interval is missing', () => {
+    expect(formatP(0.4567, null, null)).toBe('0.457')
+  })
 })

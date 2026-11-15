@@ -193,8 +193,8 @@ export default function ResultsPage() {
                 <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">
                   {row.degenerate_verified ? t('results.degenerate') : formatPsi(row.psi_verified, row.psi_verified_lo, row.psi_verified_hi, false)}
                 </td>
-                <td className="py-2 px-3 text-right text-zinc-500">{formatP(row.p_naive)}</td>
-                <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">{formatP(row.p_verified)}</td>
+                <td className="py-2 px-3 text-right text-zinc-500">{formatP(row.p_naive, row.p_naive_lo, row.p_naive_hi)}</td>
+                <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">{formatP(row.p_verified, row.p_verified_lo, row.p_verified_hi)}</td>
               </tr>
             ))}
           </tbody>
