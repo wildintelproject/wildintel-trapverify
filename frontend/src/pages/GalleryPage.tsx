@@ -8,6 +8,7 @@ import 'yet-another-react-lightbox/styles.css'
 import 'yet-another-react-lightbox/plugins/captions.css'
 import { api } from '../api'
 import EventCard, { type Decision } from '../components/EventCard'
+import { frameSrc } from '../utils/frameImage'
 import type { DetectionEvent } from '../types'
 
 interface EventSlide extends SlideImage {
@@ -47,6 +48,13 @@ export default function GalleryPage() {
   const [saving, setSaving] = useState(false)
   const [completed, setCompleted] = useState(false)
   const [recordRejection, setRecordRejection] = useState(false)
+  const [showBoxes, setShowBoxes] = useState<boolean>(() => {
+    try { return localStorage.getItem('camtrapShowBoxes') !== '0' } catch { return true }
+  })
+  function toggleBoxes(on: boolean) {
+    setShowBoxes(on)
+    try { localStorage.setItem('camtrapShowBoxes', on ? '1' : '0') } catch { /* storage unavailable */ }
+  }
   const [corrections, setCorrections] = useState<Record<string, string>>({})
   const [taxa, setTaxa] = useState<string[]>([])
   const [locked, setLocked] = useState(true)
@@ -170,7 +178,7 @@ export default function GalleryPage() {
   const lbEv = events[lbEvIdx]
   const lbSlides: EventSlide[] = lbEv
     ? lbEv.frames.map((fr, i) => ({
-        src: fr.img,
+        src: frameSrc(fr, showBoxes),
         title: t('gallery.lb_title', {
           site: lbEv.siteId,
           occasion: lbEv.occasion,
@@ -366,6 +374,16 @@ export default function GalleryPage() {
               </span>
             )}
           </div>
+          <div className="flex items-center gap-3">
+          {events.some((e) => e.frames.some((f) => !!f.boxes)) && (
+            <label
+              className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-300 cursor-pointer select-none"
+              title={t('gallery.show_boxes_hint')}
+            >
+              <input type="checkbox" checked={showBoxes} onChange={(e) => toggleBoxes(e.target.checked)} />
+              {t('gallery.show_boxes')}
+            </label>
+          )}
           <button
             className="px-4 py-1.5 text-sm rounded transition-colors bg-zinc-700 text-white hover:bg-zinc-600 flex items-center gap-1.5"
             onClick={() => navigate(-1)}
@@ -375,6 +393,7 @@ export default function GalleryPage() {
             </svg>
             {t('gallery.back')}
           </button>
+          </div>
         </div>
 
         {!completed && reviewParams && (
@@ -511,6 +530,7 @@ export default function GalleryPage() {
                       needsDecision={needsDecision.has(ev.key)}
                       onDecide={decide}
                       allowUncertain={!completed}
+                      showBoxes={showBoxes}
                       recordCorrection={recordRejection && !completed}
                       correction={corrections[ev.key] ?? ''}
                       onCorrect={setCorrection}

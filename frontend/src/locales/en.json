@@ -205,6 +205,8 @@
     "occasion_label": "Sampling occasion {{n}}",
     "confirmed_btn": "✓ Confirmed",
     "rejected_btn": "✗ Rejected",
+    "show_boxes": "Show boxes",
+    "show_boxes_hint": "Draws a box around the animal being verified, when the data include bounding boxes. The box of the species you are reviewing is amber; other boxes of the same species in the photo are lighter.",
     "actual_species_placeholder": "Actual species (optional)…",
     "actual_species_hint": "What is it really? Pick a taxon from the dataset, or type any name. It does not change the rejection.",
     "uncertain_btn": "? Uncertain",

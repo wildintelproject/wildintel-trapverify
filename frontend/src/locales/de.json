@@ -205,6 +205,8 @@
     "occasion_label": "Stichprobenanlass {{n}}",
     "confirmed_btn": "✓ Bestätigt",
     "rejected_btn": "✗ Abgelehnt",
+    "show_boxes": "Rahmen anzeigen",
+    "show_boxes_hint": "Zeichnet einen Rahmen um das zu prüfende Tier, wenn die Daten Begrenzungsrahmen enthalten. Der Rahmen der geprüften Art ist bernsteinfarben; weitere Rahmen derselben Art im Foto sind heller.",
     "actual_species_placeholder": "Tatsächliche Art (optional)…",
     "actual_species_hint": "Was ist es wirklich? Wählen Sie ein Taxon aus dem Datensatz oder geben Sie einen beliebigen Namen ein. Die Ablehnung bleibt unverändert.",
     "uncertain_btn": "? Unsicher",

@@ -205,6 +205,8 @@
     "occasion_label": "Okazja próbkowania {{n}}",
     "confirmed_btn": "✓ Potwierdzone",
     "rejected_btn": "✗ Odrzucone",
+    "show_boxes": "Pokaż ramki",
+    "show_boxes_hint": "Rysuje ramkę wokół weryfikowanego zwierzęcia, gdy dane zawierają ramki ograniczające. Ramka weryfikowanego gatunku jest bursztynowa; inne ramki tego samego gatunku na zdjęciu są jaśniejsze.",
     "actual_species_placeholder": "Rzeczywisty gatunek (opcjonalnie)…",
     "actual_species_hint": "Czym to naprawdę jest? Wybierz takson ze zbioru danych lub wpisz dowolną nazwę. Odrzucenie się nie zmienia.",
     "uncertain_btn": "? Niepewne",

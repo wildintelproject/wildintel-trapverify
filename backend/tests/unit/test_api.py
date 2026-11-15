@@ -1406,3 +1406,65 @@ def test_random_seed_is_stored_in_the_session_config(client, camtrap_dir, tmp_pa
             "random_seed": seed})
         assert r.status_code == 200
         assert client.get("/api/state").json()["config"]["random_seed"] == seed
+
+
+# ─── bounding boxes on served images ──────────────────────────────────────────
+
+@pytest.fixture
+def boxed_session(client, camtrap_dir, tmp_path):
+    """The minimal dataset with real image files and a box on o001 only."""
+    from PIL import Image
+    (camtrap_dir / "img").mkdir(exist_ok=True)
+    media = pd.read_csv(camtrap_dir / "media.csv")
+    for fp in media["filePath"]:
+        Image.new("RGB", (160, 100), (80, 80, 80)).save(camtrap_dir / fp, quality=95)
+    obs = pd.read_csv(camtrap_dir / "observations.csv")
+    for c in ("bboxX", "bboxY", "bboxWidth", "bboxHeight"):
+        obs[c] = None
+    obs.loc[obs["observationID"] == "o001", ["bboxX", "bboxY", "bboxWidth", "bboxHeight"]] = [0.2, 0.2, 0.5, 0.5]
+    obs.to_csv(camtrap_dir / "observations.csv", index=False)
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"), "target_species": ["Vulpes vulpes"],
+        "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5,
+        "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.5})
+    assert r.status_code == 200
+    return camtrap_dir
+
+
+def _pixels(resp):
+    from PIL import Image
+    import io
+    return Image.open(io.BytesIO(resp.content)).convert("RGB")
+
+
+def test_image_is_served_untouched_by_default(client, boxed_session):
+    plain = client.get("/api/image/m001")
+    assert plain.status_code == 200 and plain.content == (boxed_session / "img" / "frame0.jpg").read_bytes()
+    assert plain.content == client.get("/api/image/m001", params={"boxes": "false", "obs": "o001"}).content
+
+
+def test_boxes_are_drawn_for_the_requested_observation(client, boxed_session):
+    plain = _pixels(client.get("/api/image/m001"))
+    boxed = client.get("/api/image/m001", params={"boxes": "true", "obs": "o001"})
+    assert boxed.status_code == 200 and boxed.headers["content-type"] == "image/jpeg"
+    img = _pixels(boxed)
+    assert img.size == plain.size == (160, 100)
+    x0, y0 = round(0.2 * 160), round(0.2 * 100)
+    r, g, b = img.getpixel((x0, y0 + 20))
+    assert r > 200 and b < 80 and (r, g, b) != plain.getpixel((x0, y0 + 20))      # the amber edge
+    assert img.getpixel((5, 90)) == pytest.approx(plain.getpixel((5, 90)), abs=6)   # elsewhere unchanged (JPEG noise)
+
+
+def test_observation_without_a_box_gets_the_original_file(client, boxed_session):
+    orig = (boxed_session / "img" / "frame3.jpg").read_bytes()
+    assert client.get("/api/image/m004", params={"boxes": "true", "obs": "o004"}).content == orig
+    assert client.get("/api/image/m001", params={"boxes": "true", "obs": "does-not-exist"}).content \
+        == (boxed_session / "img" / "frame0.jpg").read_bytes()
+    assert client.get("/api/image/m001", params={"boxes": "true"}).content \
+        == (boxed_session / "img" / "frame0.jpg").read_bytes()                  # no obs given
+
+
+def test_event_frames_report_how_many_boxes_they_have(client, boxed_session):
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    boxes = {f["obsId"]: f["boxes"] for e in ev for f in e["frames"]}
+    assert boxes["o001"] == 1 and all(v == 0 for k, v in boxes.items() if k != "o001")

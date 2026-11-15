@@ -671,6 +671,9 @@ def generic_csv_to_camtrapdp(
     for why: locating the images is ``resolve_media_path()``'s job at review
     time via ``image_base_dir``, same as any other CamtrapDP directory, not
     something this conversion bakes in once and for all.
+
+    If the CSV has the CamtrapDP columns ``bboxX``, ``bboxY``, ``bboxWidth`` and
+    ``bboxHeight`` (relative 0-1 coordinates), they are kept in ``observations.csv``.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     if species_map is None:
@@ -738,8 +741,59 @@ def generic_csv_to_camtrapdp(
         "classificationMethod":      "machine",
         "classifiedBy":              "custom",
         "classificationTimestamp":   None,
+        # CamtrapDP bounding box columns, kept when the CSV has them (relative 0-1 coordinates
+        # of the top-left corner and size); the review draws them on the photo.
+        **{c: list(df[c]) for c in BOX_COLS if c in df.columns},
     }).to_csv(out_dir / "observations.csv", index=False)
     return out_dir
+
+
+# ─── Bounding boxes ───────────────────────────────────────────────────────────
+
+BOX_COLS = ["bboxX", "bboxY", "bboxWidth", "bboxHeight"]
+
+
+def collect_boxes(obs: pd.DataFrame) -> dict[tuple[str, str], str]:
+    """Bounding boxes of each (mediaID, scientificName), as JSON ``[[x, y, w, h], ...]``.
+
+    Uses the CamtrapDP columns ``bboxX``, ``bboxY``, ``bboxWidth`` and ``bboxHeight``:
+    the top-left corner and size of the box, **relative to the image** (0 to 1).
+    Boxes that are missing, not numeric, empty or outside the image are ignored.
+    The boxes of a photo and species are listed best first (highest
+    ``classificationProbability``), so the first one is the one of the
+    representative observation. Returns ``{}`` when the box columns are absent.
+    """
+    if not all(c in obs.columns for c in BOX_COLS):
+        return {}
+    b = obs[BOX_COLS].apply(pd.to_numeric, errors="coerce")
+    eps = 1e-3
+    ok = (
+        b.notna().all(axis=1)
+        & (b["bboxWidth"] > 0) & (b["bboxHeight"] > 0)
+        & (b["bboxX"] >= -eps) & (b["bboxY"] >= -eps)
+        & (b["bboxX"] + b["bboxWidth"] <= 1 + eps) & (b["bboxY"] + b["bboxHeight"] <= 1 + eps)
+    )
+    if not ok.any():
+        return {}
+    sub = obs.loc[ok, ["mediaID", "scientificName"]].copy()
+    sub["_p"] = pd.to_numeric(obs.loc[ok, "classificationProbability"], errors="coerce").fillna(-1)
+    sub["_box"] = [
+        [round(float(max(x, 0)), 5), round(float(max(y, 0)), 5), round(float(w), 5), round(float(h), 5)]
+        for x, y, w, h in zip(b.loc[ok, "bboxX"], b.loc[ok, "bboxY"], b.loc[ok, "bboxWidth"], b.loc[ok, "bboxHeight"])
+    ]
+    sub = sub.sort_values("_p", ascending=False, kind="stable")
+    grouped = sub.groupby(["mediaID", "scientificName"], sort=False)["_box"].agg(list)
+    return {(str(m), str(sp)): json.dumps(boxes) for (m, sp), boxes in grouped.items()}
+
+
+def count_boxes(value) -> int:
+    """Number of boxes in a candidate's ``bboxes`` cell (JSON text, empty or NaN)."""
+    if not isinstance(value, str) or not value:
+        return 0
+    try:
+        return len(json.loads(value))
+    except (ValueError, TypeError):
+        return 0
 
 
 # ─── Build candidate manifest ─────────────────────────────────────────────────
@@ -822,6 +876,10 @@ def build_candidates(
         & (obs["scientificName"].isin(target_species))
     ].copy()
 
+    # Keep the bounding boxes of every (mediaID, scientificName) before the collapse
+    # below, so the review can show which animal(s) of the species is being verified.
+    boxes_by_key = collect_boxes(target_obs)
+
     # Collapse multiple observation rows for the same (mediaID, scientificName)
     # -- e.g. several bounding boxes for the same species in one frame -- to a
     # single representative row (highest classificationProbability), mirroring
@@ -835,6 +893,10 @@ def build_candidates(
         .drop_duplicates(subset=["mediaID", "scientificName"], keep="first")
         .drop(columns="_prob_sort")
     )
+    target_obs["bboxes"] = [
+        boxes_by_key.get((str(m), str(sp)), "")
+        for m, sp in zip(target_obs["mediaID"], target_obs["scientificName"])
+    ]
 
     # Demote frames whose own classification score falls below min_score, mirroring
     # to_camtrapdp()'s per-frame threshold: a frame with no score at all is never
@@ -1006,7 +1068,7 @@ def build_candidates(
         "observationID", "mediaID", "filePath", "fileName",
         "classificationProbability", "scientificName", "deploymentID",
         "siteID", "occasion", "species_safe", "ts", "timestamp_display",
-        "is_context",
+        "is_context", "bboxes",
     ]]
 
 
@@ -1454,6 +1516,8 @@ def get_events(
                 "ts":        row["timestamp_display"] if pd.notna(row.get("timestamp_display")) else "",
                 "prob":      round(float(row_prob), 3) if pd.notna(row_prob) else None,
                 "isContext": row_is_ctx,
+                # Boxes can only be drawn on images the app serves itself, not on remote ones.
+                "boxes":     count_boxes(row.get("bboxes")) if img_url.startswith("/api/image/") else 0,
             })
 
         events.append({
@@ -1538,6 +1602,8 @@ def get_review_events(
                 "ts":        row["timestamp_display"] if pd.notna(row.get("timestamp_display")) else "",
                 "prob":      round(float(row_prob), 3) if pd.notna(row_prob) else None,
                 "isContext": row_is_ctx,
+                # Boxes can only be drawn on images the app serves itself, not on remote ones.
+                "boxes":     count_boxes(row.get("bboxes")) if img_url.startswith("/api/image/") else 0,
             })
 
         events.append({
