@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends
 
 from api.deps import require_candidates
 from camtrap_workflow import get_events, get_review_events, media_extra_bases, species_stats
-from schemas.requests import ReviewDecisionsRequest
-from services import session_service, workflow_service
+from fastapi import HTTPException
+from camtrap_workflow import rounds_completed
+from schemas.requests import ProgressRequest, ReviewDecisionsRequest
+from services import progress_service, session_service, workflow_service
 
 router = APIRouter(
     prefix="/api/species",
@@ -88,3 +90,29 @@ def update_species_decisions(species_safe: str, req: ReviewDecisionsRequest) -> 
     )
     confirmed = workflow_service.replace_species_decisions(species_safe, req.confirmed_keys)
     return {"success": True, "confirmed": confirmed}
+
+
+@router.get("/{species_safe}/progress")
+def get_progress(species_safe: str, iteration: int) -> dict:
+    """Saved progress of an unfinished round (``{"progress": null}`` when there is none)."""
+    d = session_service.paths()["decisions"]
+    return {"progress": progress_service.load_progress(d, species_safe, iteration)}
+
+
+@router.put("/{species_safe}/progress")
+def save_progress(species_safe: str, req: ProgressRequest) -> dict:
+    """Save the decisions made so far in a round; changes no result."""
+    d = session_service.paths()["decisions"]
+    if req.iteration <= rounds_completed(d).get(species_safe, 0):
+        raise HTTPException(400, "Esa ronda ya está terminada.")
+    n = progress_service.save_progress(
+        d, species_safe, req.iteration, req.decisions, req.corrections, req.decision_times,
+    )
+    saved = progress_service.load_progress(d, species_safe, req.iteration)
+    return {"success": True, "n": n, "saved_at": saved["saved_at"] if saved else None}
+
+
+@router.post("/{species_safe}/reopen")
+def reopen_round(species_safe: str) -> dict:
+    """Re-open the last finished round of a species to correct it."""
+    return workflow_service.reopen_last_round(species_safe)

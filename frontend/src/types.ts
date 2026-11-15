@@ -77,6 +77,15 @@ export interface OccupancyRow {
   degenerate_verified: boolean
 }
 
+export interface SavedProgress {
+  iteration: number
+  /** repObsId of each decided event -> its decision */
+  decisions: Record<string, 'confirmed' | 'rejected' | 'uncertain'>
+  corrections: Record<string, string>
+  decision_times: Record<string, number>
+  saved_at: string
+}
+
 export interface RelinkStatus {
   camtrap_dir_ok: boolean
   images_ok: boolean

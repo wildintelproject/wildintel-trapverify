@@ -1,4 +1,4 @@
-import type { DetectionEvent, OccupancyRow, RecentSession, RelinkStatus, SpeciesStats, WorkflowConfig } from './types'
+import type { DetectionEvent, OccupancyRow, RecentSession, RelinkStatus, SavedProgress, SpeciesStats, WorkflowConfig } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch(url, options)
@@ -59,6 +59,20 @@ export const api = {
       '/api/decisions',
       { species, iteration, confirmed, uncertain, corrections, decision_times: decisionTimes },
     ),
+
+  getProgress: (species: string, iteration: number) =>
+    req<{ progress: SavedProgress | null }>(`/api/species/${species}/progress?iteration=${iteration}`),
+
+  saveProgress: (species: string, body: Omit<SavedProgress, 'saved_at'>, keepalive = false) =>
+    req<{ success: boolean; saved_at: string | null; n: number }>(`/api/species/${species}/progress`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      keepalive,
+    }),
+
+  reopenRound: (species: string) =>
+    post<{ success: boolean; iteration: number; restored: number }>(`/api/species/${species}/reopen`, {}),
 
   rejectBurst: (mediaId: string) =>
     post<{ success: boolean; removed: string[] }>('/api/reject', { mediaId }),

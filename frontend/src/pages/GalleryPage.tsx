@@ -21,6 +21,28 @@ interface EventSlide extends SlideImage {
   frameTs: string
 }
 
+/** The unfinished round as the server stores it: decided events by their representative observationID. */
+function progressBody(
+  events: DetectionEvent[],
+  decisions: Record<string, Decision>,
+  corrections: Record<string, string>,
+  times: Record<string, number>,
+  iteration: number,
+) {
+  const dec: Record<string, 'confirmed' | 'rejected' | 'uncertain'> = {}
+  const corr: Record<string, string> = {}
+  const tm: Record<string, number> = {}
+  events.forEach((e) => {
+    const d = decisions[e.key]
+    if (!d) return
+    dec[e.repObsId] = d
+    const text = (corrections[e.key] ?? '').trim()
+    if (d === 'rejected' && text) corr[e.repObsId] = text
+    if (times[e.key]) tm[e.repObsId] = times[e.key]
+  })
+  return { iteration, decisions: dec, corrections: corr, decision_times: tm }
+}
+
 function Spinner({ sm }: { sm?: boolean }) {
   const sz = sm ? 'w-4 h-4 border' : 'w-8 h-8 border-2'
   return <div className={`${sz} border-zinc-600 border-t-blue-500 rounded-full animate-spin`} />
@@ -61,6 +83,13 @@ export default function GalleryPage() {
   const [locked, setLocked] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null)
+  // Progress of the unfinished round, kept in the session folder ("Save progress").
+  const [progressAt, setProgressAt] = useState<string | null>(null)
+  const [progressState, setProgressState] = useState<'idle' | 'dirty' | 'saving' | 'error'>('idle')
+  const [reloadKey, setReloadKey] = useState(0)
+  const lastSavedRef = useRef('')
+  const finishedRef = useRef(false)
+  const progressTimerRef = useRef<number | null>(null)
   const decisionsRef = useRef(decisions)
   const completedRef = useRef(false)
   // When the reviewer last set each event's decision in this page (epoch ms), for the review-time log.
@@ -83,6 +112,7 @@ export default function GalleryPage() {
 
   const loadEvents = useCallback(async (iter: number) => {
     if (!species) return
+    finishedRef.current = false
     setLoading(true)
     setError(null)
     try {
@@ -133,6 +163,30 @@ export default function GalleryPage() {
       setCorrections(corr)
       decidedAtRef.current = {}
       setNeedsDecision(new Set())
+
+      // Unfinished work from an earlier visit (any browser, or another computer through the
+      // session export): the progress saved in the session folder wins over the round's files.
+      const prog = await api.getProgress(species, iter).then((r) => r.progress).catch(() => null)
+      if (prog) {
+        const find = (id: string) => evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
+        const restored: Record<string, Decision> = {}
+        const restoredCorr: Record<string, string> = {}
+        Object.entries(prog.decisions).forEach(([id, d]) => {
+          const ev = find(id)
+          if (!ev) return
+          restored[ev.key] = d
+          if (prog.corrections[id]) restoredCorr[ev.key] = prog.corrections[id]
+          if (prog.decision_times[id]) decidedAtRef.current[ev.key] = prog.decision_times[id]
+        })
+        setDecisions(restored)
+        setCorrections(restoredCorr)
+        setProgressAt(prog.saved_at)
+        lastSavedRef.current = JSON.stringify(progressBody(evts, restored, restoredCorr, decidedAtRef.current, iter))
+      } else {
+        setProgressAt(null)
+        lastSavedRef.current = JSON.stringify(progressBody(evts, pre, corr, decidedAtRef.current, iter))
+      }
+      setProgressState('idle')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar eventos')
     } finally {
@@ -156,7 +210,52 @@ export default function GalleryPage() {
     return () => { live = false }
   }, [species])
 
-  useEffect(() => { if (roundReady) loadEvents(iteration) }, [loadEvents, iteration, roundReady])
+  useEffect(() => { if (roundReady) loadEvents(iteration) }, [loadEvents, iteration, roundReady, reloadKey])
+
+  // Save the progress a couple of seconds after the last click, with the "Save progress"
+  // button, and when the page is closed. Nothing counts as a result until the round is finished.
+  const progressPayload = useCallback(() => {
+    if (!species || completed || loading || saving || finishedRef.current || events.length === 0) return null
+    const body = progressBody(events, decisions, corrections, decidedAtRef.current, iteration)
+    const json = JSON.stringify(body)
+    return json === lastSavedRef.current ? null : { body, json }
+  }, [species, completed, loading, saving, events, decisions, corrections, iteration])
+
+  const flushProgress = useCallback(async (opts: { keepalive?: boolean; announce?: boolean } = {}) => {
+    if (progressTimerRef.current) { window.clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+    const p = progressPayload()
+    if (!p || !species) {
+      if (opts.announce) showToast(t('gallery.progress_up_to_date'), 'success')
+      return
+    }
+    setProgressState('saving')
+    try {
+      const r = await api.saveProgress(species, p.body, opts.keepalive)
+      lastSavedRef.current = p.json
+      setProgressAt(r.saved_at)
+      setProgressState('idle')
+      if (opts.announce) showToast(t('gallery.progress_saved_toast', { n: Object.keys(p.body.decisions).length }), 'success')
+    } catch {
+      setProgressState('error')
+      if (opts.announce) showToast(t('gallery.toast_error'), 'danger')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progressPayload, species])
+
+  useEffect(() => {
+    if (!progressPayload()) return
+    setProgressState('dirty')
+    progressTimerRef.current = window.setTimeout(() => { flushProgress() }, 2500)
+    return () => { if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current) }
+  }, [progressPayload, flushProgress])
+
+  const flushRef = useRef(flushProgress)
+  flushRef.current = flushProgress
+  useEffect(() => {
+    const onHide = () => { flushRef.current({ keepalive: true }) }
+    window.addEventListener('pagehide', onHide)
+    return () => { window.removeEventListener('pagehide', onHide); flushRef.current({ keepalive: true }) }
+  }, [])
 
   useEffect(() => {
     if (!lbOpen) return
@@ -304,6 +403,7 @@ export default function GalleryPage() {
       return
     }
     if (!species) return
+    if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current)
     setSaving(true)
     try {
       const confirmedIds = events
@@ -323,6 +423,7 @@ export default function GalleryPage() {
         if (decisions[e.key] && at) decisionTimes[e.repObsId] = at
       })
       const result = await api.saveDecisions(species, iteration, confirmedIds, uncertainIds, correctionIds, decisionTimes)
+      finishedRef.current = true                           // the server dropped the progress with the round
       if (result.done) {
         showToast(t('gallery.toast_done'), 'success')
         setTimeout(() => navigate('/species'), 1500)
@@ -334,6 +435,24 @@ export default function GalleryPage() {
       showToast(e instanceof Error ? e.message : t('gallery.toast_error'), 'danger')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Go back to the last finished round (e.g. a mistake noticed afterwards). The round's decisions
+  // come back as progress; the progress of the current round is kept for later.
+  async function handleReopen() {
+    if (!species) return
+    if (!window.confirm(t('gallery.reopen_confirm'))) return
+    await flushProgress()
+    try {
+      const r = await api.reopenRound(species)
+      showToast(t('gallery.reopen_done', { n: r.iteration }), 'success')
+      setCompleted(false)
+      setLocked(true)
+      setIteration(r.iteration)
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : t('gallery.toast_error'), 'danger')
     }
   }
 
@@ -386,8 +505,19 @@ export default function GalleryPage() {
                 </button>
               </span>
             ) : (
-              <span className="px-2 py-0.5 text-xs font-medium bg-zinc-600 text-zinc-200 rounded-full">
-                {t('gallery.round', { n: iteration })}
+              <span className="flex items-center gap-2">
+                <span className="px-2 py-0.5 text-xs font-medium bg-zinc-600 text-zinc-200 rounded-full">
+                  {t('gallery.round', { n: iteration })}
+                </span>
+                {iteration > 1 && (
+                  <button
+                    className="px-2 py-0.5 text-xs border border-zinc-400 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                    title={t('gallery.reopen_tooltip', { n: iteration - 1 })}
+                    onClick={handleReopen}
+                  >
+                    ← {t('gallery.reopen', { n: iteration - 1 })}
+                  </button>
+                )}
               </span>
             )}
           </div>
@@ -475,6 +605,21 @@ export default function GalleryPage() {
             {t('gallery.confirm_all')}
           </button>
           <button
+            className="px-5 py-2.5 bg-blue-600 text-white rounded-lg shadow-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex flex-col items-center leading-tight"
+            onClick={() => flushProgress({ announce: true })}
+            disabled={saving || progressState === 'saving'}
+            title={t('gallery.save_progress_hint')}
+          >
+            <span>{t('gallery.save_progress')}</span>
+            <span className="text-[10px] opacity-80">
+              {progressState === 'dirty' ? t('gallery.progress_unsaved')
+                : progressState === 'saving' ? t('gallery.saving')
+                : progressState === 'error' ? t('gallery.progress_error')
+                : progressAt ? t('gallery.progress_saved_at', { time: new Date(progressAt).toLocaleTimeString() })
+                : t('gallery.progress_none')}
+            </span>
+          </button>
+          <button
             className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg shadow-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
             onClick={handleSave}
             disabled={saving}
@@ -485,7 +630,7 @@ export default function GalleryPage() {
                 <path d="M5 13.5V9.5h6v4M5 2.5v3h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             )}
-            {saving ? t('gallery.saving') : t('gallery.save')}
+            {saving ? t('gallery.saving') : t('gallery.finish_round')}
           </button>
         </div>
       )}
