@@ -2390,3 +2390,18 @@ def test_filtered_and_review_tags_live_together_in_the_verified_camtrapdp(client
     tags = _tags_by_media(sd)
     assert tags["m005"] == "camtrapverify:filtered"                    # kept, never reviewed
     assert "camtrapverify:confirmed" in tags[next(iter(_media_of(ev, 0)))].split("|")
+
+
+def test_the_verified_camtrapdp_keeps_every_column_of_the_source(client, camtrap_dir, tmp_path):
+    """Sessions read only the columns they need, but the export is written from a full read."""
+    f = camtrap_dir / "observations.csv"
+    df = pd.read_csv(f, dtype=str)
+    df["observationComments"], df["lifeStage"] = "keep me", "adult"
+    df.to_csv(f, index=False)
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev = _round1_events(client)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
+    client.get("/api/results")
+    v = _verified_observations(sd)
+    assert {"observationComments", "lifeStage"} <= set(v.columns)
+    assert (v["observationComments"] == "keep me").all() and (v["lifeStage"] == "adult").all()

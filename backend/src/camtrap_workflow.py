@@ -169,7 +169,19 @@ def resolve_camtrapdp_resource(camtrap_dir: Path, name: str) -> Optional[Path]:
     return None
 
 
-def load_camtrapdp(camtrap_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+# Columns the review workflow needs from the two big tables. Creating a session reads only these
+# (instead of every column as ``str``), which cuts load time and memory on large exports (e.g.
+# 1.4 M observations / 550 k media rows). The verified CamtrapDP is written from a full read.
+WORKFLOW_MEDIA_COLUMNS = frozenset(("mediaID", "deploymentID", "timestamp", "filePath", "fileName"))
+WORKFLOW_OBS_COLUMNS = frozenset((
+    "observationID", "deploymentID", "mediaID", "observationLevel", "observationType", "scientificName",
+    "classificationProbability", "observationTags", "bboxX", "bboxY", "bboxWidth", "bboxHeight",
+))
+
+
+def load_camtrapdp(
+    camtrap_dir: Path, minimal: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Read the three core CamtrapDP tables from a directory.
 
     All columns are kept as ``str`` to avoid silent type coercions on IDs.
@@ -182,19 +194,24 @@ def load_camtrapdp(camtrap_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
         camtrap_dir: Path to the directory containing ``deployments.csv``,
             ``media.csv`` and ``observations.csv`` (or a ``datapackage.json``
             pointing at differently-named equivalents).
+        minimal: Read only the columns of ``media.csv`` and ``observations.csv`` that building the
+            candidates needs (:data:`WORKFLOW_MEDIA_COLUMNS`, :data:`WORKFLOW_OBS_COLUMNS`). The
+            default reads everything, as the verified export and the converters need.
 
     Returns:
         Tuple of ``(deployments, media, observations)`` DataFrames.
     """
-    def _load(name: str) -> pd.DataFrame:
+    def _load(name: str, wanted: Optional[frozenset] = None) -> pd.DataFrame:
         path = resolve_camtrapdp_resource(camtrap_dir, name)
         if path is None:
             path = camtrap_dir / f"{name}.csv"  # let pandas raise a familiar error
-        return pd.read_csv(path, dtype=str)
+        if wanted is None:
+            return pd.read_csv(path, dtype=str)
+        return pd.read_csv(path, dtype=str, usecols=lambda c: c in wanted)
 
     dep = _load("deployments")
-    med = _load("media")
-    obs = _load("observations")
+    med = _load("media", WORKFLOW_MEDIA_COLUMNS if minimal else None)
+    obs = _load("observations", WORKFLOW_OBS_COLUMNS if minimal else None)
     if "fileName" not in med.columns:
         med["fileName"] = med["filePath"].apply(
             lambda x: Path(str(x)).name if pd.notna(x) else ""

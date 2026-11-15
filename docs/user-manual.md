@@ -340,7 +340,7 @@ These control how the data is segmented into reviewable units.
 |---|---|---|
 | **Sampling occasion duration** (days or hours) | 5 days | Groups images at a location into consecutive windows of N days, or of N **hours** if you choose *Hours* (for example 1 hour, for activity patterns). The windows start at 00:00 of the first day of the study; the last one is shorter if the study period is not a multiple of the window. The number of occasions adapts automatically to the study duration. See [Occasions shorter than a day](#occasions-shorter-than-a-day). |
 | **Gap between detection events (seconds)** | 60 | Images less than N seconds apart at the same site belong to the same detection event. |
-| **Minimum detection score** | 0.5 | Detections scoring **below** this threshold are excluded from the candidate set (a score equal to the threshold is kept, and a photo with no score is never excluded). Not used with *Classifiers and reference*, which already filters the detection events. See [When to use a minimum score](#when-to-use-a-minimum-score). |
+| **Minimum detection confidence** | 0.5 | Detections scoring **below** this threshold are excluded from the candidate set (a score equal to the threshold is kept, and a photo with no score is never excluded). Not used with *Classifiers and reference*, which already filters the detection events. See [When to use a minimum score](#when-to-use-a-minimum-score). |
 | **Minimum detection confidence per species** | none | Optional. Under the general score, a collapsible list gives each selected species a box for its own cut-off, which replaces the general one for that species. An empty box uses the general score and `0` turns the cut-off off for that species. See [When to use a minimum score](#when-to-use-a-minimum-score). |
 | **Order of the detection events** | By score | *By score* shows each occasion's most confident event first (fewest photos to inspect). *By time* shows the earliest first, so the first confirmed event is the first true detection (needed for time-to-detection analyses such as `unmarked::occuTTD`); more photos may have to be inspected. The detection histories are the same either way. Stored as `review_order` in `config.json`. With a dataset from *Classifiers and reference* filtered *By cells*, the earliest event of an occasion may have been removed: for time to detection, combine with *None*. |
 | **Random seed for tied detection events** | 42 | Detection events with the same score in a cell (all of them when the photos have no score) are shown in a pseudo-random order, not by date. The seed makes that order reproducible: the same data and seed always give the same order. It is stored in `config.json`; record it when you report your results. |
@@ -596,9 +596,9 @@ This is the path to the generated files (see [Output Files](#output-files) below
 Next comes the **review breakdown**:
 
 ![Results page](./img/user_manual/results.png)
-*"By sampling occasion" breakdown, with overall counts and a per-species table.*
+*"By cell" breakdown (location × sampling occasion × species), with overall counts and a per-species table.*
 
-This is repeated twice — **by sampling occasion** and **by detection event** — each with confirmed / rejected / unreviewed counts and percentages, followed by a per-species breakdown table.
+This is repeated twice — **by cell** (a combination of location × sampling occasion × species) and **by detection event** — each with confirmed / rejected / unreviewed counts and percentages, followed by a per-species breakdown table.
 
 Finally, when enough detection history is available, the page shows an **occupancy estimate**:
 
@@ -719,7 +719,7 @@ The outputs are designed for **occupancy models**: a detection history per speci
 
 The score is used only to **order** the detection events within each site and sampling occasion (highest first) and, optionally, for the minimum detection score. It does **not** need to be a calibrated probability: any value where higher means more likely works, including raw model outputs such as logits. Points to keep in mind:
 
-- If your scores are not between 0 and 1 (for example raw logits, which can be negative), set the **Minimum detection score** to 0 to turn the cut-off off; with the default 0.5 every photo below it would be dropped. If the folder has a `datapackage.json`, a (non-blocking) warning that `classificationProbability` is outside 0–1 is also shown when the folder is checked.
+- If your scores are not between 0 and 1 (for example raw logits, which can be negative), set the **Minimum detection confidence** to 0 to turn the cut-off off; with the default 0.5 every photo below it would be dropped. If the folder has a `datapackage.json`, a (non-blocking) warning that `classificationProbability` is outside 0–1 is also shown when the folder is checked.
 - A photo with **no score** is treated as having a score of 0. If some photos have no score, those with a negative score are shown after them.
 - If **no photos have a score**, the detection events of each cell are presented in a **random order set by the random seed** (setup parameter, 42 by default), the same order every time for the same data and seed. The same applies to any events that share the same score. The review is still valid, but the first round is no longer the most likely detection, so more photos will usually need to be inspected. Report the seed with your results.
 - A cut-off hides the photos below it for good, and the savings and results then apply only to the photos above it (see [When to use a minimum score](#when-to-use-a-minimum-score)).

@@ -2197,3 +2197,44 @@ def test_validation_checks_only_the_first_rows(tmp_path, monkeypatch):
     assert validate_camtrapdp_datapackage(dp_path)                                     # all rows by default here
     monkeypatch.setattr(camtrap_workflow, "VALIDATION_ROW_LIMIT", 1)
     assert validate_camtrapdp_datapackage(dp_path) == []                               # beyond the limit: not looked at
+
+
+# ─── Reading only the columns the workflow needs ──────────────────────────────
+
+def _candidates_from(dirpath, minimal):
+    dep, med, obs = load_camtrapdp(dirpath, minimal=minimal)
+    return build_candidates(dep, med, obs, ["Vulpes vulpes"], date(2025, 11, 1), date(2025, 11, 10), 5, 100_000,
+                            include_burst_context=True), (med, obs)
+
+
+def test_minimal_load_reads_only_the_needed_columns(camtrap_dir):
+    obs_f = camtrap_dir / "observations.csv"
+    df = pd.read_csv(obs_f, dtype=str)
+    df["observationComments"], df["count"], df["lifeStage"] = "c", "1", "adult"
+    df["bboxX"], df["bboxY"], df["bboxWidth"], df["bboxHeight"] = "0.1", "0.1", "0.3", "0.3"
+    df.to_csv(obs_f, index=False)
+    med_f = camtrap_dir / "media.csv"
+    m = pd.read_csv(med_f, dtype=str)
+    m["captureMethod"] = "activityDetection"
+    m.to_csv(med_f, index=False)
+
+    _, (med_min, obs_min) = _candidates_from(camtrap_dir, True)
+    _, (med_full, obs_full) = _candidates_from(camtrap_dir, False)
+    assert {"observationComments", "count", "lifeStage"}.isdisjoint(obs_min.columns) and "captureMethod" not in med_min.columns
+    assert {"observationComments", "count", "lifeStage"} <= set(obs_full.columns) and "captureMethod" in med_full.columns
+    assert {"bboxX", "bboxY", "bboxWidth", "bboxHeight", "observationID"} <= set(obs_min.columns)
+
+
+def test_candidates_are_the_same_with_the_minimal_read(camtrap_dir):
+    obs_f = camtrap_dir / "observations.csv"
+    df = pd.read_csv(obs_f, dtype=str)
+    df["observationComments"] = "x"
+    df["bboxX"], df["bboxY"], df["bboxWidth"], df["bboxHeight"] = "0.1", "0.1", "0.3", "0.3"
+    df["observationTags"] = ""
+    df.to_csv(obs_f, index=False)
+    small, _ = _candidates_from(camtrap_dir, True)
+    full, _ = _candidates_from(camtrap_dir, False)
+    shared = [c for c in small.columns if c in full.columns]
+    assert "bboxes" in shared and set(small.columns) <= set(full.columns)
+    pd.testing.assert_frame_equal(small[shared].reset_index(drop=True), full[shared].reset_index(drop=True))
+
