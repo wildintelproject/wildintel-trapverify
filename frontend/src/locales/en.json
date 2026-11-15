@@ -204,7 +204,9 @@
     "reviewed_periods": "Reviewed {{resolved}} of {{total}} sampling occasions ({{pct}}%)",
     "complete": "Complete",
     "round": "Round {{n}}",
-    "no_species": "No species with candidates. Check your configuration."
+    "no_species": "No species with candidates. Check your configuration.",
+    "pending": "{{n}} pending expert review",
+    "pending_badge": "{{n}} pending expert review"
   },
   "gallery": {
     "title": "Detection verification",
@@ -214,7 +216,7 @@
     "intro_hint": "The detection events shown below are separated by <strong style='color:#10b981'>{{gap}} seconds</strong>, captured at different locations and sampling occasions of <strong style='color:#10b981'>{{days}} days</strong>, corresponding to observations with a detection confidence of <strong style='color:#10b981'>{{minScore}}</strong> or higher. For each one, confirm whether the detection event contains one or more individuals of the species <strong style='color:#10b981'>{{species}}</strong>. If you confirm the species' presence in a detection event, its presence will be considered verified for that location during the corresponding sampling occasion, and no further detection events from that same occasion will need to be reviewed. If you cannot confirm its presence, a new detection event captured at the same location and during the same sampling occasion will be shown to continue the verification.",
     "intro_hint_hours_one": "The detection events shown below are separated by <strong style='color:#10b981'>{{gap}} seconds</strong>, captured at different locations and sampling occasions of <strong style='color:#10b981'>{{count}} hour</strong>, corresponding to observations with a detection confidence of <strong style='color:#10b981'>{{minScore}}</strong> or higher. For each one, confirm whether the detection event contains one or more individuals of the species <strong style='color:#10b981'>{{species}}</strong>. If you confirm the species' presence in a detection event, its presence will be considered verified for that location during the corresponding sampling occasion, and no further detection events from that same occasion will need to be reviewed. If you cannot confirm its presence, a new detection event captured at the same location and during the same sampling occasion will be shown to continue the verification.",
     "intro_hint_hours_other": "The detection events shown below are separated by <strong style='color:#10b981'>{{gap}} seconds</strong>, captured at different locations and sampling occasions of <strong style='color:#10b981'>{{count}} hours</strong>, corresponding to observations with a detection confidence of <strong style='color:#10b981'>{{minScore}}</strong> or higher. For each one, confirm whether the detection event contains one or more individuals of the species <strong style='color:#10b981'>{{species}}</strong>. If you confirm the species' presence in a detection event, its presence will be considered verified for that location during the corresponding sampling occasion, and no further detection events from that same occasion will need to be reviewed. If you cannot confirm its presence, a new detection event captured at the same location and during the same sampling occasion will be shown to continue the verification.",
-    "round_hint": "In round {{n}}, each sampling occasion is represented by the detection event with the highest detection confidence among those not yet reviewed.",
+    "round_hint": "In round {{n}}, each sampling occasion is represented by the detection event with the highest detection confidence among those not yet reviewed. If you are not sure, mark it «Unsure»: it counts as not confirmed for the next round, but the occasion will not be set to not detected until someone reviews it.",
     "back": "Back",
     "confirm_all": "Confirm all",
     "finish_round": "Finish round",
@@ -263,7 +265,7 @@
     "actual_species_placeholder": "Actual species (optional)…",
     "actual_species_hint": "What is it really? Pick a taxon from the dataset, or type any name. It does not change the rejection.",
     "unsure_btn": "? Unsure",
-    "unsure_hint": "Label possible but unsure (e.g. animal partly visible, fast movement in a dark frame). Counts as rejected for occupancy and is reported separately.",
+    "unsure_hint": "Not clear: another detection event of this occasion will be shown in the next round. If none gets confirmed, the occasion stays pending expert review instead of counting as not detected.",
     "zoom": "Open fullscreen",
     "lb_title": "Location: {{site}} — Sampling occasion {{occasion}} — Image {{idx}}/{{total}} ({{meta}})",
     "toast_done": "Species complete. Returning to index…",
@@ -285,7 +287,12 @@
     "toast_updated": "Decisions updated. Results regenerated.",
     "context_frame": "Context",
     "image_permission_denied": "Permission denied. Check the access permissions.",
-    "round_hint_time": "In round {{n}}, each sampling occasion is represented by its earliest detection event not yet reviewed (review order: by time)."
+    "round_hint_time": "In round {{n}}, each sampling occasion is represented by its earliest detection event among those not yet reviewed. If you are not sure, mark it «Unsure»: it counts as not confirmed for the next round, but the occasion will not be set to not detected until someone reviews it.",
+    "pending_badge": "Pending expert review",
+    "pending_hint": "These occasions ran out of detection events without a confirmation, and at least one was marked unsure. For each one, confirm presence (the event you are viewing is recorded), mark it as rejected, or leave it unsure for someone else to review. You can save without deciding all of them.",
+    "pending_save": "Save verdicts",
+    "pending_saved": "Saved: {{confirmed}} confirmed, {{rejected}} not detected. The rest stay pending.",
+    "toast_rounds_done_pending": "Rounds finished. {{n}} occasions are pending expert review: review them now, or export the session so someone else can finish them."
   },
   "help": {
     "title": "Help — CamTrap Verify",
@@ -358,7 +365,7 @@
     "fp_col_pct": "% of rejected events",
     "fp_not_recorded": "not recorded",
     "effort_col_unsure": "Unsure events",
-    "effort_col_unsure_hint": "Events marked unsure; they count as rejections in the detection histories.",
+    "effort_col_unsure_hint": "Events marked unsure. During the rounds they count as not confirmed (the next event of the occasion is shown); a cell left with only unsure events is pending expert review.",
     "cutoff_notice": "A minimum detection score of {{score}} was applied: photos scoring below it were never shown for review. Savings and results apply only to candidates at or above the cut-off.",
     "excluded_title": "Excluded by the minimum score cut-off",
     "excluded_col_photos": "Excluded photos",
@@ -394,7 +401,11 @@
     "col_psi_verified": "ψ verified",
     "col_p_naive": "p naive",
     "col_p_verified": "p verified",
-    "degenerate": "Degenerate"
+    "degenerate": "Degenerate",
+    "pending_hint": "They appear as NA in <code>dethist_verified_*.csv</code>, just like occasions with an inactive camera. To tell them apart, see <code>cell_status_*.csv</code> (values <code>pending</code> and <code>inactive</code>). You can export the session from the species index so that someone else reviews them.",
+    "pending": "Pending expert review",
+    "col_pending": "Pending",
+    "effort_col_cells_pending": "Cells pending"
   },
   "footer": {
     "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. All rights reserved.",

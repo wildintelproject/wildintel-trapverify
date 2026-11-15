@@ -60,6 +60,14 @@ export const api = {
       { species, iteration, confirmed, unsure, corrections, decision_times: decisionTimes },
     ),
 
+  getPending: (species: string) =>
+    req<DetectionEvent[]>(`/api/species/${species}/pending`),
+
+  settlePending: (species: string, confirmed: string[], rejectedKeys: string[]) =>
+    post<{ success: boolean; confirmed: number; rejected: number }>(
+      `/api/species/${species}/pending`, { confirmed, rejected_keys: rejectedKeys },
+    ),
+
   getProgress: (species: string, iteration: number) =>
     req<{ progress: SavedProgress | null }>(`/api/species/${species}/progress?iteration=${iteration}`),
 
@@ -110,7 +118,8 @@ export const api = {
       confirmed: number
       rejected: number
       unverified: number
-      by_species: { species: string; confirmed: number; rejected: number; unverified: number }[]
+      pending?: number
+      by_species: { species: string; confirmed: number; rejected: number; pending?: number; unverified: number }[]
       datapackage_generated: boolean
       datapackage_fabricated_fields: string[]
     }>('/api/results'),

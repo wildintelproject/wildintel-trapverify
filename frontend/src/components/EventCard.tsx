@@ -54,6 +54,8 @@ function EventCard({
   const [activeIndex, setActiveIndex] = useState(() => bestFrameIndex(event.frames))
   const n = event.frames.length
   const frame = event.frames[Math.min(activeIndex, n - 1)]
+  // On a pending card the decision is about the detection event of the photo being looked at.
+  const repObsId = frame?.burstRepObsId ?? event.repObsId
 
   // Warm the browser cache with the neighbouring frames once the pointer is over the card, so the
   // arrows switch frames instantly. Not before, so a page of cards does not download every neighbour.
@@ -191,7 +193,7 @@ function EventCard({
               ? 'bg-emerald-600 text-white hover:bg-emerald-700'
               : 'border border-emerald-600 text-emerald-400 hover:bg-emerald-600 hover:text-white'
           }`}
-          onClick={() => onDecide(event.key, event.repObsId, 'confirmed')}
+          onClick={() => onDecide(event.key, repObsId, 'confirmed')}
           disabled={readOnly}
         >
           {t('gallery.confirmed_btn')}
@@ -202,7 +204,7 @@ function EventCard({
               ? 'bg-red-600 text-white hover:bg-red-700'
               : 'border border-red-600 text-red-400 hover:bg-red-600 hover:text-white'
           }`}
-          onClick={() => onDecide(event.key, event.repObsId, 'rejected')}
+          onClick={() => onDecide(event.key, repObsId, 'rejected')}
           disabled={readOnly}
         >
           {t('gallery.rejected_btn')}
@@ -214,7 +216,7 @@ function EventCard({
                 ? 'bg-amber-600 text-white hover:bg-amber-700'
                 : 'border border-amber-600 text-amber-400 hover:bg-amber-600 hover:text-white'
             }`}
-            onClick={() => onDecide(event.key, event.repObsId, 'unsure')}
+            onClick={() => onDecide(event.key, repObsId, 'unsure')}
             disabled={readOnly}
             title={t('gallery.unsure_hint')}
           >

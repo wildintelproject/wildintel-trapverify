@@ -7,6 +7,8 @@ export interface Frame {
   isContext?: boolean
   /** Number of bounding boxes the server can draw for this frame's observation. */
   boxes?: number
+  /** Pending review: the observation that represents the detection event this frame belongs to. */
+  burstRepObsId?: string
 }
 
 export interface DetectionEvent {
@@ -18,7 +20,7 @@ export interface DetectionEvent {
   repObsId: string
   maxProb: number
   frames: Frame[]
-  status?: 'confirmed' | 'not_confirmed'
+  status?: 'confirmed' | 'not_confirmed' | 'pending'
 }
 
 export interface SpeciesStats {
@@ -27,6 +29,10 @@ export interface SpeciesStats {
   n_total_combos: number
   n_confirmed_combos: number
   n_resolved: number
+  /** Cells whose events ran out with an unsure event and no expert verdict yet. */
+  n_pending?: number
+  /** rounds: review in progress · pending: only pending cells left · complete */
+  phase?: 'rounds' | 'pending' | 'complete'
   current_iteration: number
   thumbnails: string[]
 }

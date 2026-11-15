@@ -206,7 +206,9 @@
     "reviewed_periods": "Przejrzano {{resolved}} z {{total}} okazji próbkowania ({{pct}}%)",
     "complete": "Ukończony",
     "round": "Runda {{n}}",
-    "no_species": "Brak gatunków z kandydatami. Sprawdź konfigurację."
+    "no_species": "Brak gatunków z kandydatami. Sprawdź konfigurację.",
+    "pending": "{{n}} do oceny eksperta",
+    "pending_badge": "{{n}} do oceny eksperta"
   },
   "gallery": {
     "title": "Weryfikacja wykryć",
@@ -218,7 +220,7 @@
     "intro_hint_hours_few": "Poniżej pokazane zostaną zdarzenia detekcji oddzielone <strong style='color:#10b981'>{{gap}} sekundami</strong>, zarejestrowane w różnych lokalizacjach i okazjach próbkowania wynoszących <strong style='color:#10b981'>{{count}} godziny</strong>, odpowiadające obserwacjom o pewności wykrycia równej co najmniej <strong style='color:#10b981'>{{minScore}}</strong>. Dla każdego z nich potwierdź, czy zdarzenie detekcji zawiera jeden lub więcej osobników gatunku <strong style='color:#10b981'>{{species}}</strong>. Jeśli potwierdzisz obecność gatunku w zdarzeniu detekcji, jego obecność w tej lokalizacji w danej okazji zostanie uznana za zweryfikowaną i nie trzeba będzie przeglądać kolejnych zdarzeń detekcji z tej samej okazji. Jeśli nie możesz potwierdzić obecności, zostanie pokazane nowe zdarzenie detekcji zarejestrowane w tej samej lokalizacji i w tej samej okazji, aby kontynuować weryfikację.",
     "intro_hint_hours_many": "Poniżej pokazane zostaną zdarzenia detekcji oddzielone <strong style='color:#10b981'>{{gap}} sekundami</strong>, zarejestrowane w różnych lokalizacjach i okazjach próbkowania wynoszących <strong style='color:#10b981'>{{count}} godzin</strong>, odpowiadające obserwacjom o pewności wykrycia równej co najmniej <strong style='color:#10b981'>{{minScore}}</strong>. Dla każdego z nich potwierdź, czy zdarzenie detekcji zawiera jeden lub więcej osobników gatunku <strong style='color:#10b981'>{{species}}</strong>. Jeśli potwierdzisz obecność gatunku w zdarzeniu detekcji, jego obecność w tej lokalizacji w danej okazji zostanie uznana za zweryfikowaną i nie trzeba będzie przeglądać kolejnych zdarzeń detekcji z tej samej okazji. Jeśli nie możesz potwierdzić obecności, zostanie pokazane nowe zdarzenie detekcji zarejestrowane w tej samej lokalizacji i w tej samej okazji, aby kontynuować weryfikację.",
     "intro_hint_hours_other": "Poniżej pokazane zostaną zdarzenia detekcji oddzielone <strong style='color:#10b981'>{{gap}} sekundami</strong>, zarejestrowane w różnych lokalizacjach i okazjach próbkowania wynoszących <strong style='color:#10b981'>{{count}} godzin</strong>, odpowiadające obserwacjom o pewności wykrycia równej co najmniej <strong style='color:#10b981'>{{minScore}}</strong>. Dla każdego z nich potwierdź, czy zdarzenie detekcji zawiera jeden lub więcej osobników gatunku <strong style='color:#10b981'>{{species}}</strong>. Jeśli potwierdzisz obecność gatunku w zdarzeniu detekcji, jego obecność w tej lokalizacji w danej okazji zostanie uznana za zweryfikowaną i nie trzeba będzie przeglądać kolejnych zdarzeń detekcji z tej samej okazji. Jeśli nie możesz potwierdzić obecności, zostanie pokazane nowe zdarzenie detekcji zarejestrowane w tej samej lokalizacji i w tej samej okazji, aby kontynuować weryfikację.",
-    "round_hint": "W rundzie {{n}} każda okazja próbkowania jest reprezentowana przez zdarzenie detekcji z najwyższą ufnością wykrycia spośród jeszcze nieprzejrzanych.",
+    "round_hint": "W rundzie {{n}} każda okazja próbkowania jest reprezentowana przez zdarzenie detekcji z najwyższą ufnością wykrycia spośród jeszcze nieprzejrzanych. Jeśli nie masz pewności, oznacz je jako «Niepewne»: liczy się jako niepotwierdzone przy przejściu do następnej rundy, ale okazja nie zostanie uznana za niewykrytą, dopóki ktoś jej nie przejrzy.",
     "back": "Wstecz",
     "confirm_all": "Potwierdź wszystkie",
     "finish_round": "Zakończ rundę",
@@ -267,7 +269,7 @@
     "actual_species_placeholder": "Rzeczywisty gatunek (opcjonalnie)…",
     "actual_species_hint": "Czym to naprawdę jest? Wybierz takson ze zbioru danych lub wpisz dowolną nazwę. Odrzucenie się nie zmienia.",
     "unsure_btn": "? Niepewne",
-    "unsure_hint": "Etykieta możliwa, ale niepewna (np. zwierzę częściowo widoczne, szybki ruch w ciemnym kadrze). Dla zajętości liczy się jako odrzucone i jest raportowane osobno.",
+    "unsure_hint": "Niejasne: w następnej rundzie zostanie pokazane inne zdarzenie detekcji z tej okazji. Jeśli żadne nie zostanie potwierdzone, okazja pozostanie do oceny eksperta zamiast liczyć się jako niewykryta.",
     "zoom": "Otwórz pełny ekran",
     "lb_title": "Lokalizacja: {{site}} — Okazja próbkowania {{occasion}} — Zdjęcie {{idx}}/{{total}} ({{meta}})",
     "toast_done": "Gatunek ukończony. Powrót do indeksu…",
@@ -289,7 +291,12 @@
     "toast_updated": "Decyzje zaktualizowane. Wyniki przeliczone.",
     "context_frame": "Kontekst",
     "image_permission_denied": "Odmowa dostępu. Sprawdź uprawnienia dostępu.",
-    "round_hint_time": "W rundzie {{n}} każdy okres próbkowania reprezentuje jego najwcześniejsze jeszcze nieprzejrzane zdarzenie detekcji (kolejność: według czasu)."
+    "round_hint_time": "W rundzie {{n}} każdą okazję próbkowania reprezentuje jej najwcześniejsze zdarzenie detekcji spośród jeszcze nieprzejrzanych. Jeśli nie masz pewności, oznacz je jako «Niepewne»: liczy się jako niepotwierdzone przy przejściu do następnej rundy, ale okazja nie zostanie uznana za niewykrytą, dopóki ktoś jej nie przejrzy.",
+    "pending_badge": "Do oceny eksperta",
+    "pending_hint": "W tych okazjach wyczerpały się zdarzenia detekcji bez potwierdzenia, a co najmniej jedno oznaczono jako niepewne. Dla każdej potwierdź obecność (zapisywane jest oglądane zdarzenie), odrzuć ją lub zostaw jako niepewną, aby przejrzał ją ktoś inny. Możesz zapisać bez rozstrzygania wszystkich.",
+    "pending_save": "Zapisz werdykty",
+    "pending_saved": "Zapisano: potwierdzono {{confirmed}}, niewykryto {{rejected}}. Reszta pozostaje oczekująca.",
+    "toast_rounds_done_pending": "Rundy zakończone. {{n}} okazji czeka na ocenę eksperta: przejrzyj je teraz lub wyeksportuj sesję, aby dokończył je ktoś inny."
   },
   "help": {
     "title": "Pomoc — CamTrap Verify",
@@ -362,7 +369,7 @@
     "fp_col_pct": "% odrzuconych zdarzeń",
     "fp_not_recorded": "nie zapisano",
     "effort_col_unsure": "Niepewne zdarzenia",
-    "effort_col_unsure_hint": "Zdarzenia oznaczone jako niepewne; w historiach detekcji liczą się jako odrzucone.",
+    "effort_col_unsure_hint": "Zdarzenia oznaczone jako niepewne. W rundach liczą się jako niepotwierdzone (pokazywane jest następne zdarzenie okresu); komórka, w której zostały tylko niepewne zdarzenia, czeka na przegląd eksperta.",
     "cutoff_notice": "Zastosowano minimalny próg wykrycia {{score}}: zdjęcia poniżej progu nigdy nie trafiły do weryfikacji. Oszczędności i wyniki dotyczą wyłącznie kandydatów na poziomie progu lub powyżej.",
     "excluded_title": "Wykluczone przez próg minimalny",
     "excluded_col_photos": "Wykluczone zdjęcia",
@@ -398,7 +405,11 @@
     "col_psi_verified": "ψ zweryfikowane",
     "col_p_naive": "p naiwne",
     "col_p_verified": "p zweryfikowane",
-    "degenerate": "Zdegenerowane"
+    "degenerate": "Zdegenerowane",
+    "pending_hint": "W <code>dethist_verified_*.csv</code> pojawiają się jako NA, tak jak okazje z nieaktywną kamerą. Aby je rozróżnić, zajrzyj do <code>cell_status_*.csv</code> (wartości <code>pending</code> i <code>inactive</code>). Sesję możesz wyeksportować z indeksu gatunków, aby przejrzał je ktoś inny.",
+    "pending": "Oczekuje na przegląd eksperta",
+    "col_pending": "Oczekujące",
+    "effort_col_cells_pending": "Komórki oczekujące"
   },
   "footer": {
     "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Wszelkie prawa zastrzeżone.",

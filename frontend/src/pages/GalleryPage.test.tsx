@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import i18n from '../i18n'
@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({
   getSpecies: vi.fn(), getState: vi.fn(), getEvents: vi.fn(), getDecisions: vi.fn(), getReview: vi.fn(),
   getTaxa: vi.fn(), saveDecisions: vi.fn(), updateDecisions: vi.fn(),
   getProgress: vi.fn(), saveProgress: vi.fn(), reopenRound: vi.fn(),
+  getPending: vi.fn(), settlePending: vi.fn(),
 }))
 vi.mock('../api', () => ({ api }))
 
@@ -228,12 +229,60 @@ describe('GalleryPage', () => {
     api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
     api.getState.mockResolvedValue({ ready: true, config: { total_iterations: 10, gap_seconds: 60, occasion_days: 5, min_score: 0.5, review_order: 'time' } })
     renderGallery()
-    expect(await screen.findByText(/earliest detection event not yet reviewed/)).toBeInTheDocument()
+    expect(await screen.findByText(/earliest detection event among those not yet reviewed/)).toBeInTheDocument()
   })
 
   it('keeps the confidence wording when reviewing by score', async () => {
     api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
     renderGallery()
     expect(await screen.findByText(/highest detection confidence among those not yet reviewed/)).toBeInTheDocument()
+  })
+
+  describe('pending expert review', () => {
+    const pendingEvent = (key: string): DetectionEvent => ({
+      ...event(key, 2), status: 'pending',
+      frames: [
+        { obsId: `obs-${key}-1`, mediaId: `m1-${key}`, img: `/api/image/m1-${key}`, ts: '2026-01-01 10:00:00', prob: 0.4, burstRepObsId: `rep-${key}-1` },
+        { obsId: `obs-${key}-2`, mediaId: `m2-${key}`, img: `/api/image/m2-${key}`, ts: '2026-01-01 11:00:00', prob: 0.7, burstRepObsId: `rep-${key}-2` },
+      ],
+    })
+
+    beforeEach(() => {
+      api.getSpecies.mockResolvedValue([stats({ phase: 'pending', n_pending: 2, n_resolved: 2, current_iteration: 4 })])
+      api.getPending.mockResolvedValue([pendingEvent('a'), pendingEvent('b')])
+    })
+
+    it('shows the pending cells instead of a round, and saves without deciding every one', async () => {
+      api.settlePending.mockResolvedValue({ success: true, confirmed: 1, rejected: 0 })
+      renderGallery()
+      expect(await screen.findByText('Pending expert review')).toBeInTheDocument()
+      expect(api.getEvents).not.toHaveBeenCalledWith('Vulpes_vulpes', 4)
+      expect(screen.queryByRole('button', { name: /Save progress/ })).toBeNull()      // no autosave for these
+      await userEvent.click(screen.getAllByRole('button', { name: /Confirmed/ })[0])
+      await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
+      await waitFor(() => expect(api.settlePending).toHaveBeenCalled())
+      // the second cell was left alone: it is not sent, so it stays pending
+      expect(api.settlePending).toHaveBeenCalledWith('Vulpes_vulpes', ['rep-a-2'], [])
+    })
+
+    it('records the event of the photo being looked at when confirming', async () => {
+      api.settlePending.mockResolvedValue({ success: true, confirmed: 1, rejected: 0 })
+      renderGallery()
+      await screen.findByText('Pending expert review')
+      const card = document.querySelector('[data-key="a"]') as HTMLElement
+      await userEvent.click(within(card).getByRole('button', { name: /previous photo/i }))        // best frame is #2: go to #1
+      await userEvent.click(within(card).getByRole('button', { name: /Confirmed/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
+      await waitFor(() => expect(api.settlePending).toHaveBeenCalledWith('Vulpes_vulpes', ['rep-a-1'], []))
+    })
+
+    it('settles a cell as not detected when it is rejected', async () => {
+      api.settlePending.mockResolvedValue({ success: true, confirmed: 0, rejected: 1 })
+      renderGallery()
+      await screen.findByText('Pending expert review')
+      await userEvent.click(screen.getAllByRole('button', { name: /Rejected/ })[1])
+      await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
+      await waitFor(() => expect(api.settlePending).toHaveBeenCalledWith('Vulpes_vulpes', [], ['b']))
+    })
   })
 })

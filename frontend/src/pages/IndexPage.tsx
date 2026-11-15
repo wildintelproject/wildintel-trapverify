@@ -214,6 +214,11 @@ export default function IndexPage() {
                 <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-2">
                   {t('index.reviewed_periods', { resolved: sp.n_resolved, total: sp.n_total_combos, pct })}
                 </p>
+                {(sp.n_pending ?? 0) > 0 && (
+                  <p className="text-amber-600 dark:text-amber-400 text-xs mb-2">
+                    {t('index.pending', { n: sp.n_pending })}
+                  </p>
+                )}
                 <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full mb-3" style={{ height: 6 }}>
                   <div
                     className={`h-full rounded-full ${done ? 'bg-emerald-500' : 'bg-blue-500'}`}
@@ -221,9 +226,13 @@ export default function IndexPage() {
                   />
                 </div>
                 <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                  done ? 'bg-emerald-600 text-white' : 'bg-zinc-600 text-zinc-200'
+                  done ? 'bg-emerald-600 text-white'
+                    : sp.phase === 'pending' ? 'bg-amber-500 text-white'
+                    : 'bg-zinc-600 text-zinc-200'
                 }`}>
-                  {done ? t('index.complete') : t('index.round', { n: sp.current_iteration })}
+                  {done ? t('index.complete')
+                    : sp.phase === 'pending' ? t('index.pending_badge', { n: sp.n_pending })
+                    : t('index.round', { n: sp.current_iteration })}
                 </span>
               </div>
             </Link>
