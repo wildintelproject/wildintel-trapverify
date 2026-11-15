@@ -107,6 +107,9 @@ export const api = {
   loadSession: (session_dir: string) =>
     post<{ ok: boolean; session_dir: string; config: unknown }>('/api/session/load', { session_dir }),
 
+  renameSession: (session_dir: string, name: string) =>
+    put<{ session_dir: string; session_name: string }>('/api/session/name', { session_dir, name }),
+
   getRecentSessions: () =>
     req<RecentSession[]>('/api/session/recent'),
 

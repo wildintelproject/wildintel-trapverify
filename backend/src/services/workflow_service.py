@@ -124,6 +124,7 @@ def run_setup(req: SetupRequest) -> dict:
     sd.mkdir(parents=True, exist_ok=True)
 
     config = req.model_dump()
+    config["session_name"] = session_service.clean_session_name(req.session_name)
     config["camtrap_dir"] = str(camtrap_dir.resolve())
     config["output_dir"] = str(base_out)
     config["session_dir"] = str(sd)

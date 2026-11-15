@@ -1,3 +1,4 @@
+import SessionNameEditor from '../components/SessionNameEditor'
 import { cleanSpeciesCutoffs } from '../utils/minScore'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -23,6 +24,7 @@ const DEFAULT: WorkflowConfig = {
   gap_seconds: 60,
   min_score: 0.5,
   min_score_by_species: {},
+  session_name: '',
   include_burst_context: false,
   classified_by: 'expert_review',
   extended_confirmation: false,
@@ -89,13 +91,14 @@ export default function SetupPage({ onSetup, ready }: Props) {
     speciesCount: number; resolved: number; total: number; pct: number
   } | null>(null)
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
+  const [renamingDir, setRenamingDir] = useState<string | null>(null)
   const [imageCheck, setImageCheck] = useState<{ total: number; missing: number; permission_denied: number; ambiguous: { fileName: string }[] } | null>(null)
   const [checkingImages, setCheckingImages] = useState(false)
 
   useEffect(() => {
     api.getState().then((s) => {
       if (s.config) {
-        setForm(s.config)
+        setForm({ ...s.config, session_name: '' })      // a new session must not inherit the old name
         setSelectedSpecies(new Set(s.config.target_species))
         setAvailableSpecies(s.config.target_species)
       }
@@ -467,23 +470,53 @@ export default function SetupPage({ onSetup, ready }: Props) {
             <ul className="list-none p-0 m-0 space-y-1.5">
               {recentSessions.map((s) => (
                 <li key={s.session_dir}>
-                  <button
-                    className="w-full text-left px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
-                    onClick={() => handleLoadSession(s.session_dir)}
-                    disabled={loadingSession}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                        {s.target_species.join(', ') || t('welcome.recent_untitled')}
-                      </span>
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500 flex-shrink-0">
-                        {new Date(s.last_opened).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short' })}
-                      </span>
+                  {renamingDir === s.session_dir ? (
+                    <div className="px-3 py-2 rounded border border-blue-400 dark:border-blue-600">
+                      <SessionNameEditor
+                        startEditing
+                        sessionDir={s.session_dir}
+                        name={s.session_name ?? ''}
+                        fallback=""
+                        className="w-full"
+                        onRenamed={() => api.getRecentSessions().then(setRecentSessions).catch(() => {})}
+                        onDone={() => setRenamingDir(null)}
+                      />
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate font-mono mt-1">{s.session_dir}</div>
                     </div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate font-mono mt-0.5">
-                      {s.session_dir}
+                  ) : (
+                    <div className="flex items-stretch gap-1">
+                      <button
+                        className="flex-1 min-w-0 text-left px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                        onClick={() => handleLoadSession(s.session_dir)}
+                        disabled={loadingSession}
+                        aria-label={t('session_name.open', { name: s.session_name || s.target_species.join(', ') || s.session_dir })}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                            {s.session_name || s.target_species.join(', ') || t('welcome.recent_untitled')}
+                          </span>
+                          <span className="text-xs text-zinc-400 dark:text-zinc-500 flex-shrink-0">
+                            {new Date(s.last_opened).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+                        {s.session_name && s.target_species.length > 0 && (
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">{s.target_species.join(', ')}</div>
+                        )}
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate font-mono mt-0.5">
+                          {s.session_dir}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex-shrink-0 px-2 rounded border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        title={t('session_name.rename_one', { name: s.session_name || s.target_species.join(', ') || s.session_dir })}
+                        aria-label={t('session_name.rename_one', { name: s.session_name || s.target_species.join(', ') || s.session_dir })}
+                        onClick={() => setRenamingDir(s.session_dir)}
+                      >
+                        ✎
+                      </button>
                     </div>
-                  </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -1037,6 +1070,17 @@ export default function SetupPage({ onSetup, ready }: Props) {
       {step === 3 && (
         <div>
           <h4 className="text-lg font-semibold mb-6">{t('setup.step3_title')}</h4>
+
+          <div className="mb-6">
+            <label className={labelClass}>{t('session_name.label')}</label>
+            <input
+              type="text" className={inputClass} maxLength={120}
+              placeholder={t('session_name.placeholder')}
+              value={form.session_name ?? ''}
+              onChange={(e) => set('session_name', e.target.value)}
+            />
+            <p className={hintClass}>{t('session_name.hint')}</p>
+          </div>
 
           {/* ── Output location ── */}
           <div className="mb-6">

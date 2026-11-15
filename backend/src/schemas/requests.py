@@ -16,6 +16,8 @@ class SetupRequest(BaseModel):
     total_iterations: int = 100000
     gap_seconds: int = 60
     min_score: float = 0.5
+    # Optional name to tell sessions apart in the recent-sessions list and the species index.
+    session_name: str = Field("", max_length=120)
     # Per-species cut-offs that replace min_score (scientificName -> threshold; <= 0 means none).
     min_score_by_species: dict[str, float] = {}
     # Seed of the pseudo-random order of detection events with the same score (e.g. no scores).
@@ -56,6 +58,11 @@ class ReviewDecisionsRequest(BaseModel):
 
 class LoadSessionRequest(BaseModel):
     session_dir: str
+
+
+class RenameSessionRequest(BaseModel):
+    session_dir: str = ""          # empty: the active session
+    name: str = Field("", max_length=120)
 
 
 class TrapperLoginRequest(BaseModel):

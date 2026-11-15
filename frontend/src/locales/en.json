@@ -268,6 +268,18 @@
     "decisions_title": "Decisions",
     "decisions_body": "Confirming means the species is present in that occasion and location. Rejecting means the detection is incorrect. An occasion closes as soon as one detection event is confirmed."
   },
+  "session_name": {
+    "label": "Session name",
+    "placeholder": "e.g. Doñana spring 2023, combined",
+    "hint": "Shown in Recent sessions and on the species page, so you can tell sessions apart (e.g. two sessions with the same species). You can change it later with ✎.",
+    "rename": "Rename the session",
+    "rename_one": "Rename {{name}}",
+    "open": "Open {{name}}",
+    "save": "Save",
+    "cancel": "Cancel",
+    "session": "Session:",
+    "none": "no name"
+  },
   "results": {
     "effort_title": "Verification effort by species",
     "effort_hint": "Effort in detection events and cells, split by outcome. Inspecting an event means viewing its top-scoring photo. Baseline: a full review of every candidate event.",

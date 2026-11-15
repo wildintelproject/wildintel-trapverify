@@ -272,6 +272,18 @@
     "decisions_title": "Decyzje",
     "decisions_body": "Potwierdzenie oznacza, że gatunek jest obecny w tej okazji i lokalizacji. Odrzucenie oznacza, że wykrycie jest błędne. Okazja zamyka się, gdy tylko jedno zdarzenie detekcji zostanie potwierdzone."
   },
+  "session_name": {
+    "label": "Nazwa sesji",
+    "placeholder": "np. Doñana wiosna 2023, połączone",
+    "hint": "Wyświetlana w „Ostatnich sesjach” i na stronie gatunków, aby odróżnić sesje (np. dwie sesje z tymi samymi gatunkami). Możesz ją później zmienić przyciskiem ✎.",
+    "rename": "Zmień nazwę sesji",
+    "rename_one": "Zmień nazwę {{name}}",
+    "open": "Otwórz {{name}}",
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "session": "Sesja:",
+    "none": "bez nazwy"
+  },
   "results": {
     "effort_title": "Nakład weryfikacji według gatunku",
     "effort_hint": "Nakład w zdarzeniach detekcji i komórkach, z podziałem na wynik. Sprawdzenie zdarzenia to obejrzenie jego zdjęcia o najwyższym wyniku. Punkt odniesienia: pełny przegląd wszystkich zdarzeń kandydujących.",

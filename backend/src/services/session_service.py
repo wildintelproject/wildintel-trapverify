@@ -9,6 +9,7 @@ _state directly from outside this module.
 """
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -85,6 +86,7 @@ def list_recent_sessions() -> list[dict]:
         valid.append({
             "session_dir":    entry["session_dir"],
             "last_opened":    entry["last_opened"],
+            "session_name":   config.get("session_name", "") or "",
             "target_species": config.get("target_species", []),
             "study_start":    config.get("study_start"),
             "study_end":      config.get("study_end"),
@@ -97,6 +99,45 @@ def list_recent_sessions() -> list[dict]:
 
 
 # ── Writers ───────────────────────────────────────────────────────────────────
+
+def clean_session_name(name: str) -> str:
+    """A session name with its whitespace collapsed (an empty name means "no name")."""
+    return " ".join((name or "").split())
+
+
+def rename_session(session_dir: str, name: str) -> dict:
+    """Set (or clear, with an empty name) the name of a session.
+
+    Only the active session or one in the recent-sessions list can be renamed, so this
+    cannot be used to write ``config.json`` files elsewhere; the name is stored as
+    ``session_name`` in the session's own ``config.json``.
+    """
+    active = _state.get("session_dir")
+    target = Path(session_dir) if session_dir else active
+    if target is None:
+        raise HTTPException(400, "No hay sesión activa.")
+    known = {os.path.normcase(str(Path(e["session_dir"]))) for e in _read_recent()}
+    if active is not None:
+        known.add(os.path.normcase(str(Path(active))))
+    if os.path.normcase(str(Path(target))) not in known:
+        raise HTTPException(400, f"No es una sesión conocida: {target}")
+    cfg_file = Path(target) / "config.json"
+    try:
+        config = json.loads(cfg_file.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, f"No se puede leer {cfg_file}: {exc}") from exc
+    clean = clean_session_name(name)
+    config["session_name"] = clean
+    tmp = cfg_file.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(config, indent=2))
+    tmp.replace(cfg_file)                                   # written whole or not at all
+    if active is not None and os.path.normcase(str(Path(active))) == os.path.normcase(str(Path(target))):
+        current = _state.get("config")
+        if current is not None:
+            current["session_name"] = clean
+    logger.info("Session %s renamed to %r", target, clean)
+    return {"session_dir": str(target), "session_name": clean}
+
 
 def init_session(sd: Path, config: dict, candidates: pd.DataFrame) -> None:
     """Populate in-memory state for a newly created session."""

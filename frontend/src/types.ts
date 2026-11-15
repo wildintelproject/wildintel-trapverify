@@ -45,6 +45,8 @@ export interface WorkflowConfig {
   total_iterations: number
   gap_seconds: number
   min_score: number
+  /** Optional name that tells sessions apart. */
+  session_name?: string
   /** Cut-offs that replace min_score for some species (scientific name -> value). */
   min_score_by_species?: Record<string, number>
   include_burst_context: boolean
@@ -78,6 +80,7 @@ export interface OccupancyRow {
 export interface RecentSession {
   session_dir: string
   last_opened: string
+  session_name?: string
   target_species: string[]
   study_start: string | null
   study_end: string | null
