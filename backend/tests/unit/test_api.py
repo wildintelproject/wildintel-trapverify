@@ -2405,3 +2405,81 @@ def test_the_verified_camtrapdp_keeps_every_column_of_the_source(client, camtrap
     v = _verified_observations(sd)
     assert {"observationComments", "lifeStage"} <= set(v.columns)
     assert (v["observationComments"] == "keep me").all() and (v["lifeStage"] == "adult").all()
+
+
+# ─── Unsure decisions and pending expert review ───────────────────────────────
+
+def _round1_with_two_unsure(client, camtrap_dir, tmp_path):
+    """Round 1: confirm SITE_A occ1's event is NOT done; mark SITE_A occ2 and SITE_B occ1 unsure, reject occ1."""
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev = {e["key"]: e for e in _round1_events(client)}
+    unsure = [ev["SITE_A_occ2_Vulpes_vulpes"]["repObsId"], ev["SITE_B_occ1_Vulpes_vulpes"]["repObsId"]]
+    r = client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [], "unsure": unsure})
+    assert r.status_code == 200
+    return sd, ev
+
+
+def test_cells_with_an_unsure_event_and_no_events_left_become_pending(client, camtrap_dir, tmp_path):
+    _round1_with_two_unsure(client, camtrap_dir, tmp_path)
+    sp = client.get("/api/species").json()[0]
+    assert sp["n_pending"] == 2 and sp["phase"] == "rounds"                    # SITE_A occ1 still has a second event
+    ev2 = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 2}).json()
+    assert [e["key"] for e in ev2] == ["SITE_A_occ1_Vulpes_vulpes"]            # unsure counts as "not confirmed": next event shown
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    sp = client.get("/api/species").json()[0]
+    assert sp["phase"] == "pending" and sp["n_pending"] == 2
+    assert sp["n_resolved"] < sp["n_total_combos"]                            # not complete while pending
+
+
+def test_pending_cells_list_their_unsure_events_and_can_be_settled(client, camtrap_dir, tmp_path):
+    sd, ev = _round1_with_two_unsure(client, camtrap_dir, tmp_path)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    pend = client.get("/api/species/Vulpes_vulpes/pending").json()
+    assert [e["key"] for e in pend] == ["SITE_A_occ2_Vulpes_vulpes", "SITE_B_occ1_Vulpes_vulpes"]
+    assert all(e["status"] == "pending" and all("burstRepObsId" in f for f in e["frames"]) for e in pend)
+    keep = pend[0]["frames"][0]["burstRepObsId"]
+    r = client.post("/api/species/Vulpes_vulpes/pending", json={"confirmed": [keep], "rejected_keys": ["SITE_B_occ1_Vulpes_vulpes"]})
+    assert r.json() == {"success": True, "confirmed": 1, "rejected": 1}
+    assert client.get("/api/species/Vulpes_vulpes/pending").json() == []
+    sp = client.get("/api/species").json()[0]
+    assert sp["n_pending"] == 0 and sp["phase"] == "complete" and sp["n_confirmed_combos"] == 1
+
+
+def test_results_report_the_pending_cells_and_the_histories_leave_them_na(client, camtrap_dir, tmp_path):
+    sd, _ = _round1_with_two_unsure(client, camtrap_dir, tmp_path)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    res = client.get("/api/results").json()
+    assert res["pending"] == 2 and res["by_species"][0]["pending"] == 2
+    assert res["effort_by_species"][0]["cells_pending"] == 2
+    v = pd.read_csv(sd / "occupancy_inputs" / "dethist_verified_Vulpes_vulpes.csv", dtype=str).fillna("").set_index("siteID")
+    assert v.loc["SITE_A", "occ2"] == "" and v.loc["SITE_B", "occ1"] == "" and v.loc["SITE_A", "occ1"] == "0"
+    status = pd.read_csv(sd / "occupancy_inputs" / "cell_status_Vulpes_vulpes.csv", dtype=str).fillna("").set_index("siteID")
+    assert status.loc["SITE_A", "occ2"] == "pending"
+
+
+def test_tags_follow_the_pending_review(client, camtrap_dir, tmp_path):
+    sd, ev = _round1_with_two_unsure(client, camtrap_dir, tmp_path)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    client.get("/api/results")
+    tags = _tags_by_media(sd)
+    a2 = next(f["mediaId"] for f in ev["SITE_A_occ2_Vulpes_vulpes"]["frames"] if f["obsId"] == ev["SITE_A_occ2_Vulpes_vulpes"]["repObsId"])
+    assert tags[a2] == "camtrapverify:unsure"                                  # still waiting for an expert
+    client.post("/api/species/Vulpes_vulpes/pending", json={"confirmed": [], "rejected_keys": ["SITE_A_occ2_Vulpes_vulpes"]})
+    client.get("/api/results")
+    assert _tags_by_media(sd)[a2] == "camtrapverify:rejected"                  # settled as not detected
+
+
+def test_cannot_reopen_a_round_after_pending_cells_were_settled(client, camtrap_dir, tmp_path):
+    _round1_with_two_unsure(client, camtrap_dir, tmp_path)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    client.post("/api/species/Vulpes_vulpes/pending", json={"confirmed": [], "rejected_keys": ["SITE_B_occ1_Vulpes_vulpes"]})
+    assert client.post("/api/species/Vulpes_vulpes/reopen").status_code == 400
+
+
+def test_editing_a_species_settles_its_pending_cells(client, camtrap_dir, tmp_path):
+    _round1_with_two_unsure(client, camtrap_dir, tmp_path)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    assert client.get("/api/species").json()[0]["n_pending"] == 2
+    client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": ["SITE_A_occ2_Vulpes_vulpes"]})
+    sp = client.get("/api/species").json()[0]
+    assert sp["n_pending"] == 0 and sp["n_confirmed_combos"] == 1 and sp["phase"] == "complete"

@@ -1572,14 +1572,109 @@ def save_unsure(
     return df
 
 
-def load_all_unsure(decisions_dir: Path) -> pd.DataFrame:
-    """Concatenate all ``unsure_*.csv`` files (empty frame with the columns if none)."""
-    cols = ["observationID", "site_occasion_key", "mediaID",
-            "scientificName", "siteID", "occasion"]
-    files = list(decisions_dir.glob("unsure_*.csv")) if decisions_dir.exists() else []
-    if not files:
+DECISION_COLUMNS = ["observationID", "site_occasion_key", "mediaID", "scientificName", "siteID", "occasion"]
+_UNSURE_FILE_RE = re.compile(r"unsure_(.+)_iter(\d+)\.csv")
+
+
+def load_all_unsure(decisions_dir: Path, species_safe: Optional[str] = None) -> pd.DataFrame:
+    """Every event marked *unsure* in a round (``unsure_<sp>_iter<N>.csv``), optionally of one species.
+
+    Adds a ``round`` column. Empty frame with the columns when there is none. The files that
+    record settled pending cells (``unsure_cleared_<sp>.csv``) are not events and are skipped.
+    """
+    frames = []
+    if decisions_dir.exists():
+        for f in sorted(decisions_dir.glob("unsure_*_iter*.csv")):
+            m = _UNSURE_FILE_RE.fullmatch(f.name)
+            if m and (species_safe is None or m.group(1) == species_safe):
+                df = pd.read_csv(f, dtype=str)
+                df["round"] = int(m.group(2))
+                frames.append(df)
+    if not frames:
+        return pd.DataFrame(columns=[*DECISION_COLUMNS, "round"])
+    return pd.concat(frames, ignore_index=True)
+
+
+def cleared_keys_set(decisions_dir: Path) -> set[str]:
+    """Pending cells an expert later resolved as *not detected*."""
+    keys: set[str] = set()
+    if decisions_dir.exists():
+        for f in decisions_dir.glob("unsure_cleared_*.csv"):
+            df = pd.read_csv(f, dtype=str)
+            if "site_occasion_key" in df.columns:
+                keys.update(df["site_occasion_key"].dropna())
+    return keys
+
+
+def cell_states(candidates: pd.DataFrame, decisions_dir: Path) -> pd.DataFrame:
+    """One row per site x occasion x species cell with its review status.
+
+    * ``confirmed``: an expert confirmed one of its detection events.
+    * ``rejected``: every available event was reviewed and none confirmed (a verified 0).
+    * ``pending``: like ``rejected``, but at least one event was marked *unsure* and no expert has
+      settled it yet ("pending expert review"): it is NA, not 0, in the verified histories.
+    * ``unverified``: the rounds have not reached all its events yet.
+
+    Returns a frame with ``site_occasion_key``, ``species_safe``, ``scientificName``, ``siteID``,
+    ``occasion``, ``max_rank`` and ``status``.
+    """
+    cols = ["site_occasion_key", "species_safe", "scientificName", "siteID", "occasion", "max_rank", "status"]
+    if candidates is None or candidates.empty:
         return pd.DataFrame(columns=cols)
-    return pd.concat([pd.read_csv(f, dtype=str) for f in files], ignore_index=True)
+    cells = (
+        candidates.groupby(["site_occasion_key", "species_safe"], sort=True)
+        .agg(scientificName=("scientificName", "first"), siteID=("siteID", "first"),
+             occasion=("occasion", "first"), max_rank=("rank", "max"))
+        .reset_index()
+    )
+    conf = confirmed_keys_set(decisions_dir) if decisions_dir.exists() else set()
+    unsure = set(load_all_unsure(decisions_dir)["site_occasion_key"].dropna()) - cleared_keys_set(decisions_dir)
+    rounds = rounds_completed(decisions_dir)
+    done = cells["species_safe"].astype(str).map(rounds).fillna(0)
+    exhausted = cells["max_rank"].astype(int) <= done
+    cells["status"] = "unverified"
+    cells.loc[exhausted, "status"] = "rejected"
+    cells.loc[exhausted & cells["site_occasion_key"].isin(unsure), "status"] = "pending"
+    cells.loc[cells["site_occasion_key"].isin(conf), "status"] = "confirmed"
+    return cells[cols]
+
+
+def resolve_pending(
+    decisions_dir: Path,
+    candidates: pd.DataFrame,
+    species_safe: str,
+    confirmed_ids: list[str],
+    rejected_keys: list[str],
+) -> tuple[int, int]:
+    """Record an expert's verdict on cells that were pending expert review.
+
+    Confirmed representative observations are appended to ``decisions_<sp>_pending.csv`` (read like
+    any decision file, without counting as a new round); cells settled as not detected are appended
+    to ``unsure_cleared_<sp>.csv``. Cells left unsure again are not mentioned and stay pending.
+
+    Returns ``(n_confirmed, n_rejected)`` actually recorded.
+    """
+    decisions_dir.mkdir(parents=True, exist_ok=True)
+    sp_cands = candidates[candidates["species_safe"] == species_safe]
+    states = cell_states(sp_cands, decisions_dir)
+    pending = set(states.loc[states["status"] == "pending", "site_occasion_key"])
+
+    conf_rows = sp_cands[
+        sp_cands["observationID"].isin(confirmed_ids) & sp_cands["site_occasion_key"].isin(pending)
+    ][DECISION_COLUMNS].drop_duplicates("site_occasion_key")
+    if not conf_rows.empty:
+        path = decisions_dir / f"decisions_{species_safe}_pending.csv"
+        if path.exists():
+            conf_rows = pd.concat([pd.read_csv(path, dtype=str), conf_rows.astype(str)])
+        conf_rows.drop_duplicates("site_occasion_key").to_csv(path, index=False)
+
+    confirmed_keys = set(conf_rows["site_occasion_key"]) if not conf_rows.empty else set()
+    cleared = sorted((set(rejected_keys) & pending) - confirmed_keys)
+    if cleared:
+        path = decisions_dir / f"unsure_cleared_{species_safe}.csv"
+        existing = pd.read_csv(path, dtype=str) if path.exists() else pd.DataFrame(columns=["site_occasion_key"])
+        pd.concat([existing, pd.DataFrame({"site_occasion_key": cleared})]).drop_duplicates("site_occasion_key").to_csv(path, index=False)
+    return len(confirmed_keys), len(cleared)
 
 
 NO_ANIMAL_LABEL = "No animal / empty"
@@ -1785,9 +1880,13 @@ def species_stats(
 ) -> list[dict]:
     """Compute per-species progress statistics for the index page.
 
-    A cell is considered *resolved* when it is confirmed OR all of its available
-    ranks have been reviewed (``max_rank <= rounds_done``). ``n_resolved`` drives
-    the progress bar and the "Completo" badge.
+    A cell is *resolved* when it is confirmed OR all of its available ranks have been reviewed
+    (``max_rank <= rounds_done``) without any of them marked unsure. Exhausted cells with an unsure
+    event are counted in ``n_pending`` instead (pending expert review). ``n_resolved`` drives the
+    progress bar and the "Complete" badge.
+
+    ``phase`` tells the gallery what to show: ``rounds`` while some cell still has unreviewed
+    events, ``pending`` once only pending cells remain, ``complete`` when everything is settled.
 
     Args:
         candidates: Full candidate manifest DataFrame.
@@ -1797,39 +1896,119 @@ def species_stats(
     Returns:
         List of dicts, one per species, with keys ``species_name``,
         ``species_safe``, ``n_total_combos``, ``n_confirmed_combos``,
-        ``n_resolved`` and ``current_iteration``.
+        ``n_resolved``, ``n_pending``, ``current_iteration`` and ``phase``.
     """
-    conf_keys = confirmed_keys_set(decisions_dir)
-
-    iter_by_sp: dict[str, int] = {}
-    for f in decisions_dir.glob("*.csv"):
-        m = re.match(r"decisions_(.+)_iter(\d+)\.csv", f.name)
-        if m:
-            sp, it = m.group(1), int(m.group(2))
-            iter_by_sp[sp] = max(iter_by_sp.get(sp, 0), it)
+    states = cell_states(candidates, decisions_dir)
+    rounds = rounds_completed(decisions_dir)
 
     result = []
-    for sp_safe, grp in candidates.groupby("species_safe"):
-        sp_name = grp["scientificName"].iloc[0]
-        all_keys = set(grp["site_occasion_key"].unique())
-        max_rank = grp.groupby("site_occasion_key")["rank"].max()
-        R = iter_by_sp.get(str(sp_safe), 0)
-        resolved = sum(
-            1 for k in all_keys
-            if k in conf_keys or max_rank.get(k, 0) <= R
-        )
+    for sp_safe, grp in states.groupby("species_safe", sort=True):
+        counts = grp["status"].value_counts()
+        n_conf = int(counts.get("confirmed", 0))
+        n_rej = int(counts.get("rejected", 0))
+        n_pending = int(counts.get("pending", 0))
+        n_open = int(counts.get("unverified", 0))
+        phase = "rounds" if n_open else ("pending" if n_pending else "complete")
         result.append({
-            "species_name": sp_name,
+            "species_name": grp["scientificName"].iloc[0],
             "species_safe": str(sp_safe),
-            "n_total_combos": len(all_keys),
-            "n_confirmed_combos": sum(1 for k in all_keys if k in conf_keys),
-            "n_resolved": resolved,
-            "current_iteration": R + 1,
+            "n_total_combos": len(grp),
+            "n_confirmed_combos": n_conf,
+            "n_resolved": n_conf + n_rej,
+            "n_pending": n_pending,
+            "current_iteration": rounds.get(str(sp_safe), 0) + 1,
+            "phase": phase,
         })
     return result
 
 
 # ─── Events for gallery ───────────────────────────────────────────────────────
+
+def _build_events(
+    sp_cands: pd.DataFrame,
+    total_seqs_by_key: dict,
+    image_base_dir: str,
+    fallback_base: Path,
+    flat_search: bool,
+    extra_bases: tuple,
+    with_burst_reps: bool = False,
+) -> list[dict]:
+    """Gallery event dicts (one per cell) from candidate frames already sorted for display.
+
+    With ``with_burst_reps`` every frame also carries ``burstRepObsId``, the observation that
+    represents the detection event the frame belongs to, so a decision taken while looking at a
+    given event of a cell holding several of them records that event (pending expert review).
+    """
+    # Per-frame display values for the whole selection at once (not row by row).
+    sp_cands = sp_cands.copy()
+    sp_cands["_ts_shown"] = _frame_times(sp_cands)
+    sp_cands["_p"] = pd.to_numeric(sp_cands["classificationProbability"], errors="coerce")
+    sp_cands["_ctx"] = (sp_cands["is_context"].fillna(False).astype(bool)
+                        if "is_context" in sp_cands.columns else False)
+    has_deployment = "deploymentID" in sp_cands.columns
+    has_file_name = "fileName" in sp_cands.columns
+    has_boxes = "bboxes" in sp_cands.columns
+
+    burst_rep: dict = {}
+    if with_burst_reps:
+        real = sp_cands[~sp_cands["_ctx"]]
+        pr = pd.to_numeric(real["classificationProbability"], errors="coerce").fillna(0)
+        rep_rows = real.assign(_pr=pr).sort_values("_pr", ascending=False, kind="stable").drop_duplicates(["site_occasion_key", "burst_id"])
+        burst_rep = {(k, b): o for k, b, o in zip(rep_rows["site_occasion_key"], rep_rows["burst_id"], rep_rows["observationID"])}
+
+    events = []
+    for key, group in sp_cands.groupby("site_occasion_key", sort=False):
+        # (``group`` keeps the order of the frames sorted above.)
+        # Context frames (is_context=True) are not used for repObsId / maxProb
+        decision_rows = group[~group["_ctx"]]
+
+        prob_col = pd.to_numeric(
+            decision_rows["classificationProbability"], errors="coerce"
+        ).fillna(0)
+        rep_idx = prob_col.idxmax()
+        rep_obs = decision_rows.loc[rep_idx, "observationID"]
+        max_prob = float(prob_col.max())
+
+        frames = []
+        for obs_id, media_id, fp, dep_id, fname, ts_shown, prob, is_ctx_row, bboxes, burst in zip(
+            group["observationID"], group["mediaID"], group["filePath"],
+            group["deploymentID"] if has_deployment else [""] * len(group),
+            group["fileName"] if has_file_name else [""] * len(group),
+            group["_ts_shown"], group["_p"], group["_ctx"],
+            group["bboxes"] if has_boxes else [None] * len(group),
+            group["burst_id"],
+        ):
+            img_url = gallery_frame_img_url(
+                str(fp), str(media_id), str(dep_id), str(fname),
+                image_base_dir, fallback_base, flat_search=flat_search, extra_bases=extra_bases,
+            )
+            frame = {
+                "obsId":     obs_id,
+                "mediaId":   str(media_id),
+                "img":       img_url,
+                "ts":        ts_shown,
+                "prob":      round(float(prob), 3) if pd.notna(prob) else None,
+                "isContext": bool(is_ctx_row),
+                # Boxes can only be drawn on images the app serves itself, not on remote ones.
+                "boxes":     count_boxes(bboxes) if img_url.startswith("/api/image/") else 0,
+            }
+            if with_burst_reps:
+                frame["burstRepObsId"] = burst_rep.get((key, burst), obs_id)
+            frames.append(frame)
+
+        events.append({
+            "key":       key,
+            "siteId":    str(group["siteID"].iloc[0]),
+            "occasion":  int(group["occasion"].iloc[0]),
+            "rank":      int(group["rank"].iloc[0]),
+            "totalSeqs": int(total_seqs_by_key.get(key, 1)),
+            "repObsId":  rep_obs,
+            "maxProb":   max_prob,
+            "frames":    frames,
+        })
+
+    return events
+
 
 def get_events(
     candidates: pd.DataFrame,
@@ -1881,63 +2060,43 @@ def get_events(
     all_sp = candidates[candidates["species_safe"] == species_safe]
     total_seqs_by_key = all_sp.groupby("site_occasion_key")["rank"].max().to_dict()
 
-    # Per-frame display values for the whole selection at once (not row by row).
     sp_cands = _sort_frames(sp_cands, ["burst_id", "ts"])
-    sp_cands["_ts_shown"] = _frame_times(sp_cands)
-    sp_cands["_p"] = pd.to_numeric(sp_cands["classificationProbability"], errors="coerce")
-    sp_cands["_ctx"] = (sp_cands["is_context"].fillna(False).astype(bool)
-                        if "is_context" in sp_cands.columns else False)
-    has_deployment = "deploymentID" in sp_cands.columns
-    has_file_name = "fileName" in sp_cands.columns
-    has_boxes = "bboxes" in sp_cands.columns
+    return _build_events(sp_cands, total_seqs_by_key, image_base_dir, fallback_base, flat_search, extra_bases)
 
-    events = []
-    for key, group in sp_cands.groupby("site_occasion_key", sort=False):
-        # (``group`` keeps the order of the frames sorted above.)
-        # Context frames (is_context=True) are not used for repObsId / maxProb
-        decision_rows = group[~group["_ctx"]]
 
-        prob_col = pd.to_numeric(
-            decision_rows["classificationProbability"], errors="coerce"
-        ).fillna(0)
-        rep_idx = prob_col.idxmax()
-        rep_obs = decision_rows.loc[rep_idx, "observationID"]
-        max_prob = float(prob_col.max())
+def get_pending_events(
+    species_cands: pd.DataFrame,
+    decisions_dir: Path,
+    image_base_dir: str = "",
+    fallback_base: Path = Path("."),
+    flat_search: bool = False,
+    extra_bases: tuple = (),
+) -> list[dict]:
+    """The cells of a species that are pending expert review, as gallery events.
 
-        frames = []
-        for obs_id, media_id, fp, dep_id, fname, ts_shown, prob, is_ctx_row, bboxes in zip(
-            group["observationID"], group["mediaID"], group["filePath"],
-            group["deploymentID"] if has_deployment else [""] * len(group),
-            group["fileName"] if has_file_name else [""] * len(group),
-            group["_ts_shown"], group["_p"], group["_ctx"],
-            group["bboxes"] if has_boxes else [None] * len(group),
-        ):
-            img_url = gallery_frame_img_url(
-                str(fp), str(media_id), str(dep_id), str(fname),
-                image_base_dir, fallback_base, flat_search=flat_search, extra_bases=extra_bases,
-            )
-            frames.append({
-                "obsId":     obs_id,
-                "mediaId":   str(media_id),
-                "img":       img_url,
-                "ts":        ts_shown,
-                "prob":      round(float(prob), 3) if pd.notna(prob) else None,
-                "isContext": bool(is_ctx_row),
-                # Boxes can only be drawn on images the app serves itself, not on remote ones.
-                "boxes":     count_boxes(bboxes) if img_url.startswith("/api/image/") else 0,
-            })
+    Each card carries the frames of every detection event of that cell that was marked unsure
+    during the rounds (lowest rank first); every frame has ``burstRepObsId`` (the representative of
+    its event), so confirming while looking at a given event records that event.
 
-        events.append({
-            "key":       key,
-            "siteId":    str(group["siteID"].iloc[0]),
-            "occasion":  int(group["occasion"].iloc[0]),
-            "rank":      int(group["rank"].iloc[0]),
-            "totalSeqs": int(total_seqs_by_key.get(key, 1)),
-            "repObsId":  rep_obs,
-            "maxProb":   max_prob,
-            "frames":    frames,
-        })
-
+    Returns event dicts (as :func:`get_events`) with ``status='pending'``, sorted by site, occasion.
+    """
+    states = cell_states(species_cands, decisions_dir)
+    pending = set(states.loc[states["status"] == "pending", "site_occasion_key"])
+    if not pending:
+        return []
+    unsure = load_all_unsure(decisions_dir)
+    unsure = unsure[unsure["site_occasion_key"].isin(pending)]
+    flagged = species_cands[species_cands["observationID"].isin(set(unsure["observationID"]))]
+    burst_keys = flagged[["site_occasion_key", "burst_id"]].drop_duplicates()
+    rows = species_cands.merge(burst_keys, on=["site_occasion_key", "burst_id"])
+    total_seqs_by_key = species_cands.groupby("site_occasion_key")["rank"].max().to_dict()
+    events = _build_events(
+        _sort_frames(rows, ["rank", "burst_id", "ts"]), total_seqs_by_key, image_base_dir, fallback_base,
+        flat_search, extra_bases, with_burst_reps=True,
+    )
+    for e in events:
+        e["status"] = "pending"
+    events.sort(key=lambda e: (e["siteId"], e["occasion"]))
     return events
 
 
@@ -2051,7 +2210,7 @@ TAG_FILTERED = "camtrapverify:filtered"    # removed by "Classifiers and referen
 TAG_REFERENCE = "camtrapverify:reference"  # the reference (e.g. Zooniverse) confirmed it
 TAG_CONFIRMED = "camtrapverify:confirmed"
 TAG_REJECTED = "camtrapverify:rejected"
-TAG_UNCERTAIN = "camtrapverify:unsure"
+TAG_UNSURE = "camtrapverify:unsure"
 TAG_ACTUAL_SPECIES = "camtrapverify-actual-species:"
 
 
@@ -2072,13 +2231,15 @@ def reviewed_event_tags(
     unc_ids: set,
     rounds_done: dict[str, int],
     corrections: Optional[dict[str, str]] = None,
+    cleared: Optional[set] = None,
 ) -> dict[str, list[str]]:
     """Tags for the events the reviewer rejected, by the ``observationID`` that represents each event.
 
     An event was *inspected and not confirmed* when its cell has a confirmation at a later rank,
     or has none and the species finished a round at that rank or later. Such an event is tagged
-    ``camtrapverify:rejected``, or ``camtrapverify:unsure`` when it was marked unsure (which
-    behaves as a rejection in the histories). With a recorded actual species the event also gets
+    ``camtrapverify:rejected``, or ``camtrapverify:unsure`` when it was marked unsure and its cell
+    is still pending expert review (an expert who settled the cell as not detected makes it a
+    rejection; ``cleared`` holds those cells). With a recorded actual species the event also gets
     ``camtrapverify-actual-species:<name>``. Events never inspected get no tag.
     """
     cand = candidates
@@ -2097,10 +2258,11 @@ def reviewed_event_tags(
     rows = rows[rows["rank"] < limit]
     if rows.empty:
         return {}
-    reps = rows.loc[rows.groupby([cell, burst], sort=False)["_p"].idxmax(), "observationID"]
+    reps = rows.loc[rows.groupby([cell, burst], sort=False)["_p"].idxmax()]
     tags: dict[str, list[str]] = {}
-    for oid in reps:
-        t = [TAG_UNCERTAIN if oid in unc_ids and oid not in conf_ids else TAG_REJECTED]
+    for oid, key in zip(reps["observationID"], reps[cell]):
+        unsure = oid in unc_ids and oid not in conf_ids and key not in (cleared or ())
+        t = [TAG_UNSURE if unsure else TAG_REJECTED]
         actual = (corrections or {}).get(oid, "").strip().replace("|", " ")
         if actual:
             t.append(TAG_ACTUAL_SPECIES + actual)
@@ -2213,7 +2375,8 @@ def export_verified_camtrapdp(
     if candidates is not None and not candidates.empty:
         unc = load_all_unsure(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
         unc_ids = set(unc["observationID"].dropna()) if not unc.empty else set()
-        rev = reviewed_event_tags(candidates, _rep_confirmed(decisions_dir), unc_ids, rounds_completed(decisions_dir), corrections)
+        rev = reviewed_event_tags(candidates, _rep_confirmed(decisions_dir), unc_ids, rounds_completed(decisions_dir), corrections,
+                                  cleared_keys_set(decisions_dir))
         if rev:
             rep_rows = obs[obs["observationID"].isin(rev)]
             by_pair = {(m, s): rev[str(o)] for o, m, s in zip(rep_rows["observationID"], rep_rows["mediaID"], rep_rows["scientificName"])}
@@ -2301,6 +2464,7 @@ def _time_to_detection(
     naive_keys: set,
     verif_keys: set,
     rounds_done: int,
+    pending_keys: Optional[set] = None,
 ):
     """Time to first detection per site x occasion, in hours from the start of the occasion.
 
@@ -2348,8 +2512,8 @@ def _time_to_detection(
             tN[i, j] = hours(first_naive[key]) if key in first_naive else length
             if key in verif_keys:
                 tV[i, j] = hours(first_verified[key]) if key in first_verified else np.nan
-            elif key in naive_keys and max_rank.get(key, 0) > rounds_done:
-                tV[i, j] = np.nan                                   # pending: events left to review
+            elif key in (pending_keys or ()) or (key in naive_keys and max_rank.get(key, 0) > rounds_done):
+                tV[i, j] = np.nan                                   # pending expert review, or events left to review
             else:
                 tV[i, j] = length                                   # all inspected and rejected, or no candidate
     return tN, tV
@@ -2371,9 +2535,12 @@ def build_occupancy_inputs(
       falls back to the full occasion length otherwise.
     * ``dethist_naive_<sp>.csv`` — 1/0/NA detection history trusting the classifier.
     * ``dethist_verified_<sp>.csv`` — 1/0/NA detection history using only
-      human-confirmed detections.
+      human-confirmed detections. Cells pending expert review are NA too.
+    * ``cell_status_<sp>.csv`` — same shape, telling the NA cells apart: ``1``, ``0``,
+      ``pending`` (pending expert review), ``unreviewed`` (rounds not finished; written as 0 in the
+      verified history) or ``inactive`` (camera not operating).
     * ``verification_summary.csv`` — per-species summary with ``psi_obs`` naive
-      vs. verified.
+      vs. verified, plus ``pending_cells`` and ``unreviewed_cells``.
 
     Args:
         candidates: Full candidate manifest DataFrame.
@@ -2472,6 +2639,8 @@ def build_occupancy_inputs(
 
     # ── Historiales de detección por especie ─────────────────────────────────
     summary_rows = []
+    states = cell_states(candidates, decisions_dir)
+    status_by_key = dict(zip(states["site_occasion_key"], states["status"]))
 
     for sp in target_species:
         sp_safe   = sanitize(sp)
@@ -2486,15 +2655,34 @@ def build_occupancy_inputs(
             verif_keys = {k for k in (dec["site_occasion_key"].dropna() if not dec.empty else [])
                           if k.endswith(f"_{sp_safe}")}
 
+        # Verified history: 1 confirmed; NA where the camera was inactive OR the cell is pending
+        # expert review (unknown, not a true zero); 0 otherwise. cell_status_<sp>.csv keeps those
+        # two kinds of NA apart.
         yN = np.full((n_sites, n_occ), np.nan)
         yV = np.full((n_sites, n_occ), np.nan)
+        status = np.full((n_sites, n_occ), "inactive", dtype=object)
+        n_pending = 0
+        n_unverified = 0
         for i, site in enumerate(sites):
             for j in range(n_occ):
                 if op[i, j] == 0:
                     continue
                 key = f"{site}_occ{j + 1}_{sp_safe}"
                 yN[i, j] = 1.0 if key in naive_keys else 0.0
-                yV[i, j] = 1.0 if key in verif_keys else 0.0
+                cell = "confirmed" if key in verif_keys else status_by_key.get(key)
+                if cell == "confirmed":
+                    yV[i, j] = 1.0
+                    status[i, j] = "1"
+                elif cell == "pending":
+                    status[i, j] = "pending"
+                    n_pending += 1
+                elif cell == "unverified":
+                    yV[i, j] = 0.0
+                    status[i, j] = "unreviewed"
+                    n_unverified += 1
+                else:                                            # rejected, or no candidate at all
+                    yV[i, j] = 0.0
+                    status[i, j] = "0"
 
         def _to_df(y: "np.ndarray") -> pd.DataFrame:
             rows = []
@@ -2514,7 +2702,11 @@ def build_occupancy_inputs(
             sp_cands, dec, sp, sp_safe, sites, occasion_windows_dt(
                 study_start, study_end, config_occasion_hours(config)), op, naive_keys, verif_keys,
             rounds_completed(decisions_dir).get(sp_safe, 0),
+            pending_keys={k for k, v in status_by_key.items() if v == "pending"},
         )
+        status_df = pd.DataFrame(status, columns=occ_cols)
+        status_df.insert(0, "siteID", sites)
+        status_df.to_csv(out_dir / f"cell_status_{sp_safe}.csv", index=False)
         _ttd_to_df(tN, sites, occ_cols).to_csv(out_dir / f"ttd_naive_{sp_safe}.csv", index=False)
         _ttd_to_df(tV, sites, occ_cols).to_csv(out_dir / f"ttd_verified_{sp_safe}.csv", index=False)
 
@@ -2537,6 +2729,8 @@ def build_occupancy_inputs(
             "naive_detections":     naive_det,
             "verified_detections":  verif_det,
             "false_positive_cells": fp_cells,
+            "pending_cells":        n_pending,
+            "unreviewed_cells":     n_unverified,
             "psi_obs_naive":        round(psi_naive, 3),
             "psi_obs_verified":     round(psi_verif, 3),
         })
@@ -2597,6 +2791,9 @@ def build_review_effort(
     # a cell with no confirmation costs its highest rank (every event was inspected)
     ins_rej = int(rank[~is_conf_cell].groupby(key_str[~is_conf_cell]).max().sum())
 
+    states = cell_states(candidates, decisions_dir)
+    n_pending = int((states["status"] == "pending").sum())
+
     inspected = ins_conf + ins_rej
     n_candidates = len(candidates)
     n_cells = len(keys)
@@ -2618,6 +2815,7 @@ def build_review_effort(
         "candidate_cells":         n_cells,
         "confirmed_cells":         n_conf,
         "rejected_cells":          n_rej,
+        "pending_cells":           n_pending,
         "candidate_images":        n_candidates,
         "images_inspected":        inspected,
         "inspected_in_confirmed":  ins_conf,
@@ -2733,13 +2931,17 @@ def has_tag(tags: pd.Series, tag: str) -> pd.Series:
     return tags.fillna("").astype(str).str.contains(pattern, regex=True)
 
 
-def _effort_accumulate(sp_df: pd.DataFrame, conf_ids: set, unc_ids: set, done: Optional[int], acc: dict) -> dict:
+def _effort_accumulate(
+    sp_df: pd.DataFrame, conf_ids: set, unc_ids: set, done: Optional[int], acc: dict, cleared: Optional[set] = None,
+) -> dict:
     """Effort counters of one species, computed for all its cells at once (no per-cell loop).
 
     ``sp_df`` holds the species' candidate rows (context frames already removed) with a numeric
     ``_score``. A cell is a *detection* when one of its photos is in ``conf_ids`` (its events up
     to the confirmed rank were inspected), otherwise every event up to round ``done`` was
-    inspected (all of them when ``done`` is None). Same results as walking the cells one by one.
+    inspected (all of them when ``done`` is None). A cell whose events ran out without a confirmation
+    but holds an unsure event (and no expert has settled it: ``cleared``) is *pending* expert review,
+    not a non-detection. Same results as walking the cells one by one.
     """
     cell, burst = "site_occasion_key", "burst_id"
     ev = sp_df.groupby([cell, burst], sort=False).agg(rank=("rank", "first"), score=("_score", "max")).reset_index()
@@ -2754,8 +2956,12 @@ def _effort_accumulate(sp_df: pd.DataFrame, conf_ids: set, unc_ids: set, done: O
     per_cell = ev.groupby(cell, sort=False).agg(n_ev=("rank", "size"), n_seen=("seen", "sum"))
     det_cells = pd.Series(per_cell.index.isin(cr.index), index=per_cell.index)
     unv_cells = ~det_cells & (per_cell["n_seen"] < per_cell["n_ev"])
-    non_cells = ~det_cells & ~unv_cells
+    exhausted_cells = ~det_cells & ~unv_cells
     unc_per_cell = n_unc.reindex(per_cell.index).fillna(0)
+    pend_cells = exhausted_cells & (unc_per_cell > 0) & ~per_cell.index.isin(cleared or ())
+    non_cells = exhausted_cells & ~pend_cells
+    pend_keys = set(per_cell.index[pend_cells])
+    in_pend = ev[cell].isin(pend_keys)
 
     acc["events"] += len(ev)
     acc["photos"] += len(sp_df)
@@ -2763,10 +2969,11 @@ def _effort_accumulate(sp_df: pd.DataFrame, conf_ids: set, unc_ids: set, done: O
     acc["det"] += int(det_cells.sum())
     acc["unv"] += int(unv_cells.sum())
     acc["non"] += int(non_cells.sum())
-    acc["unc_cells"] += int((non_cells & (unc_per_cell > 0)).sum())
+    acc["pend"] += int(pend_cells.sum())
     acc["insp"] += int(ev["seen"].sum())
     acc["insp_det"] += int((ev["seen"] & det_ev).sum())
-    acc["insp_non"] += int((ev["seen"] & ~det_ev).sum())
+    acc["insp_pend"] += int((ev["seen"] & in_pend).sum())
+    acc["insp_non"] += int((ev["seen"] & ~det_ev & ~in_pend).sum())
 
     before = det_ev & (ev["rank"] < ev["cr"])
     acc["before"] += ev.loc[before].groupby(cell).size().reindex(per_cell.index[det_cells], fill_value=0).tolist()
@@ -2807,14 +3014,16 @@ def build_species_effort(
       the event-level baseline is a full review of ``candidate_events``.
     * ``candidate_photos``, ``photos_inspected``, ``photos_in_inspected_events``.
     * ``events_inspected_in_detection_cells`` / ``events_inspected_in_non_detection_cells``:
-      effort split by cell outcome.
+      effort split by cell outcome (``events_inspected_in_pending_cells`` for the pending ones).
     * ``rejections_before_confirm_{mean,median,max}``: rejected events before
       the confirmed one, over detection cells.
     * ``rejected_score_{min,median,max}``: score of every rejected event.
     * ``confirmed_score_{min,median,max}``: score of the confirmed event.
     * ``unsure_events``: events the reviewer marked *unsure* (not counting any
-      later confirmed). They behave exactly as rejections in the histories.
-      ``non_detection_cells_with_unsure``: non-detection cells holding at least one.
+      later confirmed). During the rounds an unsure event counts as not confirmed, so the next event
+      of its occasion is shown.
+      ``cells_pending``: cells whose events ran out without a confirmation but hold an unsure event
+      that no expert has settled: *pending expert review*, neither detections nor non-detections.
     * ``review_active_seconds``, ``review_decisions_timed``,
       ``review_seconds_per_decision``, ``review_est_full_seconds``,
       ``review_est_saved_seconds``: active review time from the decision timestamps
@@ -2848,6 +3057,7 @@ def build_species_effort(
 
     unc = load_all_unsure(decisions_dir)
     unc_ids = set(unc["observationID"].dropna()) - conf_ids
+    cleared = cleared_keys_set(decisions_dir)
 
     cand = candidates.copy()
     if "is_context" in cand.columns:
@@ -2860,12 +3070,13 @@ def build_species_effort(
         return {f"{prefix}_{n}": (round(float(fn[n]()), 3) if not s_.empty else None) for n in names}
 
     def build_row(label: str, acc: dict) -> dict:
-        n_cells = acc["det"] + acc["non"] + acc["unv"]
+        n_cells = acc["det"] + acc["non"] + acc["pend"] + acc["unv"]
         row = {
             "species": label,
             "candidate_cells": n_cells,
             "cells_detection": acc["det"],
             "cells_non_detection": acc["non"],
+            "cells_pending": acc["pend"],
             "cells_unverified": acc["unv"],
             "candidate_events": acc["events"],
             "events_inspected": acc["insp"],
@@ -2873,10 +3084,10 @@ def build_species_effort(
             "candidate_photos": acc["photos"],
             "photos_inspected": acc["insp"],
             "unsure_events": acc["unc"],
-            "non_detection_cells_with_unsure": acc["unc_cells"],
             "photos_in_inspected_events": acc["photos_insp"],
             "events_inspected_in_detection_cells": acc["insp_det"],
             "events_inspected_in_non_detection_cells": acc["insp_non"],
+            "events_inspected_in_pending_cells": acc["insp_pend"],
         }
         row.update(stats(acc["before"], "rejections_before_confirm", ("mean", "median", "max")))
         row.update(stats(acc["rej_scores"], "rejected_score"))
@@ -2885,15 +3096,15 @@ def build_species_effort(
 
     def new_acc() -> dict:
         return {"det": 0, "non": 0, "unv": 0, "events": 0, "insp": 0, "photos": 0,
-                "unc": 0, "unc_cells": 0,
-                "photos_insp": 0, "insp_det": 0, "insp_non": 0,
+                "unc": 0, "pend": 0,
+                "photos_insp": 0, "insp_det": 0, "insp_non": 0, "insp_pend": 0,
                 "before": [], "rej_scores": [], "conf_scores": []}
 
     total = new_acc()
     rows = []
     for sp_safe, sp_df in cand.groupby("species_safe", sort=True):
         done = None if rounds_done is None else rounds_done.get(str(sp_safe), 0)
-        acc = _effort_accumulate(sp_df, conf_ids, unc_ids, done, new_acc())
+        acc = _effort_accumulate(sp_df, conf_ids, unc_ids, done, new_acc(), cleared)
         rows.append(build_row(sp_df["scientificName"].iloc[0], acc))
         for k, v in acc.items():
             total[k] = total[k] + v

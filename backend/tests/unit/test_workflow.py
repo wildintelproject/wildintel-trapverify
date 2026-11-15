@@ -1686,25 +1686,86 @@ def test_unsure_never_confirms_a_cell(candidates, tmp_path):
     assert confirmed_keys_set(d) == set()
     assert load_all_decisions(d).empty
 
-def test_unsure_histories_identical_to_reject(candidates, decisions_dir, session_config, tmp_path):
-    from camtrap_workflow import save_unsure
-    a, b = tmp_path / "a", tmp_path / "b"
+def _read(d, name):
+    return pd.read_csv(d / name, dtype=str).fillna("").set_index("siteID")
+
+def test_unsure_cells_whose_events_ran_out_are_pending_not_zero(candidates, decisions_dir, session_config, tmp_path):
+    from camtrap_workflow import cell_states, save_unsure
+    save_unsure(decisions_dir, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])     # SITE_A occ2 and SITE_B occ1
+    st = dict(zip(*[cell_states(candidates, decisions_dir)[c] for c in ("site_occasion_key", "status")]))
+    assert st["SITE_A_occ2_Vulpes_vulpes"] == "pending" and st["SITE_B_occ1_Vulpes_vulpes"] == "pending"
+    assert st["SITE_A_occ1_Vulpes_vulpes"] == "confirmed"
+    out = tmp_path / "o"
+    build_occupancy_inputs(candidates, decisions_dir, session_config, out)
+    v, status = _read(out, "dethist_verified_Vulpes_vulpes.csv"), _read(out, "cell_status_Vulpes_vulpes.csv")
+    assert v.loc["SITE_A", "occ2"] == "" and v.loc["SITE_B", "occ1"] == ""          # NA, not a true zero
+    assert status.loc["SITE_A", "occ2"] == "pending" and status.loc["SITE_B", "occ1"] == "pending"
+    assert v.loc["SITE_A", "occ1"] == "1" and status.loc["SITE_A", "occ1"] == "1"
+    naive = _read(out, "dethist_naive_Vulpes_vulpes.csv")
+    assert naive.loc["SITE_A", "occ2"] == "1"                                      # the naive history is untouched
+    summary = pd.read_csv(out / "verification_summary.csv").iloc[0]
+    assert summary["pending_cells"] == 2
+
+def test_without_unsure_events_the_histories_are_as_before(candidates, decisions_dir, session_config, tmp_path):
+    a = tmp_path / "a"
     build_occupancy_inputs(candidates, decisions_dir, session_config, a)
+    v, status = _read(a, "dethist_verified_Vulpes_vulpes.csv"), _read(a, "cell_status_Vulpes_vulpes.csv")
+    assert v.loc["SITE_A", "occ2"] == "0" and status.loc["SITE_A", "occ2"] == "0"
+    assert pd.read_csv(a / "verification_summary.csv").iloc[0]["pending_cells"] == 0
+
+def test_an_unsure_event_with_rounds_left_is_not_pending_yet(candidates, tmp_path, session_config):
+    """SITE_A occ1 has a second event: with only round 1 done the cell is unreviewed, written 0 as any open cell."""
+    from camtrap_workflow import cell_states, save_decisions, save_unsure
+    d = tmp_path / "d"
+    save_decisions(d, candidates, "Vulpes_vulpes", 1, [])
+    save_unsure(d, candidates, "Vulpes_vulpes", 1, ["o001"])
+    st = dict(zip(*[cell_states(candidates, d)[c] for c in ("site_occasion_key", "status")]))
+    assert st["SITE_A_occ1_Vulpes_vulpes"] == "unverified"
+    out = tmp_path / "o"
+    build_occupancy_inputs(candidates, d, session_config, out)
+    assert _read(out, "cell_status_Vulpes_vulpes.csv").loc["SITE_A", "occ1"] == "unreviewed"
+    assert _read(out, "dethist_verified_Vulpes_vulpes.csv").loc["SITE_A", "occ1"] == "0"
+
+def test_an_expert_can_confirm_or_reject_pending_cells(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import cell_states, confirmed_keys_set, resolve_pending, save_unsure, species_stats
     save_unsure(decisions_dir, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])
-    build_occupancy_inputs(candidates, decisions_dir, session_config, b)
-    names = sorted(f.name for f in a.glob("*.csv"))
-    assert names and names == sorted(f.name for f in b.glob("*.csv"))
-    for n in names:
-        assert (a / n).read_text() == (b / n).read_text(), n
+    st = species_stats(candidates, decisions_dir, 100_000)[0]
+    assert st["n_pending"] == 2 and st["phase"] == "pending" and st["n_resolved"] < st["n_total_combos"]
+    n_conf, n_rej = resolve_pending(decisions_dir, candidates, "Vulpes_vulpes", ["o003"], ["SITE_B_occ1_Vulpes_vulpes"])
+    assert (n_conf, n_rej) == (1, 1)
+    assert "SITE_A_occ2_Vulpes_vulpes" in confirmed_keys_set(decisions_dir)
+    states = dict(zip(*[cell_states(candidates, decisions_dir)[c] for c in ("site_occasion_key", "status")]))
+    assert states["SITE_A_occ2_Vulpes_vulpes"] == "confirmed" and states["SITE_B_occ1_Vulpes_vulpes"] == "rejected"
+    st = species_stats(candidates, decisions_dir, 100_000)[0]
+    assert st["n_pending"] == 0 and st["phase"] in ("rounds", "complete")
+
+def test_cells_left_unsure_again_stay_pending(candidates, decisions_dir):
+    from camtrap_workflow import cell_states, resolve_pending, save_unsure
+    save_unsure(decisions_dir, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])
+    resolve_pending(decisions_dir, candidates, "Vulpes_vulpes", [], [])
+    assert (cell_states(candidates, decisions_dir)["status"] == "pending").sum() == 2
+
+def test_only_pending_cells_can_be_settled(candidates, decisions_dir):
+    from camtrap_workflow import resolve_pending
+    # o003 is not pending (nothing was marked unsure): nothing is recorded
+    assert resolve_pending(decisions_dir, candidates, "Vulpes_vulpes", ["o003"], ["SITE_B_occ1_Vulpes_vulpes"]) == (0, 0)
+
+def test_pending_events_show_every_unsure_event_of_the_cell(candidates, decisions_dir):
+    from camtrap_workflow import get_pending_events, save_unsure
+    save_unsure(decisions_dir, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])
+    ev = get_pending_events(candidates[candidates["species_safe"] == "Vulpes_vulpes"], decisions_dir)
+    assert [e["key"] for e in ev] == ["SITE_A_occ2_Vulpes_vulpes", "SITE_B_occ1_Vulpes_vulpes"]
+    assert all(e["status"] == "pending" and all("burstRepObsId" in f for f in e["frames"]) for e in ev)
 
 def test_effort_report_counts_unsure(candidates, tmp_path):
     from camtrap_workflow import build_species_effort, save_unsure
     d = tmp_path / "dec"
     save_unsure(d, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])
-    df = build_species_effort(candidates, d, tmp_path / "o")
+    df = build_species_effort(candidates, d, tmp_path / "o", {"Vulpes_vulpes": 1})
     row, tot = df.iloc[0], df.iloc[-1]
     assert row["unsure_events"] == 2 and tot["unsure_events"] == 2
-    assert row["non_detection_cells_with_unsure"] == 2
+    assert row["cells_pending"] == 2 and row["cells_non_detection"] == 0       # pending: neither detection nor non-detection
+    assert row["candidate_cells"] == row["cells_detection"] + row["cells_non_detection"] + row["cells_pending"] + row["cells_unverified"]
 
 def test_effort_report_unsure_later_confirmed_not_counted(candidates, tmp_path):
     from camtrap_workflow import build_species_effort, save_decisions, save_unsure
@@ -1717,7 +1778,7 @@ def test_effort_report_unsure_later_confirmed_not_counted(candidates, tmp_path):
 def test_effort_report_zero_unsure_without_files(candidates, tmp_path):
     from camtrap_workflow import build_species_effort
     row = build_species_effort(candidates, tmp_path / "none", tmp_path / "o").iloc[0]
-    assert row["unsure_events"] == 0 and row["non_detection_cells_with_unsure"] == 0
+    assert row["unsure_events"] == 0 and row["cells_pending"] == 0
 
 
 # ─── rejection corrections ("actual species") ─────────────────────────────────

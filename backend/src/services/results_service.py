@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from camtrap_workflow import (
     build_false_positive_sources,
     build_species_effort,
+    cell_states,
     confirmed_keys_set,
     load_review_log,
     rounds_completed,
@@ -85,22 +86,8 @@ def compute_results() -> dict:
         for _, r in conf_rows.iterrows():
             conf_burst_by_key[r["site_occasion_key"]] = (int(r["burst_id"]), int(r["rank"]))
 
-    # ── Period-level stats ────────────────────────────────────────────────────
-    periods = (
-        candidates
-        .groupby(["site_occasion_key", "species_safe"])
-        .agg(scientificName=("scientificName", "first"), max_rank=("rank", "max"))
-        .reset_index()
-    )
-
-    def _period_status(row) -> str:
-        if row["site_occasion_key"] in conf_keys:
-            return "confirmed"
-        if row["max_rank"] <= iter_by_sp.get(row["species_safe"], 0):
-            return "rejected"
-        return "unverified"
-
-    periods["status"] = periods.apply(_period_status, axis=1)
+    # ── Period-level stats (one row per site × occasion × species cell) ───────
+    periods = cell_states(candidates, decisions_dir)
     p_counts = periods["status"].value_counts().to_dict()
 
     by_species: list[dict] = [
@@ -108,6 +95,7 @@ def compute_results() -> dict:
             "species":    grp["scientificName"].iloc[0],
             "confirmed":  int(c.get("confirmed", 0)),
             "rejected":   int(c.get("rejected", 0)),
+            "pending":    int(c.get("pending", 0)),
             "unverified": int(c.get("unverified", 0)),
         }
         for _, grp in periods.groupby("species_safe", sort=True)
@@ -147,10 +135,11 @@ def compute_results() -> dict:
     ]
 
     logger.info(
-        "Results: %d periods (confirmed=%d rejected=%d unverified=%d)",
+        "Results: %d periods (confirmed=%d rejected=%d pending=%d unverified=%d)",
         len(periods),
         int(p_counts.get("confirmed", 0)),
         int(p_counts.get("rejected", 0)),
+        int(p_counts.get("pending", 0)),
         int(p_counts.get("unverified", 0)),
     )
     exclusions = pd.read_csv(p["exclusions"]) if p["exclusions"].exists() else None
@@ -173,6 +162,7 @@ def compute_results() -> dict:
         "confirmed":       int(p_counts.get("confirmed", 0)),
         "rejected":        int(p_counts.get("rejected", 0)),
         "unverified":      int(p_counts.get("unverified", 0)),
+        "pending":         int(p_counts.get("pending", 0)),
         "by_species":      by_species,
         "seq_total":       len(seqs),
         "seq_confirmed":   int(s_counts.get("confirmed", 0)),

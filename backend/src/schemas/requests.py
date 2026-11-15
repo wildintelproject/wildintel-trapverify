@@ -36,6 +36,12 @@ class SetupRequest(BaseModel):
     review_idle_seconds: int = 120
 
 
+class PendingDecisionsRequest(BaseModel):
+    """An expert's verdict on cells pending expert review; cells not mentioned stay pending."""
+    confirmed: list[str] = []          # observationID of the detection event confirmed for each cell
+    rejected_keys: list[str] = []      # cells settled as not detected
+
+
 class ProgressRequest(BaseModel):
     """Unfinished decisions of one round, saved while the reviewer works."""
     iteration: int

@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends
 from api.deps import require_candidates
 from camtrap_workflow import get_events, get_review_events, media_extra_bases, species_stats
 from fastapi import HTTPException
-from camtrap_workflow import rounds_completed
-from schemas.requests import ProgressRequest, ReviewDecisionsRequest
+from camtrap_workflow import get_pending_events, rounds_completed
+from schemas.requests import PendingDecisionsRequest, ProgressRequest, ReviewDecisionsRequest
 from services import progress_service, session_service, workflow_service
 
 router = APIRouter(
@@ -92,6 +92,26 @@ def get_species_review(species_safe: str) -> list[dict]:
     image_base_dir, fallback_base, flat_search, extra_bases = _media_resolution_config()
     return _with_image_token(
         get_review_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases))
+
+
+@router.get("/{species_safe}/pending")
+def get_species_pending(species_safe: str) -> list[dict]:
+    """The cells of a species that are pending expert review (events marked unsure, no verdict yet)."""
+    p = session_service.paths()
+    candidates = session_service.get_candidates()
+    sp_cands = candidates[candidates["species_safe"] == species_safe]
+    if sp_cands.empty:
+        return []
+    image_base_dir, fallback_base, flat_search, extra_bases = _media_resolution_config()
+    return _with_image_token(get_pending_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases))
+
+
+@router.post("/{species_safe}/pending")
+def settle_species_pending(species_safe: str, req: PendingDecisionsRequest) -> dict:
+    """Record an expert's verdict on pending cells (confirm / not detected); the rest stay pending."""
+    logger.info("Settling pending cells for %s: %d confirmed, %d rejected",
+                species_safe, len(req.confirmed), len(req.rejected_keys))
+    return workflow_service.settle_pending(species_safe, req.confirmed, req.rejected_keys)
 
 
 @router.put("/{species_safe}/decisions")
