@@ -2031,8 +2031,11 @@ def _finish_round1(client, ev, times=None):
 
 
 def _session_files(sd):
+    """Every file of the session except the backups and the CamtrapDP export, which carries
+    wall-clock stamps (``generatedAt``, classification timestamp) that differ between runs."""
     return {f.relative_to(sd).as_posix(): f.read_bytes()
-            for f in sorted(sd.rglob("*")) if f.is_file() and "reopened" not in f.parts}
+            for f in sorted(sd.rglob("*"))
+            if f.is_file() and "reopened" not in f.parts and "camtrap_dp_verified" not in f.parts}
 
 
 def test_reopen_restores_every_decision_flag_and_correction(client, camtrap_dir, tmp_path):
