@@ -1,4 +1,4 @@
-import type { DetectionEvent, OccupancyRow, RecentSession, RelinkStatus, SavedProgress, SpeciesStats, WorkflowConfig } from './types'
+import type { McClassifier, McJob, McLabels, McRunRequest, DetectionEvent, OccupancyRow, RecentSession, RelinkStatus, SavedProgress, SpeciesStats, WorkflowConfig } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch(url, options)
@@ -131,6 +131,23 @@ export const api = {
 
   renameSession: (session_dir: string, name: string) =>
     put<{ session_dir: string; session_name: string }>('/api/session/name', { session_dir, name }),
+
+
+  mcLabels: (body: { classifiers: McClassifier[]; date_start?: string | null; date_end?: string | null }) =>
+    post<McLabels>('/api/multiclassifier/labels', body),
+
+  mcGroups: (species: string[], labels: string[]) =>
+    post<{ groups: Record<string, string[]>; aliases?: Record<string, string> }>(
+      '/api/multiclassifier/groups', { species, labels }),
+
+  mcRun: (body: McRunRequest) =>
+    post<{ job_id: string; out_dir: string }>('/api/multiclassifier/run', body),
+
+  mcJob: (jobId: string) =>
+    req<McJob>(`/api/multiclassifier/jobs/${jobId}`),
+
+  mcDefaults: () =>
+    req<{ output_dir: string }>('/api/multiclassifier/defaults'),
 
   getRecentSessions: () =>
     req<RecentSession[]>('/api/session/recent'),

@@ -1247,8 +1247,13 @@ def build_candidates(
             lambda x: Path(str(x)).name if pd.notna(x) else ""
         )
 
+    # Detection events that "Classifiers and reference" removed stay in its observations.csv
+    # (tagged) so the dataset is complete, but they are not reviewed.
+    not_filtered = ~has_tag(obs["observationTags"], TAG_FILTERED) if "observationTags" in obs \
+        else pd.Series(True, index=obs.index)
     target_obs = obs[
-        (obs["observationLevel"] == "media")
+        not_filtered
+        & (obs["observationLevel"] == "media")
         & (obs["observationType"] == "animal")
         & (obs["scientificName"].isin(target_species))
     ].copy()
@@ -2025,6 +2030,8 @@ def get_review_events(
 
 # ─── Export verified CamtrapDP ────────────────────────────────────────────────
 
+TAG_FILTERED = "camtrapverify:filtered"    # removed by "Classifiers and reference": not reviewed
+TAG_REFERENCE = "camtrapverify:reference"  # the reference (e.g. Zooniverse) confirmed it
 TAG_CONFIRMED = "camtrapverify:confirmed"
 TAG_REJECTED = "camtrapverify:rejected"
 TAG_UNCERTAIN = "camtrapverify:uncertain"
@@ -2701,6 +2708,12 @@ def rounds_completed(decisions_dir: Path) -> dict[str, int]:
             if m:
                 done[m.group(1)] = max(done.get(m.group(1), 0), int(m.group(2)))
     return done
+
+
+def has_tag(tags: pd.Series, tag: str) -> pd.Series:
+    """True where the ``|``-separated ``observationTags`` contain ``tag``."""
+    pattern = r"(?:^|\|)\s*" + re.escape(tag) + r"\s*(?:\||$)"
+    return tags.fillna("").astype(str).str.contains(pattern, regex=True)
 
 
 def _effort_accumulate(sp_df: pd.DataFrame, conf_ids: set, unc_ids: set, done: Optional[int], acc: dict) -> dict:
