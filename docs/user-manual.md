@@ -501,6 +501,22 @@ While the lightbox is open:
 
 After a decision, the lightbox automatically advances to the next undecided detection event.
 
+### Another species in the photo
+
+When you review one species you will sometimes see a clear animal of **another target species** in the same photo (for example a fallow deer in a red deer sequence). In the large view, the panel on the left lists the other target species of the session (keys `1` to `9`). Clicking one **confirms that species at the same location and sampling occasion** from the photo you are viewing; clicking it again undoes it.
+
+**What counts as a detection, and what does not.** This is a deliberate, explicit action and the only one that adds a detection of a species you are not reviewing:
+
+| You do | Effect on the detection histories |
+|---|---|
+| Confirm the species you are reviewing | It is a detection (1) for that species and occasion. |
+| Click another species in the panel | It is a **verified detection (1)** of that species at that location and occasion, also when the classifier never assigned it there (a missed detection, counted as `false_negative_cells` in `verification_summary.csv`). Its rounds for that occasion are skipped, and the verified CamtrapDP marks that photo's observation of the species as human-confirmed, or adds one (`observationID` ending in `_expert`, tagged `camtrapverify:confirmed`). |
+| Reject an event and type its *actual species* | **Nothing changes in the histories.** The actual species is only recorded (`rejection_corrections.csv`, the false-positive table). It is not counted as a detection of that species. |
+
+So to count another species as present, use the panel; typing the actual species of a rejection never does. Undoing leaves no trace in the outputs (they are rebuilt when you open Results).
+
+If you confirm another species from a photo of an event and then mark that same event *Confirmed* or *Unsure*, the large view reminds you that this is right only if the photo has animals of both species (if the photo shows a single animal, the decision here should be *Rejected*) and stays on the card until you press the same decision again. A species already confirmed in that occasion, in its own review or from another detection event, is shown grey and cannot be changed from this photo. Confirmations are stored in `decisions/cross_<species>.csv`.
+
 ### Unsure cases and pending expert review
 
 Sometimes the assigned label is possible but you cannot be sure, for example an animal that is only partly visible or moving quickly through a dark frame. **If you cannot confirm the species with reasonable confidence, do not confirm it.** What you can do beyond rejecting it is mark it **Unsure** (third button on the card, or `U` in the lightbox).
@@ -739,9 +755,9 @@ The score is used only to **order** the detection events within each site and sa
 
 CamtrapDP requires every `observationID` to be unique, but some exports break that (a Trapper export where the detector and the classifier number their rows separately repeats the same ID for different photos and species). The app reads such archives safely: repeated IDs are made unique internally (the `mediaID` is appended) so a decision only ever affects its own cell, and the verified CamtrapDP is written with your original IDs. Nothing changes for archives whose IDs are already unique. A session created before this fix from such an archive should be redone, because its decisions refer to the ambiguous IDs.
 
-### Missed detections are not corrected
+### Missed detections are mostly not corrected
 
-Verification removes **false positives**: detections the classifier made wrongly. It does **not** find **false negatives**: animals that were in a photo but that the classifier missed or labelled as another species, because the tool only shows photos the classifier proposed for the species. These missed detections can matter for rare species and in difficult conditions such as night-time photos or dense vegetation, where they lower the true detection probability. Recording the actual species of a rejected event keeps that information but does **not** turn the event into a detection of the other species.
+Verification removes **false positives**: detections the classifier made wrongly. It does **not** systematically find **false negatives**: animals that were in a photo but that the classifier missed or labelled as another species, because the tool only shows photos the classifier proposed for the species. These missed detections can matter for rare species and in difficult conditions such as night-time photographs, and they are not recovered by the rounds. The one exception is the one you can see by eye: **another target species in a photo you are reviewing** (see [Another species in the photo](#another-species-in-the-photo)), which you may confirm on the spot. It is an opportunistic correction, not a search: only the photos shown for other species are looked at.
 
 ### Photos with several animals or labels
 

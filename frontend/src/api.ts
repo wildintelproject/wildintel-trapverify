@@ -1,4 +1,4 @@
-import type { McClassifier, McJob, McLabels, McRunRequest, DetectionEvent, OccupancyRow, RecentSession, RelinkStatus, SavedProgress, SpeciesStats, WorkflowConfig } from './types'
+import type { CrossSpecies, McClassifier, McJob, McLabels, McRunRequest, DetectionEvent, OccupancyRow, RecentSession, RelinkStatus, SavedProgress, SpeciesStats, WorkflowConfig } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch(url, options)
@@ -58,6 +58,20 @@ export const api = {
     post<{ success: boolean; done: boolean; next_iteration: number | null; remaining: number }>(
       '/api/decisions',
       { species, iteration, confirmed, unsure, corrections, decision_times: decisionTimes },
+    ),
+
+  getCross: (siteId: string, occasion: number) =>
+    req<{ species: CrossSpecies[] }>(
+      `/api/cross?site_id=${encodeURIComponent(siteId)}&occasion=${occasion}`,
+    ),
+
+  addCross: (body: { species: string; site_id: string; occasion: number; media_id: string; observation_id: string; source_species: string }) =>
+    post<{ success: boolean; key: string }>('/api/cross', body),
+
+  removeCross: (species: string, siteId: string, occasion: number) =>
+    req<{ success: boolean; removed: number }>(
+      `/api/cross?species=${encodeURIComponent(species)}&site_id=${encodeURIComponent(siteId)}&occasion=${occasion}`,
+      { method: 'DELETE' },
     ),
 
   getPending: (species: string) =>

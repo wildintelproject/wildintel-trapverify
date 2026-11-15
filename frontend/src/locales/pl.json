@@ -297,7 +297,19 @@
     "pending_hint": "W tych okazjach wyczerpały się zdarzenia detekcji bez potwierdzenia, a co najmniej jedno oznaczono jako niepewne. Dla każdej potwierdź obecność (zapisywane jest oglądane zdarzenie), odrzuć ją lub zostaw jako niepewną, aby przejrzał ją ktoś inny. Możesz zapisać bez rozstrzygania wszystkich.",
     "pending_save": "Zapisz werdykty",
     "pending_saved": "Zapisano: potwierdzono {{confirmed}}, niewykryto {{rejected}}. Reszta pozostaje oczekująca.",
-    "toast_rounds_done_pending": "Rundy zakończone. {{n}} okazji czeka na ocenę eksperta: przejrzyj je teraz lub wyeksportuj sesję, aby dokończył je ktoś inny."
+    "toast_rounds_done_pending": "Rundy zakończone. {{n}} okazji czeka na ocenę eksperta: przejrzyj je teraz lub wyeksportuj sesję, aby dokończył je ktoś inny.",
+    "cross_title": "Inny gatunek na tym zdjęciu? Potwierdź go tutaj dla tej lokalizacji i okazji:",
+    "cross_tooltip": "To zdjęcie potwierdza {{species}} w {{site}}, okazja {{occasion}}",
+    "cross_undo_tooltip": "Potwierdzono z tej galerii. Kliknij, aby cofnąć",
+    "cross_already": "{{species}} jest już potwierdzony w tej lokalizacji i okazji, w jego własnym przeglądzie",
+    "cross_added": "Potwierdzono {{species}} w {{site}}, okazja {{occasion}}",
+    "cross_removed": "Cofnięto potwierdzenie {{species}} w {{site}}, okazja {{occasion}}",
+    "cross_unsure_note": "Potwierdzono {{species}} w tym zdarzeniu. Jeśli to jedyne zwierzę, decyzja tutaj powinna brzmieć Odrzucone, a nie Niepewne.",
+    "cross_confirmed_note": "Potwierdzono {{species}} w tym zdarzeniu oraz ten gatunek: poprawne tylko, jeśli są zwierzęta obu gatunków.",
+    "cross_pending_note": "Potwierdzono {{species}} w tym zdarzeniu. Jeśli to jedyne zwierzę, oznacz to zdarzenie detekcji jako Odrzucone.",
+    "cross_conflict_toast": "Potwierdzono {{species}} w tym samym zdarzeniu: poprawne tylko, jeśli są zwierzęta obu gatunków. Naciśnij ten sam przycisk ponownie, aby przejść dalej, albo zmień decyzję.",
+    "cross_elsewhere": "już potwierdzony w tej okazji",
+    "cross_elsewhere_tooltip": "{{species}} został potwierdzony w tej lokalizacji i okazji ze zdjęcia innego zdarzenia detekcji. Można to cofnąć tylko z tamtego zdjęcia."
   },
   "help": {
     "title": "Pomoc — CamTrap Verify",

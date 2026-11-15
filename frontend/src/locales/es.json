@@ -293,7 +293,19 @@
     "pending_hint": "Estas ocasiones agotaron sus eventos de detección sin confirmarse y al menos uno se marcó como dudoso. Para cada una, confirma la presencia (se registra el evento que estés viendo), márcala como no confirmada o déjala como dudosa para que la revise otra persona. Puedes guardar sin decidirlas todas.",
     "pending_save": "Guardar veredictos",
     "pending_saved": "Guardado: {{confirmed}} confirmadas, {{rejected}} no detectadas. El resto sigue pendiente.",
-    "toast_rounds_done_pending": "Rondas terminadas. {{n}} ocasiones han quedado pendientes de experto: puedes revisarlas ahora o exportar la sesión para que otra persona las termine."
+    "toast_rounds_done_pending": "Rondas terminadas. {{n}} ocasiones han quedado pendientes de experto: puedes revisarlas ahora o exportar la sesión para que otra persona las termine.",
+    "cross_title": "¿Otra especie en esta foto? Confírmala aquí para esta localización y ocasión:",
+    "cross_tooltip": "Esta foto confirma {{species}} en {{site}}, ocasión {{occasion}}",
+    "cross_undo_tooltip": "Confirmada desde esta galería. Pulsa para deshacer",
+    "cross_already": "{{species}} ya está confirmada en esta localización y ocasión, en su propia revisión",
+    "cross_added": "{{species}} confirmada en {{site}}, ocasión {{occasion}}",
+    "cross_removed": "Deshecha la confirmación de {{species}} en {{site}}, ocasión {{occasion}}",
+    "cross_unsure_note": "Has confirmado {{species}} en este evento. Si es el único animal, la decisión aquí debería ser No confirmada, no Dudosa.",
+    "cross_confirmed_note": "Has confirmado {{species}} en este evento y también esta especie: solo es correcto si hay animales de las dos.",
+    "cross_pending_note": "Has confirmado {{species}} en este evento. Si es el único animal, marca este evento de detección como No confirmado.",
+    "cross_conflict_toast": "Has confirmado {{species}} en este mismo evento: solo es correcto si hay animales de las dos especies. Pulsa otra vez el mismo botón para seguir, o cambia la decisión.",
+    "cross_elsewhere": "ya confirmada en esta ocasión",
+    "cross_elsewhere_tooltip": "{{species}} se confirmó en esta localización y ocasión desde una foto de otro evento de detección. Solo se puede deshacer desde esa foto."
   },
   "help": {
     "title": "Ayuda — CamTrap Verify",

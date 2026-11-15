@@ -20,6 +20,7 @@ const api = vi.hoisted(() => ({
   getTaxa: vi.fn(), saveDecisions: vi.fn(), updateDecisions: vi.fn(),
   getProgress: vi.fn(), saveProgress: vi.fn(), reopenRound: vi.fn(),
   getPending: vi.fn(), settlePending: vi.fn(),
+  getCross: vi.fn(), addCross: vi.fn(), removeCross: vi.fn(),
 }))
 vi.mock('../api', () => ({ api }))
 
@@ -283,6 +284,64 @@ describe('GalleryPage', () => {
       await userEvent.click(screen.getAllByRole('button', { name: /Rejected/ })[1])
       await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
       await waitFor(() => expect(api.settlePending).toHaveBeenCalledWith('Vulpes_vulpes', [], ['b']))
+    })
+  })
+
+  describe('another species in the photo', () => {
+    const cell = (status: 'none' | 'cross' | 'confirmed', mediaID?: string) => [
+      { scientificName: 'Vulpes vulpes', species_safe: 'Vulpes_vulpes', status: 'none' },
+      { scientificName: 'Sus scrofa', species_safe: 'Sus_scrofa', status, mediaID },
+    ]
+    const setup = async (status: 'none' | 'cross' | 'confirmed' = 'none', mediaID?: string) => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      api.getState.mockResolvedValue({ ready: true, config: { total_iterations: 10, gap_seconds: 60, occasion_days: 5, min_score: 0.5, target_species: ['Vulpes vulpes', 'Sus scrofa'] } })
+      api.getEvents.mockResolvedValue([event('a', 2), event('b', 2)])
+      api.getCross.mockResolvedValue({ species: cell(status, mediaID) })
+      api.addCross.mockResolvedValue({ success: true, key: 'k' })
+      api.removeCross.mockResolvedValue({ success: true, removed: 1 })
+      renderGallery()
+      await userEvent.click(await screen.findByRole('button', { name: 'Large view' }))
+      return await screen.findByTestId('lb-cross')
+    }
+
+    it('lists the other target species in the large view, not the one being reviewed', async () => {
+      const panel = await setup()
+      expect(within(panel).getByRole('button', { name: /Sus scrofa/ })).toBeInTheDocument()
+      expect(within(panel).queryByRole('button', { name: /Vulpes vulpes/ })).toBeNull()
+    })
+
+    it('confirms the other species from the photo being viewed', async () => {
+      const panel = await setup()
+      await userEvent.click(within(panel).getByRole('button', { name: /Sus scrofa/ }))
+      await waitFor(() => expect(api.addCross).toHaveBeenCalled())
+      expect(api.addCross).toHaveBeenCalledWith({
+        species: 'Sus scrofa', site_id: 'S1', occasion: 1, media_id: 'm-a', observation_id: 'obs-a', source_species: 'Vulpes vulpes',
+      })
+    })
+
+    it('undoes it with a second click when it was confirmed from this event', async () => {
+      const panel = await setup('cross', 'm-a')
+      await userEvent.click(within(panel).getByRole('button', { name: /Sus scrofa/ }))
+      await waitFor(() => expect(api.removeCross).toHaveBeenCalledWith('Sus scrofa', 'S1', 1))
+      expect(api.addCross).not.toHaveBeenCalled()
+    })
+
+    it('does not offer to change a species already confirmed in this occasion', async () => {
+      const panel = await setup('confirmed')
+      expect(within(panel).getByRole('button', { name: /Sus scrofa/ })).toBeDisabled()
+    })
+
+    it('treats a species confirmed from another detection event of the occasion the same way', async () => {
+      const panel = await setup('cross', 'some-other-photo')
+      expect(within(panel).getByRole('button', { name: /Sus scrofa/ })).toBeDisabled()
+      expect(within(panel).getByText(/already confirmed in this occasion/)).toBeInTheDocument()
+    })
+
+    it('reminds that Confirmed here is right only with animals of both species, and stays on the card once', async () => {
+      await setup('cross', 'm-a')
+      await userEvent.keyboard('y')
+      expect(await screen.findByRole('note')).toHaveTextContent(/right only if there are animals of both/)
+      expect(screen.getByText(/Image 1\/1/)).toBeInTheDocument()
     })
   })
 })

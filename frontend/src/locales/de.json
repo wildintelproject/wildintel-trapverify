@@ -293,7 +293,19 @@
     "pending_hint": "Bei diesen Stichprobenanlässen sind alle Detektionsereignisse ohne Bestätigung aufgebraucht, und mindestens eines wurde als unsicher markiert. Bestätigen Sie jeweils das Vorkommen (das angezeigte Ereignis wird gespeichert), lehnen Sie ab oder lassen Sie es unsicher, damit jemand anderes es prüft. Sie können speichern, ohne alle zu entscheiden.",
     "pending_save": "Urteile speichern",
     "pending_saved": "Gespeichert: {{confirmed}} bestätigt, {{rejected}} nicht nachgewiesen. Der Rest bleibt offen.",
-    "toast_rounds_done_pending": "Runden abgeschlossen. {{n}} Stichprobenanlässe warten auf Expertenprüfung: Prüfen Sie sie jetzt oder exportieren Sie die Sitzung, damit jemand anderes sie abschließt."
+    "toast_rounds_done_pending": "Runden abgeschlossen. {{n}} Stichprobenanlässe warten auf Expertenprüfung: Prüfen Sie sie jetzt oder exportieren Sie die Sitzung, damit jemand anderes sie abschließt.",
+    "cross_title": "Eine andere Art auf diesem Foto? Hier für diesen Standort und diese Erfassungsperiode bestätigen:",
+    "cross_tooltip": "Dieses Foto bestätigt {{species}} an {{site}}, Periode {{occasion}}",
+    "cross_undo_tooltip": "Aus dieser Galerie bestätigt. Klicken zum Rückgängigmachen",
+    "cross_already": "{{species}} ist an diesem Standort und in dieser Periode bereits bestätigt, in der eigenen Prüfung",
+    "cross_added": "{{species}} bestätigt an {{site}}, Periode {{occasion}}",
+    "cross_removed": "Bestätigung von {{species}} an {{site}}, Periode {{occasion}} rückgängig gemacht",
+    "cross_unsure_note": "Du hast {{species}} in diesem Ereignis bestätigt. Wenn es das einzige Tier ist, sollte die Entscheidung hier Abgelehnt sein, nicht Unsicher.",
+    "cross_confirmed_note": "Du hast {{species}} in diesem Ereignis bestätigt und auch diese Art: nur richtig, wenn Tiere beider Arten zu sehen sind.",
+    "cross_pending_note": "Du hast {{species}} in diesem Ereignis bestätigt. Wenn es das einzige Tier ist, markiere dieses Detektionsereignis als Abgelehnt.",
+    "cross_conflict_toast": "Du hast {{species}} in demselben Ereignis bestätigt: nur richtig, wenn Tiere beider Arten zu sehen sind. Drücke dieselbe Schaltfläche erneut, um weiterzugehen, oder ändere die Entscheidung.",
+    "cross_elsewhere": "in dieser Periode bereits bestätigt",
+    "cross_elsewhere_tooltip": "{{species}} wurde an diesem Standort und in dieser Periode auf einem Foto eines anderen Detektionsereignisses bestätigt. Rückgängig machen geht nur von jenem Foto aus."
   },
   "help": {
     "title": "Hilfe — CamTrap Verify",

@@ -33,6 +33,7 @@
     - Brightness and contrast controls
     - Tonal inversion (useful for night-vision / near-infrared images)
     - Left / right arrows to move between occasions without closing
+- **Another species in the photo** — in the large view, confirm another target species at the same location and occasion from the photo being viewed (keys `1`–`9`). It becomes a verified detection (also where the classifier never assigned it), the verified CamtrapDP marks or adds a human observation, and undoing leaves no trace.
 - **Keyboard navigation** — arrow keys advance frames; `C` confirms, `R` rejects (configurable); `U` marks a detection event as unsure.
 - **Per-species progress bars** — a coloured badge on each species card shows the current round; the bar fills as cells are resolved.
 
@@ -85,7 +86,7 @@
 - **Still images only** — video files are not read; extract frames and classify them first (see the [user manual](user-manual.md#9-scope-and-limitations) for guidance).
 - **Designed for occupancy models** — only one detection event per cell is verified, so the verified data are not suitable for counting events, activity patterns or abundance; time-to-first-detection needs care because the highest-scoring event is shown first, not the earliest.
 - **The score only orders the events** — it does not need to be calibrated (raw model outputs work with the minimum score set to 0); without scores the events are shown in a seeded random order.
-- **Corrects false positives, not missed detections** — animals the classifier missed or labelled as another species are not recovered.
+- **Corrects false positives, mostly not missed detections** — animals the classifier missed are not searched for. The exception is another target species seen in a photo you are reviewing: it can be confirmed from the large view (a verified detection, counted as a false negative of the classifier).
 - **Unsure cases and pending expert review** — mark a doubtful event *Unsure*: the next event of the occasion is shown, and an occasion that runs out with an unsure event and no confirmation waits for an expert (NA in the verified history, `cell_status_<sp>.csv`) instead of counting as not detected.
 
 ---

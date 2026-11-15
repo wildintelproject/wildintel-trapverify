@@ -199,3 +199,13 @@ export interface McJob {
   error?: string
   unmapped?: string[]
 }
+
+export interface CrossSpecies {
+  scientificName: string
+  species_safe: string
+  /** cross: confirmed from a photo of another species; confirmed: in its own review */
+  status: 'none' | 'cross' | 'confirmed'
+  mediaID?: string
+  observationID?: string
+  source?: string
+}
