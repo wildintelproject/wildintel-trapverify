@@ -2089,3 +2089,115 @@ def test_cannot_reopen_after_the_species_was_edited(client, setup_session):
     keys = [e["key"] for e in ev]
     client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": keys[:1]})
     assert client.post("/api/species/Vulpes_vulpes/reopen").status_code == 400
+
+
+# ─── observationTags in the verified CamtrapDP ────────────────────────────────
+
+def _verified_observations(sd):
+    return pd.read_csv(Path(sd) / "camtrap_dp_verified" / "observations.csv", dtype=str).fillna("")
+
+
+def _tags_by_media(sd):
+    obs = _verified_observations(sd)
+    return {m: t for m, t in zip(obs["mediaID"], obs["observationTags"])}
+
+
+def _review_round1(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev = _round1_events(client)
+    client.post("/api/decisions", json={
+        "species": "Vulpes_vulpes", "iteration": 1,
+        "confirmed": [ev[0]["repObsId"]], "uncertain": [ev[1]["repObsId"]],
+        "corrections": {ev[2]["repObsId"]: "Canis lupus"},
+    })
+    return sd, ev
+
+
+def _media_of(ev, i):
+    """Media of the photo that represents event ``i`` (the one the review decides on)."""
+    return {f["mediaId"] for f in ev[i]["frames"] if f["obsId"] == ev[i]["repObsId"]}
+
+
+def test_confirmed_rejected_and_uncertain_events_carry_their_tag(client, camtrap_dir, tmp_path):
+    sd, ev = _review_round1(client, camtrap_dir, tmp_path)
+    client.get("/api/results")                                        # brings the verified CamtrapDP up to date
+    tags = _tags_by_media(sd)
+    assert all("camtrapverify:confirmed" in tags[m].split("|") for m in _media_of(ev, 0))
+    rep = {f["mediaId"] for f in ev[1]["frames"] if f["obsId"] == ev[1]["repObsId"]}
+    assert all(tags[m].split("|") == ["camtrapverify:uncertain"] for m in rep)
+    rep = {f["mediaId"] for f in ev[2]["frames"] if f["obsId"] == ev[2]["repObsId"]}
+    assert all(tags[m].split("|") == ["camtrapverify:rejected", "camtrapverify-actual-species:Canis lupus"] for m in rep)
+
+
+def test_confirmed_observations_are_not_also_tagged_rejected(client, camtrap_dir, tmp_path):
+    sd, ev = _review_round1(client, camtrap_dir, tmp_path)
+    client.get("/api/results")
+    for m in _media_of(ev, 0):
+        assert "rejected" not in _tags_by_media(sd)[m]
+
+
+def test_events_never_inspected_get_no_tag(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    client.get("/api/results")
+    obs = _verified_observations(sd)
+    assert "observationTags" not in obs.columns or set(obs["observationTags"]) == {""}      # nothing reviewed: no tags
+
+
+def test_an_earlier_rejected_event_of_a_confirmed_cell_is_tagged_rejected(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev1 = _round1_events(client)
+    # round 1: reject everything; round 2: confirm the second-ranked event of the cell that has one
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": []})
+    ev2 = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 2}).json()
+    assert ev2
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": [ev2[0]["repObsId"]]})
+    client.get("/api/results")
+    tags = _tags_by_media(sd)
+    cell = ev2[0]["key"]
+    first = next(e for e in ev1 if e["key"] == cell)
+    rep = {f["mediaId"] for f in first["frames"] if f["obsId"] == first["repObsId"]}
+    assert all(tags[m] == "camtrapverify:rejected" for m in rep)                   # rejected in round 1
+    assert all("camtrapverify:confirmed" in tags[m] for m in _media_of(ev2, 0))    # confirmed in round 2
+
+
+def test_existing_observation_tags_are_kept(client, camtrap_dir, tmp_path):
+    obs_file = camtrap_dir / "observations.csv"
+    df = pd.read_csv(obs_file, dtype=str)
+    df["observationTags"] = "travelDirection:left"
+    df.to_csv(obs_file, index=False)
+    sd, ev = _review_round1(client, camtrap_dir, tmp_path)
+    client.get("/api/results")
+    tags = _tags_by_media(sd)
+    m = next(iter(_media_of(ev, 0)))
+    assert tags[m].split("|") == ["travelDirection:left", "camtrapverify:confirmed"]
+
+
+def test_tags_follow_the_pipe_separated_key_value_format(client, camtrap_dir, tmp_path):
+    sd, _ = _review_round1(client, camtrap_dir, tmp_path)
+    client.get("/api/results")
+    for cell in _verified_observations(sd)["observationTags"]:
+        for tag in filter(None, cell.split("|")):
+            assert tag.count(":") >= 1 and not tag.startswith(":") and not tag.endswith(":")
+
+
+def test_tags_are_not_repeated_by_a_second_export(client, camtrap_dir, tmp_path):
+    sd, ev = _review_round1(client, camtrap_dir, tmp_path)
+    client.get("/api/results")
+    first = _verified_observations(sd)["observationTags"].tolist()
+    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 2, "decisions": {}})      # any other save
+    from services import workflow_service
+    workflow_service.write_verified_export() if hasattr(workflow_service, "write_verified_export") else workflow_service.rebuild_outputs()
+    assert _verified_observations(sd)["observationTags"].tolist() == first
+
+
+def test_extended_confirmation_tags_every_photo_of_the_confirmed_event(client, camtrap_dir, tmp_path):
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"), "target_species": ["Vulpes vulpes"],
+        "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5, "total_iterations": 100_000,
+        "gap_seconds": 60, "min_score": 0.5, "extended_confirmation": True,
+    })
+    ev = _round1_events(client)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
+    client.get("/api/results")
+    tags = _tags_by_media(Path(r.json()["session_dir"]))
+    assert all("camtrapverify:confirmed" in tags[f["mediaId"]] for f in ev[0]["frames"])

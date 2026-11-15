@@ -38,6 +38,12 @@ from schemas.requests import SetupRequest
 from services import progress_service, session_service
 
 
+def _corrections_by_observation(path: Path) -> dict[str, str]:
+    """``observationID`` -> actual species typed for a rejected event (empty when none was recorded)."""
+    corr = load_rejection_corrections(path)
+    return dict(zip(corr["observationID"], corr["actual_species"])) if not corr.empty else {}
+
+
 def rebuild_outputs() -> None:
     """Regenerate camtrap_dp_verified and occupancy_inputs from current session state."""
     logger.info("Rebuilding output files")
@@ -51,6 +57,7 @@ def rebuild_outputs() -> None:
         classified_by_label=config.get("classified_by", "expert_review"),
         extended_confirmation=bool(config.get("extended_confirmation", False)),
         candidates=candidates,
+        corrections=_corrections_by_observation(p["corrections"]),
     )
     build_occupancy_inputs(candidates, p["decisions"], config, p["occupancy_out"])
     build_review_effort(candidates, p["decisions"], config, p["occupancy_out"])
