@@ -108,6 +108,8 @@
     "hint_gap": "Bilder mit weniger als N Sekunden Abstand werden zum selben Detektionsereignis gruppiert.",
     "label_min_score": "Mindest-Erkennungsscore",
     "hint_min_score": "Erkennungen mit einer Konfidenz unterhalb dieses Schwellenwerts werden ignoriert.",
+    "label_random_seed": "Zufalls-Seed für Detektionsereignisse mit gleicher Bewertung",
+    "hint_random_seed": "Detektionsereignisse mit gleicher Bewertung (alle, wenn die Fotos keine Bewertung haben) werden in zufälliger Reihenfolge angezeigt. Der Seed macht diese Reihenfolge reproduzierbar: gleiche Daten und gleicher Seed ergeben immer dieselbe Reihenfolge. Geben Sie ihn bei der Berichterstattung an.",
     "label_classified_by": "Klassifiziert von",
     "hint_classified_by": "Wert, der in das Feld classifiedBy des verifizierten CamtrapDP für bestätigte Beobachtungen geschrieben wird.",
     "label_extended_confirmation": "Erweiterte Bestätigung",

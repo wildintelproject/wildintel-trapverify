@@ -108,6 +108,8 @@
     "hint_gap": "Images less than N seconds apart are grouped into the same detection event.",
     "label_min_score": "Minimum detection score",
     "hint_min_score": "Detections with confidence below this threshold are ignored.",
+    "label_random_seed": "Random seed for tied detection events",
+    "hint_random_seed": "Detection events with the same score (all of them when the photos have no score) are shown in a random order. The seed makes that order reproducible: the same data and seed always give the same order. Record it when you report your results.",
     "label_classified_by": "Classified by",
     "hint_classified_by": "Value written to the classifiedBy field in the verified CamtrapDP for confirmed observations.",
     "label_extended_confirmation": "Extended confirmation",

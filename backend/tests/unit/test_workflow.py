@@ -1839,3 +1839,61 @@ def test_effort_report_review_time_none_for_old_sessions(candidates, tmp_path):
     from camtrap_workflow import build_species_effort
     df = build_species_effort(candidates, tmp_path / "none", tmp_path / "o")
     assert df["review_active_seconds"].isna().all() and df["review_est_saved_seconds"].isna().all()
+
+
+# ─── seeded random tie-break among events with the same score ─────────────────
+
+def _tie_tables(scores, shuffle_seed=None):
+    """One site, one occasion; one event per frame (3 h apart), so rank order = event review order."""
+    n = len(scores)
+    dep = pd.DataFrame({"deploymentID": ["D"], "locationID": ["S"],
+                        "deploymentStart": ["2025-11-01"], "deploymentEnd": ["2025-11-05"]})
+    med = pd.DataFrame({"mediaID": [f"m{i:02d}" for i in range(n)], "deploymentID": "D",
+                        "timestamp": [f"2025-11-02 {(3 * i) // 60:02d}:{(3 * i) % 60:02d}:00" for i in range(n)],
+                        "filePath": [f"i{i}.jpg" for i in range(n)]})
+    # 3 minutes apart > the 60 s gap used below, so every frame is its own event
+    obs = pd.DataFrame({"observationID": [f"o{i:02d}" for i in range(n)], "deploymentID": "D",
+                        "mediaID": [f"m{i:02d}" for i in range(n)], "observationLevel": "media",
+                        "observationType": "animal", "scientificName": "Vulpes vulpes",
+                        "classificationProbability": [None if s is None else str(s) for s in scores],
+                        "classificationMethod": "machine", "classifiedBy": "x", "classificationTimestamp": None})
+    if shuffle_seed is not None:
+        med = med.sample(frac=1, random_state=shuffle_seed).reset_index(drop=True)
+        obs = obs.sample(frac=1, random_state=shuffle_seed).reset_index(drop=True)
+    return dep, med, obs
+
+
+def _review_order(scores, seed=42, shuffle_seed=None):
+    from camtrap_workflow import build_candidates
+    dep, med, obs = _tie_tables(scores, shuffle_seed)
+    c = build_candidates(dep, med, obs, target_species=["Vulpes vulpes"], study_start=date(2025, 11, 1),
+                         study_end=date(2025, 11, 5), occasion_days=5, total_iterations=1000,
+                         gap_seconds=60, seed=seed)
+    return list(c.sort_values("rank")["mediaID"])
+
+
+def test_scores_still_decide_the_order():
+    assert _review_order([0.2, 0.9, 0.5, 0.7]) == ["m01", "m03", "m02", "m00"]
+
+
+def test_without_scores_order_is_random_not_chronological_and_complete():
+    order = _review_order([None] * 12)
+    assert sorted(order) == [f"m{i:02d}" for i in range(12)]          # every event, once
+    assert order != [f"m{i:02d}" for i in range(12)]                  # not chronological
+
+
+def test_tiebreak_is_reproducible_and_depends_on_the_seed():
+    a = _review_order([None] * 12, seed=7)
+    assert a == _review_order([None] * 12, seed=7)
+    assert a != _review_order([None] * 12, seed=8)
+
+
+def test_tiebreak_does_not_depend_on_row_order():
+    assert _review_order([None] * 12, shuffle_seed=1) == _review_order([None] * 12) \
+        == _review_order([None] * 12, shuffle_seed=2)
+
+
+def test_only_equal_scores_are_shuffled():
+    order = _review_order([0.9, 0.5, 0.5, 0.5, 0.5, 0.1])
+    assert order[0] == "m00" and order[-1] == "m05"                    # distinct scores keep their place
+    assert sorted(order[1:5]) == ["m01", "m02", "m03", "m04"]

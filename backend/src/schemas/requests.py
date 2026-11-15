@@ -13,6 +13,8 @@ class SetupRequest(BaseModel):
     total_iterations: int = 100000
     gap_seconds: int = 60
     min_score: float = 0.5
+    # Seed of the pseudo-random order of detection events with the same score (e.g. no scores).
+    random_seed: int = 42
     include_burst_context: bool = False
     classified_by: str = "expert_review"
     extended_confirmation: bool = False

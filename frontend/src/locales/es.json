@@ -108,6 +108,8 @@
     "hint_gap": "Imágenes con menos de N segundos de diferencia se agrupan en el mismo evento de detección.",
     "label_min_score": "Score mínimo de detección",
     "hint_min_score": "Se ignoran las detecciones con confianza inferior a este umbral.",
+    "label_random_seed": "Semilla aleatoria para eventos de detección empatados",
+    "hint_random_seed": "Los eventos de detección con la misma puntuación (todos, si las fotos no tienen puntuación) se muestran en orden aleatorio. La semilla hace ese orden reproducible: los mismos datos y la misma semilla dan siempre el mismo orden. Anótala al informar de tus resultados.",
     "label_classified_by": "Clasificado por",
     "hint_classified_by": "Valor que se escribirá en el campo classifiedBy del CamtrapDP verificado para las observaciones confirmadas.",
     "label_extended_confirmation": "Confirmación extendida",

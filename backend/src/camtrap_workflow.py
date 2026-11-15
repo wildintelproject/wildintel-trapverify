@@ -756,6 +756,7 @@ def build_candidates(
     gap_seconds: int = 60,
     include_burst_context: bool = False,
     min_score: float = 0.0,
+    seed: int = 42,
 ) -> pd.DataFrame:
     """Build the verification candidate manifest from CamtrapDP tables.
 
@@ -791,6 +792,10 @@ def build_candidates(
             reach to remain a candidate. A frame with no score at all is never
             demoted -- only a known score below this excludes it. Defaults to
             0.0 (no filtering).
+        seed: Seed of the pseudo-random order of detection events that have the
+            same score within a cell (for example when no frame has a score). The
+            same seed gives the same order; the order does not depend on the
+            chronology or on the row order. Defaults to 42.
 
     Returns:
         DataFrame with one row per candidate frame, including columns
@@ -916,17 +921,22 @@ def build_candidates(
 
     joined = pd.concat(records, ignore_index=True)
 
-    # Rank bursts by max prob within each cell (highest prob = rank 1)
+    # Rank bursts by max prob within each cell (highest prob = rank 1). Bursts with
+    # the same score -- all of them when no frame has a score -- are put in a
+    # pseudo-random order that depends only on ``seed``, the cell and the burst
+    # (not on the row order), so it is reproducible and not chronological.
     burst_max = (
         joined.groupby(["site_occasion_key", "burst_id"])["prob"]
         .max()
         .reset_index(name="burst_max_prob")
     )
-    burst_max["rank"] = (
-        burst_max.groupby("site_occasion_key")["burst_max_prob"]
-        .rank(method="first", ascending=False)
-        .astype(int)
+    burst_max["_tie"] = pd.util.hash_pandas_object(
+        burst_max[["site_occasion_key", "burst_id"]].assign(_seed=seed), index=False
     )
+    burst_max = burst_max.sort_values(
+        ["site_occasion_key", "burst_max_prob", "_tie"], ascending=[True, False, True]
+    )
+    burst_max["rank"] = burst_max.groupby("site_occasion_key").cumcount() + 1
 
     joined = joined.merge(burst_max[["site_occasion_key", "burst_id", "rank"]],
                           on=["site_occasion_key", "burst_id"])
@@ -1931,6 +1941,7 @@ def compute_min_score_exclusions(
     total_iterations: int,
     gap_seconds: int,
     min_score: float,
+    seed: int = 42,
 ) -> pd.DataFrame:
     """Count what the ``min_score`` cut-off removed from the review, per species.
 
@@ -1966,7 +1977,7 @@ def compute_min_score_exclusions(
         dep, med, obs,
         target_species=target_species, study_start=study_start, study_end=study_end,
         occasion_days=occasion_days, total_iterations=total_iterations,
-        gap_seconds=gap_seconds, include_burst_context=False, min_score=0.0,
+        gap_seconds=gap_seconds, include_burst_context=False, min_score=0.0, seed=seed,
     )
     if full.empty:
         return zero
