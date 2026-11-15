@@ -523,7 +523,11 @@ Once you have reviewed the detection events, click **Finish round** (floating bu
 - If all detection events have been decided, the session advances to the next round (if any occasions were rejected) or marks the species as **Complete**.
 - If some detection events are still undecided, a warning is shown.
 
-The **✓✓ Confirm all** button marks every undecided detection event in the current view as confirmed in one click.
+The **✓✓ Confirm all in this location** button confirms every detection event of the location being shown in one click (it no longer touches the other locations, which are not on screen).
+
+### One location at a time
+
+The gallery shows **one location per page**, so a round with thousands of detection events stays fast. Use **‹ Previous location** / **Next location ›**, the selector (each location shows how many of its cards are decided, e.g. `S12 · 3/20`) or the **Next location** button below the cards to move on. **Finish round** still needs every card of every location to be decided; if some are missing, the page jumps to the first one. The large view follows the card you are looking at, and each card shows one photo with ‹ › arrows (the whole event is in the large view).
 
 ### Saving progress and going back a round
 

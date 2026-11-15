@@ -221,14 +221,57 @@ describe('EventCard', () => {
 
     it('preloads the previous and next frames once the pointer enters', () => {
       const { loaded, card } = renderCard()
-      fireEvent.mouseEnter(card)
+      fireEvent.pointerEnter(card)
       expect(loaded.sort()).toEqual(['/api/image/media-b', '/api/image/media-c'])    // frame 0 -> next (b) and wraps to previous (c)
     })
 
     it('preloads the same URLs the card will show, boxes included', () => {
       const { loaded, card } = renderCard(true)
-      fireEvent.mouseEnter(card)
+      fireEvent.pointerEnter(card)
       expect(loaded.every((u) => u.includes('boxes=true&obs='))).toBe(true)
+    })
+  })
+
+  describe('one image per card', () => {
+    const threeFrames = makeEvent({
+      frames: ['a', 'b', 'c'].map((id, k) => ({
+        obsId: `obs-${id}`, mediaId: `media-${id}`, img: `/api/image/media-${id}`, ts: `2026-01-01 10:00:0${k}`, prob: 0.5 + k / 10,
+      })),
+    })
+    const renderThree = () => render(
+      <EventCard event={threeFrames} decision={null} needsDecision={false} onDecide={vi.fn()} onOpenLightbox={vi.fn()} eventIdx={0} />,
+    )
+
+    it('mounts a single image, the most confident frame, however many frames the event has', () => {
+      const { container } = renderThree()
+      const imgs = container.querySelectorAll('img')
+      expect(imgs).toHaveLength(1)
+      expect(imgs[0]).toHaveAttribute('src', '/api/image/media-c')
+    })
+
+    it('steps through the frames with the arrows, wrapping around', async () => {
+      const { container } = renderThree()
+      const next = screen.getByRole('button', { name: /siguiente/i })
+      await userEvent.click(next)
+      expect(container.querySelector('img')).toHaveAttribute('src', '/api/image/media-a')    // wraps from the last
+      await userEvent.click(screen.getByRole('button', { name: /anterior/i }))
+      expect(container.querySelector('img')).toHaveAttribute('src', '/api/image/media-c')
+      expect(container.querySelectorAll('img')).toHaveLength(1)
+    })
+
+    it('has no arrows for a single frame', () => {
+      render(<EventCard event={makeEvent()} decision={null} needsDecision={false} onDecide={vi.fn()} onOpenLightbox={vi.fn()} eventIdx={0} />)
+      expect(screen.queryByRole('button', { name: /siguiente/i })).toBeNull()
+    })
+
+    it('opens the large view at the frame being looked at', async () => {
+      const onOpen = vi.fn()
+      const { container } = render(
+        <EventCard event={threeFrames} decision={null} needsDecision={false} onDecide={vi.fn()} onOpenLightbox={onOpen} eventIdx={4} />,
+      )
+      await userEvent.click(screen.getByRole('button', { name: /siguiente/i }))
+      await userEvent.click(container.querySelector('img')!)
+      expect(onOpen).toHaveBeenCalledWith(4, 0)
     })
   })
 })

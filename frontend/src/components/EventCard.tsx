@@ -1,10 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Swiper, SwiperSlide } from 'swiper/react'
-import { Navigation, Pagination } from 'swiper/modules'
+import { memo, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import 'swiper/css'
-import 'swiper/css/navigation'
-import 'swiper/css/pagination'
 import type { DetectionEvent } from '../types'
 import { frameSrc } from '../utils/frameImage'
 import { isPermissionDenied } from '../utils/imageError'
@@ -34,7 +29,13 @@ interface Props {
   onCorrect?: (key: string, value: string) => void
 }
 
-export default function EventCard({
+/**
+ * One gallery card. It renders a single <img> (the frame being looked at) with arrows, instead of
+ * a carousel that mounts every frame of the event: a round can have over a thousand cards and some
+ * events have hundreds of frames. The whole event is in the large view. Memoised, so a decision
+ * re-renders one card and not the whole page.
+ */
+function EventCard({
   event,
   decision,
   needsDecision,
@@ -51,18 +52,25 @@ export default function EventCard({
   const { t, i18n } = useTranslation()
   const imgError = i18n.language.startsWith('es') ? '/img-error-es.svg' : '/img-error-en.svg'
   const [activeIndex, setActiveIndex] = useState(() => bestFrameIndex(event.frames))
+  const n = event.frames.length
+  const frame = event.frames[Math.min(activeIndex, n - 1)]
 
   // Warm the browser cache with the neighbouring frames once the pointer is over the card, so the
   // arrows switch frames instantly. Not before, so a page of cards does not download every neighbour.
   const [warm, setWarm] = useState(false)
   useEffect(() => {
-    const n = event.frames.length
     if (!warm || n < 2) return
     for (const i of [activeIndex + 1, activeIndex - 1]) {
       const f = event.frames[(i + n) % n]
       if (f) new Image().src = frameSrc(f, showBoxes)
     }
-  }, [warm, activeIndex, event.frames, showBoxes])
+  }, [warm, activeIndex, event.frames, n, showBoxes])
+
+  function step(delta: number) {
+    setActiveIndex((i) => (i + delta + n) % n)
+  }
+
+  const navBtn = 'absolute top-1/2 -translate-y-1/2 bg-black/50 text-white w-7 h-7 rounded-full flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity'
 
   const borderClass = decision === 'confirmed'
     ? 'border-2 border-emerald-500'
@@ -77,65 +85,86 @@ export default function EventCard({
   return (
     <div
       className={`rounded-lg overflow-hidden bg-zinc-900 text-zinc-100 ${borderClass}`}
-      onMouseEnter={() => setWarm(true)}
+      onPointerEnter={() => setWarm(true)}
+      onFocus={() => setWarm(true)}
     >
       <div className="relative" style={{ aspectRatio: '16/10', background: '#000' }}>
-        <Swiper
-          modules={[Navigation, Pagination]}
-          navigation={event.frames.length > 1}
-          pagination={event.frames.length > 1 ? { clickable: true } : false}
-          slidesPerView={1}
-          initialSlide={activeIndex}
-          onSlideChange={(swiper) => setActiveIndex(swiper.activeIndex)}
-          style={{ width: '100%', height: '100%' }}
-        >
-          {event.frames.map((frame, i) => (
-            <SwiperSlide key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-              <img
-                src={frameSrc(frame, showBoxes)}
-                alt=""
-                style={{
-                  width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer',
-                  opacity: frame.isContext ? 0.6 : 1,
-                }}
-                onClick={() => onOpenLightbox(eventIdx, i)}
-                loading="lazy"
-                onError={(e) => {
-                  const img = e.currentTarget
-                  const failedSrc = img.src
-                  img.onerror = null
-                  img.src = imgError
-                  img.style.objectFit = 'contain'
-                  isPermissionDenied(failedSrc).then((denied) => {
-                    if (denied) img.title = t('gallery.image_permission_denied')
-                  })
-                }}
-              />
-              {frame.isContext && (
-                <span
-                  className="absolute top-1.5 left-1.5 bg-zinc-800/80 text-zinc-300 text-xs px-1.5 py-0.5 rounded"
-                  style={{ zIndex: 15, pointerEvents: 'none' }}
-                >
-                  {t('gallery.context_frame')}
-                </span>
-              )}
-              <div
-                className="absolute bottom-0 left-0 right-0 flex justify-between px-2 py-1"
-                style={{
-                  background: 'linear-gradient(transparent, rgba(0,0,0,.8))',
-                  fontSize: 11,
-                  pointerEvents: 'none',
-                  zIndex: 10,
-                }}
-              >
-                <span>{frame.ts}</span>
-                {!frame.isContext && frame.prob != null && (
-                  <span className="bg-black/50 px-1.5 py-0.5 rounded text-xs">{frame.prob.toFixed(2)}</span>
-                )}
-              </div>
-            </SwiperSlide>
-          ))}
-        </Swiper>
+        {frame && (
+          <img
+            key={frameSrc(frame, showBoxes)}
+            src={frameSrc(frame, showBoxes)}
+            alt=""
+            style={{
+              width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer',
+              opacity: frame.isContext ? 0.6 : 1,
+            }}
+            onClick={() => onOpenLightbox(eventIdx, activeIndex)}
+            loading="lazy"
+            onError={(e) => {
+              const img = e.currentTarget
+              const failedSrc = img.src
+              img.onerror = null
+              img.src = imgError
+              img.style.objectFit = 'contain'
+              isPermissionDenied(failedSrc).then((denied) => {
+                if (denied) img.title = t('gallery.image_permission_denied')
+              })
+            }}
+          />
+        )}
+        {frame?.isContext && (
+          <span
+            className="absolute top-1.5 left-8 bg-zinc-800/80 text-zinc-300 text-xs px-1.5 py-0.5 rounded"
+            style={{ zIndex: 15, pointerEvents: 'none' }}
+          >
+            {t('gallery.context_frame')}
+          </span>
+        )}
+        {frame && (
+          <div
+            className="absolute bottom-0 left-0 right-0 flex justify-between px-2 py-1"
+            style={{
+              background: 'linear-gradient(transparent, rgba(0,0,0,.8))',
+              fontSize: 11,
+              pointerEvents: 'none',
+              zIndex: 10,
+            }}
+          >
+            <span>{frame.ts}</span>
+            {!frame.isContext && frame.prob != null && (
+              <span className="bg-black/50 px-1.5 py-0.5 rounded text-xs">{frame.prob.toFixed(2)}</span>
+            )}
+          </div>
+        )}
+        {n > 1 && (
+          <>
+            <button
+              className={`${navBtn} left-1`}
+              style={{ zIndex: 20 }}
+              aria-label={t('gallery.prev_frame')}
+              title={t('gallery.prev_frame')}
+              onClick={() => step(-1)}
+            >
+              ‹
+            </button>
+            <button
+              className={`${navBtn} right-1`}
+              style={{ zIndex: 20 }}
+              aria-label={t('gallery.next_frame')}
+              title={t('gallery.next_frame')}
+              onClick={() => step(1)}
+            >
+              ›
+            </button>
+            <span
+              className="absolute left-1/2 -translate-x-1/2 bottom-6 bg-black/60 text-white text-[10px] px-1.5 rounded"
+              style={{ zIndex: 20, pointerEvents: 'none' }}
+              aria-hidden="true"
+            >
+              {Math.min(activeIndex, n - 1) + 1}/{n}
+            </span>
+          </>
+        )}
 
         <span
           className="absolute top-0 right-0 m-1 flex flex-col items-end bg-black/75 px-1.5 py-0.5 rounded"
@@ -210,3 +239,5 @@ export default function EventCard({
     </div>
   )
 }
+
+export default memo(EventCard)

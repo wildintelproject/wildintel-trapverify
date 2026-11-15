@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import YARLightbox, { type ControllerRef, type SlideImage } from 'yet-another-react-lightbox'
@@ -62,6 +62,8 @@ export default function GalleryPage() {
   const [needsDecision, setNeedsDecision] = useState<Set<string>>(new Set())
   const [lbOpen, setLbOpen] = useState(false)
   const [lbEvIdx, setLbEvIdx] = useState(0)   // which event is shown in the lightbox
+  const [siteIdx, setSiteIdx] = useState(0)    // the gallery shows one location at a time
+  const gridTopRef = useRef<HTMLDivElement>(null)
   // Cards the lightbox moved on from after a decision, most recent last: "previous card" walks
   // back through them to correct a mistake.
   const [lbHistory, setLbHistory] = useState<number[]>([])
@@ -151,6 +153,7 @@ export default function GalleryPage() {
       }
 
       setEvents(evts)
+      setSiteIdx(0)
       const pre: Record<string, Decision> = {}
       saved.confirmed.forEach((id) => {
         const ev = evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
@@ -324,13 +327,13 @@ export default function GalleryPage() {
       }))
     : []
 
-  function openLightbox(evIdx: number, frIdx: number) {
+  const openLightbox = useCallback((evIdx: number, frIdx: number) => {
     setLbEvIdx(evIdx)
     setLbIndex(frIdx)
     setLbHistory([])
     setLbInverted(false)
     setLbOpen(true)
-  }
+  }, [])
 
   function resetLbFilters() {
     setLbBrightness(100)
@@ -402,36 +405,56 @@ export default function GalleryPage() {
   }
   lbBackRef.current = lbGoBack
 
-  function dropCorrection(key: string) {
+  // Stable identities: the cards are memoised, so a decision re-renders one card, not all of them.
+  const dropCorrection = useCallback((key: string) => {
     setCorrections((prev) => { if (!(key in prev)) return prev; const c = { ...prev }; delete c[key]; return c })
-  }
+  }, [])
 
-  function setCorrection(key: string, value: string) {
+  const setCorrection = useCallback((key: string, value: string) => {
     setCorrections((prev) => ({ ...prev, [key]: value }))
-  }
+  }, [])
 
-  function decide(key: string, _repObsId: string, d: Decision) {
+  const decide = useCallback((key: string, _repObsId: string, d: Decision) => {
     setDecisions((prev) => ({ ...prev, [key]: d }))
     decidedAtRef.current[key] = Date.now()
     if (d !== 'rejected') dropCorrection(key)
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(key); return s })
+  }, [dropCorrection])
+
+  // Confirm every card of the location being shown (the page shows one location at a time).
+  function confirmAllInSite() {
+    const now = Date.now()
+    setDecisions((prev) => {
+      const next = { ...prev }
+      siteEvents.forEach((ev) => { next[ev.key] = 'confirmed'; decidedAtRef.current[ev.key] = now })
+      return next
+    })
+    setCorrections((prev) => {
+      const next = { ...prev }
+      siteEvents.forEach((ev) => { delete next[ev.key] })
+      return next
+    })
+    setNeedsDecision((prev) => {
+      const s = new Set(prev)
+      siteEvents.forEach((ev) => s.delete(ev.key))
+      return s
+    })
   }
 
-  function confirmAll() {
-    const all: Record<string, Decision> = {}
-    const now = Date.now()
-    events.forEach((ev) => { all[ev.key] = 'confirmed'; decidedAtRef.current[ev.key] = now })
-    setDecisions(all)
-    setCorrections({})
-    setNeedsDecision(new Set())
+  function goSite(i: number) {
+    setSiteIdx(Math.max(0, Math.min(i, sites.length - 1)))
+    gridTopRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }
 
   async function handleSave() {
     const undecided = events.filter((e) => !decisions[e.key])
     if (undecided.length > 0) {
       setNeedsDecision(new Set(undecided.map((e) => e.key)))
-      document.querySelector(`[data-key="${undecided[0].key}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setSiteIdx(Math.max(0, sites.indexOf(undecided[0].siteId)))
+      setTimeout(() => {
+        document.querySelector(`[data-key="${CSS.escape(undecided[0].key)}"]`)
+          ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+      }, 50)
       showToast(t('gallery.needs_decision'), 'danger')
       return
     }
@@ -506,10 +529,31 @@ export default function GalleryPage() {
     }
   }
 
-  const bySite = events.reduce<Record<string, DetectionEvent[]>>((acc, ev) => {
-    ;(acc[ev.siteId] ??= []).push(ev)
-    return acc
-  }, {})
+  // One page per location.
+  const { sites, bySite, indexByKey } = useMemo(() => {
+    const bySite: Record<string, DetectionEvent[]> = {}
+    const sites: string[] = []
+    const indexByKey = new Map<string, number>()
+    events.forEach((ev, i) => {
+      indexByKey.set(ev.key, i)
+      if (!bySite[ev.siteId]) { bySite[ev.siteId] = []; sites.push(ev.siteId) }
+      bySite[ev.siteId].push(ev)
+    })
+    sites.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))      // easy to find in the list
+    return { sites, bySite, indexByKey }
+  }, [events])
+  const currentSiteIdx = Math.min(siteIdx, Math.max(sites.length - 1, 0))
+  const currentSite = sites[currentSiteIdx]
+  const siteEvents = currentSite ? bySite[currentSite] : []
+
+  // The page behind the large view follows the card shown in it.
+  useEffect(() => {
+    if (!lbOpen) return
+    const ev = events[lbEvIdx]
+    if (!ev) return
+    const i = sites.indexOf(ev.siteId)
+    if (i >= 0 && i !== siteIdx) setSiteIdx(i)
+  }, [lbOpen, lbEvIdx, events, sites, siteIdx])
 
   const lbCurrentEv = events[lbEvIdx]
   const lbDecision  = lbCurrentEv ? decisions[lbCurrentEv.key] : undefined
@@ -595,9 +639,47 @@ export default function GalleryPage() {
     />
   ) : null
 
+  const siteLabel = (site: string) => {
+    const evs = bySite[site] ?? []
+    const done = evs.reduce((n, e) => n + (decisions[e.key] ? 1 : 0), 0)
+    return `${site}  ·  ${done}/${evs.length}`
+  }
+
+  const siteNav = sites.length > 1 && (
+    <div className="flex flex-wrap items-center gap-2 mb-3">
+      <button
+        className="px-3 py-1.5 text-sm rounded bg-zinc-700 text-white hover:bg-zinc-600 disabled:opacity-40"
+        onClick={() => goSite(currentSiteIdx - 1)}
+        disabled={currentSiteIdx === 0}
+      >
+        ‹ {t('gallery.prev_site')}
+      </button>
+      <select
+        aria-label={t('gallery.location')}
+        className="px-2 py-1.5 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+        value={currentSiteIdx}
+        onChange={(e) => goSite(Number(e.target.value))}
+      >
+        {sites.map((s, i) => <option key={s} value={i}>{siteLabel(s)}</option>)}
+      </select>
+      <button
+        className="px-3 py-1.5 text-sm rounded bg-zinc-700 text-white hover:bg-zinc-600 disabled:opacity-40"
+        onClick={() => goSite(currentSiteIdx + 1)}
+        disabled={currentSiteIdx >= sites.length - 1}
+      >
+        {t('gallery.next_site')} ›
+      </button>
+      <span className="text-sm text-zinc-500 dark:text-zinc-400">
+        {t('gallery.site_position', { i: currentSiteIdx + 1, n: sites.length })}
+        {' · '}
+        {t('gallery.decided_progress', { done: decidedCount, total: events.length })}
+      </span>
+    </div>
+  )
+
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-4">
-      <div className="mb-3">
+      <div className="mb-3" ref={gridTopRef}>
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-baseline gap-3">
             <h2 className="text-2xl font-semibold mb-0">
@@ -721,13 +803,14 @@ export default function GalleryPage() {
         <div className="fixed bottom-6 right-6 z-[200] flex gap-2">
           <button
             className="px-5 py-2.5 bg-zinc-600 text-white rounded-lg shadow-xl hover:bg-zinc-500 transition-colors disabled:opacity-50 flex items-center gap-2"
-            onClick={confirmAll}
-            disabled={saving || events.length === 0}
+            onClick={confirmAllInSite}
+            disabled={saving || siteEvents.length === 0}
+            title={t('gallery.confirm_all_site_tooltip')}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M2 8.5L5.5 12L10 6M5 5.5L8.5 9L13 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            {t('gallery.confirm_all')}
+            {t('gallery.confirm_all_site')}
           </button>
           <button
             className="px-5 py-2.5 bg-blue-600 text-white rounded-lg shadow-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex flex-col items-center leading-tight"
@@ -788,11 +871,12 @@ export default function GalleryPage() {
           No hay eventos pendientes para esta especie en esta ronda.
         </div>
       ) : (
-        Object.entries(bySite).map(([site, siteEvents]) => (
-          <div key={site} className="mb-4 border border-zinc-700 rounded-lg p-3">
+        <>
+          {siteNav}
+          <div key={currentSite} className="mb-4 border border-zinc-700 rounded-lg p-3">
             <h5 className="mb-3 flex items-center text-base font-semibold">
               <span className="text-zinc-500 dark:text-zinc-400 font-normal">{t('gallery.location')}</span>
-              <span className="ml-2">{site}</span>
+              <span className="ml-2">{currentSite}</span>
               <span className="ml-auto px-2 py-0.5 text-xs font-normal bg-zinc-600 text-zinc-200 rounded-full">
                 {siteEvents.length === 1
                   ? t('gallery.periods', { n: siteEvents.length })
@@ -808,30 +892,37 @@ export default function GalleryPage() {
             </h5>
             <hr className="border-zinc-700 mt-0 mb-3" />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
-              {siteEvents.map((ev) => {
-                const idx = events.indexOf(ev)
-                return (
-                  <div key={ev.key} data-key={ev.key}>
-                    <EventCard
-                      event={ev}
-                      decision={decisions[ev.key] ?? null}
-                      needsDecision={needsDecision.has(ev.key)}
-                      onDecide={decide}
-                      allowUncertain={!completed}
-                      showBoxes={showBoxes}
-                      recordCorrection={recordRejection && !completed}
-                      correction={corrections[ev.key] ?? ''}
-                      onCorrect={setCorrection}
-                      onOpenLightbox={(eIdx, fIdx) => openLightbox(eIdx, fIdx)}
-                      eventIdx={idx}
-                      readOnly={completed && locked}
-                    />
-                  </div>
-                )
-              })}
+              {siteEvents.map((ev) => (
+                <div key={ev.key} data-key={ev.key}>
+                  <EventCard
+                    event={ev}
+                    decision={decisions[ev.key] ?? null}
+                    needsDecision={needsDecision.has(ev.key)}
+                    onDecide={decide}
+                    allowUncertain={!completed}
+                    showBoxes={showBoxes}
+                    recordCorrection={recordRejection && !completed}
+                    correction={corrections[ev.key] ?? ''}
+                    onCorrect={setCorrection}
+                    onOpenLightbox={openLightbox}
+                    eventIdx={indexByKey.get(ev.key) ?? 0}
+                    readOnly={completed && locked}
+                  />
+                </div>
+              ))}
             </div>
           </div>
-        ))
+          {currentSiteIdx < sites.length - 1 && (
+            <div className="flex justify-center mb-24">
+              <button
+                className="px-5 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+                onClick={() => goSite(currentSiteIdx + 1)}
+              >
+                {t('gallery.next_site_cta', { site: sites[currentSiteIdx + 1] })} ›
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       <style>{`.yarl__slide_image {
