@@ -16,6 +16,7 @@ Uso:
     uv run cli docs build
     uv run cli docs pdf
     uv run cli dev
+    uv run cli simulate-random SESSION_DIR [--draws 1000] [--seed 42] [--output FILE.csv]
     uv run cli package build [--format deb|rpm|appimage|windows|all] [--version 0.1.0]
 """
 import json
@@ -596,6 +597,43 @@ def prod_logs(
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
+
+# ── simulate-random ───────────────────────────────────────────────────────────
+
+@app.command("simulate-random")
+def simulate_random(
+    session: Path = typer.Argument(..., help="Carpeta de una sesión terminada (con candidate_manifest.csv)."),
+    draws: int = typer.Option(1000, help="Número de submuestras aleatorias por especie."),
+    seed: int = typer.Option(42, help="Semilla: la misma semilla da el mismo resultado."),
+    output: Path = typer.Option(None, help="CSV de salida (por defecto, random_subsample_simulation.csv en la sesión)."),
+) -> None:
+    """Compara la verificación dirigida con submuestras aleatorias del mismo tamaño."""
+    import pandas as pd
+    from random_subsample import load_session, simulate_random_subsample
+    from rich.table import Table
+
+    try:
+        candidates, decisions_dir = load_session(session)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+    df = simulate_random_subsample(candidates, decisions_dir, draws=draws, seed=seed)
+    out = output or session / "random_subsample_simulation.csv"
+    df.to_csv(out, index=False)
+
+    table = Table(title=f"Random subsample vs targeted verification ({draws} draws, seed {seed})")
+    for col in ("Species", "Photos reviewed", "Cells with detection", "Targeted found", "Random found (mean, min–max)", "Random %"):
+        table.add_column(col, justify="left" if col == "Species" else "right")
+    for _, r in df.iterrows():
+        table.add_row(
+            str(r["species"]), str(r["photos_reviewed"]), str(r["cells_with_detection"]), str(r["targeted_found"]),
+            "–" if r["random_found_mean"] is None or pd.isna(r["random_found_mean"])
+            else f"{r['random_found_mean']} ({r['random_found_min']}–{r['random_found_max']})",
+            "–" if pd.isna(r["random_found_pct_mean"]) else f"{r['random_found_pct_mean']} %",
+        )
+    console.print(table)
+    console.print(f"Saved: {out}")
+
 
 if __name__ == "__main__":
     app()
