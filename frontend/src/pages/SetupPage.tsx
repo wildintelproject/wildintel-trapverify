@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import DirectoryPicker from '../components/DirectoryPicker'
 import CsvImportForm from '../components/CsvImportForm'
-import type { RecentSession, WorkflowConfig } from '../types'
+import MultiClassifierForm, { type McParams } from '../components/MultiClassifierForm'
+import RelinkDialog from '../components/RelinkDialog'
+import type { RecentSession, RelinkStatus, WorkflowConfig } from '../types'
 
 interface Props { onSetup: () => void; ready: boolean }
 
@@ -20,6 +22,7 @@ const DEFAULT: WorkflowConfig = {
   total_iterations: 100000,
   gap_seconds: 60,
   min_score: 0.5,
+  min_score_by_species: {},
   include_burst_context: false,
   classified_by: 'expert_review',
   extended_confirmation: false,
@@ -56,6 +59,9 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [availableSpecies, setAvailableSpecies] = useState<string[]>([])
   const [selectedSpecies, setSelectedSpecies] = useState<Set<string>>(new Set())
   const [dataRange, setDataRange] = useState<{ min: string; max: string } | null>(null)
+  // Dataset made by "Several classifiers": period, occasions, gap and minimum
+  // score were fixed when it was scored and can't change here.
+  const [mcLocked, setMcLocked] = useState(false)
   const [sourceType, setSourceType] = useState<'local' | 'trapper' | null>(null)
   const [trapperForm, setTrapperForm] = useState({ url: '', user: '', password: '', researchProject: '', classificationProject: '' })
   const [trapperConn, setTrapperConn] = useState<{ status: 'idle' | 'testing' | 'ok' | 'error'; message: string }>({ status: 'idle', message: '' })
@@ -64,7 +70,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [loadingClassProjects, setLoadingClassProjects] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
-  const [localFormat, setLocalFormat] = useState<'camtrapdp' | 'deepfaune' | 'csv' | null>(null)
+  const [localFormat, setLocalFormat] = useState<'camtrapdp' | 'deepfaune' | 'csv' | 'multiclassifier' | null>(null)
   const [deepfauneForm, setDeepfauneForm] = useState({ csvPath: '' })
   const [converting, setConverting] = useState(false)
   const [convertError, setConvertError] = useState<string | null>(null)
@@ -75,6 +81,8 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [stepError, setStepError] = useState<string | null>(null)
   const [sessionPickerOpen, setSessionPickerOpen] = useState(false)
+  const [importPickerOpen, setImportPickerOpen] = useState(false)
+  const [importRelink, setImportRelink] = useState<RelinkStatus | null>(null)
   const [loadingSession, setLoadingSession] = useState(false)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [sessionSummary, setSessionSummary] = useState<{
@@ -129,6 +137,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   async function handleDirSelected(path: string) {
     if (picker === 'camtrap_dir') {
       set('camtrap_dir', path)
+      setMcLocked(false)
       setPicker(null)
       setInspecting(true)
       try {
@@ -164,6 +173,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   // from there exactly like a CamtrapDP directory picked directly.
   async function afterConversion(camtrap_dir: string) {
     set('camtrap_dir', camtrap_dir)
+    setMcLocked(false)
     setInspecting(true)
     try {
       const info = await api.inspectDir(camtrap_dir)
@@ -181,6 +191,25 @@ export default function SetupPage({ onSetup, ready }: Props) {
     finally { setInspecting(false) }
     setStepError(null)
     setLocalFormat('camtrapdp')
+  }
+
+  // The multi-classifier dataset was scored with its own study period,
+  // occasion length and event gap: the session must use the same ones, and
+  // its probabilities are already filtered, so no minimum score is applied.
+  async function afterMcConversion(camtrap_dir: string, p: McParams) {
+    await afterConversion(camtrap_dir)
+    setForm((f) => ({
+      ...f,
+      study_start: p.study_start,
+      study_end: p.study_end,
+      occasion_days: p.occasion_days,
+      gap_seconds: p.gap_seconds,
+      min_score: 0,
+      min_score_by_species: {},
+    }))
+    setDataRange({ min: p.study_start, max: p.study_end })
+    setSelectedSpecies(new Set(p.species))
+    setMcLocked(true)
   }
 
   async function handleDeepfauneConvert() {
@@ -250,9 +279,11 @@ export default function SetupPage({ onSetup, ready }: Props) {
     if (step === 0 && sourceType === 'local' && localFormat !== null) {
       setLocalFormat(null)
       setConvertError(null)
+      setMcLocked(false)
     } else if (step === 0 && sourceType !== null) {
       setSourceType(null)
       setLocalFormat(null)
+      setMcLocked(false)
     } else {
       setStep((s) => s - 1)
     }
@@ -262,7 +293,10 @@ export default function SetupPage({ onSetup, ready }: Props) {
     setSubmitting(true)
     setStepError(null)
     try {
-      await api.setup({ ...form, target_species: [...selectedSpecies] })
+      const overrides = Object.fromEntries(
+        Object.entries(form.min_score_by_species ?? {}).filter(([sp, v]) => selectedSpecies.has(sp) && Number.isFinite(v)),
+      )
+      await api.setup({ ...form, target_species: [...selectedSpecies], min_score_by_species: overrides })
       onSetup()
       navigate('/species')
     } catch (e) {
@@ -280,6 +314,24 @@ export default function SetupPage({ onSetup, ready }: Props) {
       await api.loadSession(path)
       onSetup()
       navigate('/species')
+    } catch (e) {
+      setSessionError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoadingSession(false)
+    }
+  }
+
+  // A session exported on another computer (see "Export session" on the
+  // species index). Its folders usually need pointing at this computer's.
+  async function handleImportSession(path: string) {
+    setImportPickerOpen(false)
+    setLoadingSession(true)
+    setSessionError(null)
+    try {
+      const r = await api.importSession(path)
+      onSetup()
+      if (r.relink.needs_relink) setImportRelink(r.relink)
+      else navigate('/species')
     } catch (e) {
       setSessionError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -316,6 +368,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         if (taskStatus.status === 'done' && taskStatus.path) {
           const extractedPath = taskStatus.path
           set('camtrap_dir', extractedPath)
+          setMcLocked(false)
 
           // Inspect the extracted CamtrapDP to pre-fill species and dates
           setInspecting(true)
@@ -424,6 +477,17 @@ export default function SetupPage({ onSetup, ready }: Props) {
             )}
           </button>
           <button
+            className="px-6 py-2.5 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-base flex items-center gap-2 disabled:opacity-50"
+            onClick={() => setImportPickerOpen(true)}
+            disabled={loadingSession}
+            title={t('welcome.import_session_tooltip')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {t('welcome.import_session')}
+          </button>
+          <button
             className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-base flex items-center gap-2"
             onClick={() => setStep(0)}
           >
@@ -484,6 +548,22 @@ export default function SetupPage({ onSetup, ready }: Props) {
       <DirectoryPicker
         onSelect={handleLoadSession}
         onClose={() => { setSessionPickerOpen(false); setSessionError(null) }}
+      />
+    )}
+    {importPickerOpen && (
+      <DirectoryPicker
+        showFiles
+        fileExt=".zip"
+        title={t('welcome.import_session_picker')}
+        onSelect={handleImportSession}
+        onClose={() => { setImportPickerOpen(false); setSessionError(null) }}
+      />
+    )}
+    {importRelink && (
+      <RelinkDialog
+        status={importRelink}
+        onClose={() => { setImportRelink(null); navigate('/species') }}
+        onDone={() => { setImportRelink(null); navigate('/species') }}
       />
     )}
     </>
@@ -753,7 +833,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         <div>
           <h4 className="text-lg font-semibold mb-1">{t('setup.local_format_title')}</h4>
           <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t('setup.local_format_desc')}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <button
               className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-center group"
               onClick={() => setLocalFormat('camtrapdp')}
@@ -784,6 +864,16 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </strong>
               <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.local_format_csv_desc')}</span>
             </button>
+            <button
+              className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-center group"
+              onClick={() => setLocalFormat('multiclassifier')}
+            >
+              <span className="text-4xl">🧩</span>
+              <strong className="text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                {t('setup.local_format_mc')}
+              </strong>
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.local_format_mc_desc')}</span>
+            </button>
           </div>
         </div>
       )}
@@ -801,7 +891,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
                 className={`${inputClass} rounded-r-none`}
                 placeholder={t('setup.placeholder_data_dir')}
                 value={form.camtrap_dir}
-                onChange={(e) => set('camtrap_dir', e.target.value)}
+                onChange={(e) => { set('camtrap_dir', e.target.value); setMcLocked(false) }}
               />
               <button type="button" className={browseBtn}
                 onClick={() => setPicker('camtrap_dir')} disabled={inspecting}>
@@ -947,6 +1037,11 @@ export default function SetupPage({ onSetup, ready }: Props) {
         <CsvImportForm onConverted={afterConversion} onBack={goBack} />
       )}
 
+      {/* ── Step 0g: combine several classifiers ── */}
+      {step === 0 && sourceType === 'local' && localFormat === 'multiclassifier' && (
+        <MultiClassifierForm onConverted={afterMcConversion} onBack={goBack} />
+      )}
+
       {/* ── Step 1 ── */}
       {step === 1 && (
         <div>
@@ -1007,17 +1102,18 @@ export default function SetupPage({ onSetup, ready }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t('setup.label_start')}</label>
-              <input type="date" className={inputClass} value={form.study_start}
+              <input type="date" className={inputClass} value={form.study_start} disabled={mcLocked}
                 min={dataRange?.min} max={dataRange?.max}
                 onChange={(e) => set('study_start', e.target.value)} />
             </div>
             <div>
               <label className={labelClass}>{t('setup.label_end')}</label>
-              <input type="date" className={inputClass} value={form.study_end}
+              <input type="date" className={inputClass} value={form.study_end} disabled={mcLocked}
                 min={dataRange?.min} max={dataRange?.max}
                 onChange={(e) => set('study_end', e.target.value)} />
             </div>
           </div>
+          {mcLocked && <p className={hintClass}>{t('setup.mc_locked')}</p>}
         </div>
       )}
 
@@ -1058,18 +1154,26 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_occasion_days')}</label>
-            <input type="number" className={inputClass} min={1} value={form.occasion_days}
+            <input type="number" className={inputClass} min={1} value={form.occasion_days} disabled={mcLocked}
               onChange={(e) => set('occasion_days', Number(e.target.value))} />
             <p className={hintClass}>{t('setup.hint_occasion_days')}</p>
+            {mcLocked && <p className={hintClass}>{t('setup.mc_locked')}</p>}
           </div>
 
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_gap')}</label>
-            <input type="number" className={inputClass} min={1} value={form.gap_seconds}
+            <input type="number" className={inputClass} min={1} value={form.gap_seconds} disabled={mcLocked}
               onChange={(e) => set('gap_seconds', Number(e.target.value))} />
             <p className={hintClass}>{t('setup.hint_gap')}</p>
+            {mcLocked && <p className={hintClass}>{t('setup.mc_locked')}</p>}
           </div>
 
+          {mcLocked ? (
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_min_score')}</label>
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">{t('setup.mc_locked_score')}</p>
+          </div>
+          ) : (
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_min_score')}</label>
             <div className="flex items-center gap-3">
@@ -1081,7 +1185,49 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </span>
             </div>
             <p className={hintClass}>{t('setup.hint_min_score')}</p>
+
+            {/* Per-species thresholds: empty = use the general value above */}
+            <details className="mt-3 rounded border border-zinc-200 dark:border-zinc-700 px-3 py-2"
+              open={Object.keys(form.min_score_by_species ?? {}).length > 0}>
+              <summary className="cursor-pointer text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                {t('setup.label_min_score_by_species')}
+              </summary>
+              <p className={`${hintClass} mb-2`}>{t('setup.hint_min_score_by_species', { value: form.min_score.toFixed(2) })}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                {[...selectedSpecies].sort().map((sp) => {
+                  const v = form.min_score_by_species?.[sp]
+                  return (
+                    <label key={sp} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="italic text-zinc-700 dark:text-zinc-300 truncate">{sp}</span>
+                      <input
+                        type="number" min={0} max={1} step={0.05}
+                        aria-label={`${t('setup.label_min_score')}: ${sp}`}
+                        className="w-24 px-2 py-1 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono"
+                        placeholder={form.min_score.toFixed(2)}
+                        value={v ?? ''}
+                        onChange={(e) => {
+                          const raw = e.target.value
+                          setForm((f) => {
+                            const next = { ...(f.min_score_by_species ?? {}) }
+                            if (raw === '') delete next[sp]
+                            else next[sp] = Math.min(1, Math.max(0, Number(raw)))
+                            return { ...f, min_score_by_species: next }
+                          })
+                        }}
+                      />
+                    </label>
+                  )
+                })}
+              </div>
+              {Object.keys(form.min_score_by_species ?? {}).length > 0 && (
+                <button type="button" className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  onClick={() => set('min_score_by_species', {})}>
+                  {t('setup.reset_min_score_by_species')}
+                </button>
+              )}
+            </details>
           </div>
+          )}
 
           {/* ── Confirmation parameters ── */}
           <div className="border-t border-zinc-200 dark:border-zinc-700 mt-2 mb-5" />
@@ -1161,13 +1307,13 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
       {/* Navigation */}
       <div className="flex justify-between mt-10">
-        {step === 0 && sourceType === 'local' && (localFormat === 'deepfaune' || localFormat === 'csv')
+        {step === 0 && sourceType === 'local' && (localFormat === 'deepfaune' || localFormat === 'csv' || localFormat === 'multiclassifier')
           ? <div />
           : <button type="button" className={btnOutline} onClick={goBack}>
               {step === 0 && sourceType === null ? t('setup.back_welcome') : t('setup.back')}
             </button>
         }
-        {(step === 0 && sourceType === null) || (step === 0 && sourceType === 'local' && localFormat === null) || (step === 0 && sourceType === 'local' && localFormat === 'deepfaune') || (step === 0 && sourceType === 'local' && localFormat === 'csv') || (step === 0 && sourceType === 'trapper') ? (
+        {(step === 0 && sourceType === null) || (step === 0 && sourceType === 'local' && localFormat === null) || (step === 0 && sourceType === 'local' && localFormat === 'deepfaune') || (step === 0 && sourceType === 'local' && localFormat === 'csv') || (step === 0 && sourceType === 'local' && localFormat === 'multiclassifier') || (step === 0 && sourceType === 'trapper') ? (
           <div />
         ) : step < STEP_LABELS.length - 1 ? (
           <button type="button" className={btnPrimary} onClick={goNext}>
