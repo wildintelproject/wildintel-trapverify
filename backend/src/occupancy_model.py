@@ -4,6 +4,31 @@ Single-season occupancy model: psi(.)p(.) fitted by maximum likelihood.
 Replicates R's fit_naive_vs_verified() from the verify-tool paper, using
 scipy.optimize instead of the unmarked package.
 
+Model and estimation (cite exactly this):
+
+* **Model.** psi(.)p(.): one occupancy probability psi and one detection
+  probability p, both constant across sites and occasions (the "(.)" means "no
+  covariates"). Site i is occupied with probability psi; if occupied, each of its
+  K_i surveyed occasions detects the species with probability p, independently.
+  Occasions where the camera was off (NaN) are left out for that site.
+* **Likelihood.** MacKenzie et al. (2002). A site with n_det > 0 detections
+  contributes psi * p^n_det * (1 - p)^(K_i - n_det); a site with none contributes
+  (1 - psi) + psi * (1 - p)^K_i.
+* **Link function.** Both parameters are estimated on the **logit** scale,
+  theta = (logit(psi), logit(p)), and back-transformed with the logistic function.
+* **Estimation.** Maximum likelihood with BFGS (``scipy.optimize.minimize``),
+  starting at theta = (0, 0).
+* **Confidence intervals (95 %).** Wald intervals on the logit scale,
+  ``theta_hat +/- 1.96 * SE(theta_hat)``, back-transformed to the probability
+  scale (so they are asymmetric and stay inside [0, 1]). SE is the square root of
+  the diagonal of the inverse **observed information**, i.e. the inverse of the
+  Hessian of the negative log-likelihood at the maximum, computed by central
+  finite differences. This is the same kind of interval as the default
+  ``confint()`` of R's ``unmarked`` (Wald on the link scale); it is **not** a
+  profile-likelihood interval and does not use the delta method on the
+  probability scale. Wald intervals can be poor with few sites or estimates near
+  0 or 1; those fits are flagged ``degenerate`` (see :func:`fit_occu`).
+
 Reference: MacKenzie et al. (2002) Ecology 83(8):2248–2255.
 """
 import logging
@@ -58,6 +83,25 @@ def _nll(params: np.ndarray, y: np.ndarray) -> float:
     return -ll
 
 
+def _hessian(f, x: np.ndarray, h: float = 1e-4) -> np.ndarray:
+    """Hessian of ``f`` at ``x`` by central finite differences."""
+    n = len(x)
+    H = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            ei = np.zeros(n)
+            ej = np.zeros(n)
+            ei[i] = h
+            ej[j] = h
+            H[i, j] = (f(x + ei + ej) - f(x + ei - ej) - f(x - ei + ej) + f(x - ei - ej)) / (4 * h * h)
+    return H
+
+
+def _logit_wald_ci(theta: float, se: float) -> tuple[float, float]:
+    """95 % Wald interval on the logit scale, back-transformed to a probability."""
+    return _sigmoid(theta - 1.96 * se), _sigmoid(theta + 1.96 * se)
+
+
 def fit_occu(y: np.ndarray) -> dict:
     """Fit psi(.)p(.) by MLE for one detection-history matrix.
 
@@ -65,10 +109,14 @@ def fit_occu(y: np.ndarray) -> dict:
         y: (n_sites, n_occasions) — 0 not detected, 1 detected, np.nan camera off.
 
     Returns:
-        Dict with keys psi, psi_lo, psi_hi, p, degenerate, converged.
-        psi_lo/psi_hi are 95 % profile CI on the probability scale.
+        Dict with keys psi, psi_lo, psi_hi, p, p_lo, p_hi, degenerate, converged.
+        ``*_lo`` / ``*_hi`` are the 95 % Wald confidence limits on the logit
+        scale, back-transformed to probabilities (see the module docstring); they
+        are ``None`` when the Hessian is not positive definite.
         degenerate=True means the estimate should be reported as
-        "degenerate (report at detection level)" following the R version.
+        "degenerate (report at detection level)" following the R version: the
+        histories have no information (no detections or only detections), the fit
+        did not converge, psi is at 0 or 1, or the psi interval is wider than 0.9.
     """
     valid = y[~np.isnan(y)]
     n_det_total = int(valid.sum())
@@ -81,6 +129,8 @@ def fit_occu(y: np.ndarray) -> dict:
             "psi_lo": None,
             "psi_hi": None,
             "p": None,
+            "p_lo": None,
+            "p_hi": None,
             "degenerate": True,
             "converged": False,
         }
@@ -94,7 +144,7 @@ def fit_occu(y: np.ndarray) -> dict:
         logger.warning("Occupancy optimiser error: %s", exc)
         return {
             "psi": None, "psi_lo": None, "psi_hi": None,
-            "p": None, "degenerate": True, "converged": False,
+            "p": None, "p_lo": None, "p_hi": None, "degenerate": True, "converged": False,
         }
 
     psi = _sigmoid(float(res.x[0]))
@@ -106,13 +156,16 @@ def fit_occu(y: np.ndarray) -> dict:
     grad_norm = float(np.linalg.norm(res.jac)) if hasattr(res, "jac") and res.jac is not None else np.inf
     converged = res.success or grad_norm < 1e-4
 
-    lo: Optional[float] = None
-    hi: Optional[float] = None
+    # Wald CIs on the logit scale from the exact (finite-difference) observed information.
+    # BFGS's own ``hess_inv`` is only a running approximation and is not used for the SEs.
+    lo = hi = p_lo = p_hi = None
     try:
-        se = float(np.sqrt(np.diag(res.hess_inv)[0]))
-        lo = _sigmoid(float(res.x[0]) - 1.96 * se)
-        hi = _sigmoid(float(res.x[0]) + 1.96 * se)
-    except Exception:
+        cov = np.linalg.inv(_hessian(lambda t: _nll(t, y), res.x))
+        var = np.diag(cov)
+        if np.all(np.isfinite(var)) and np.all(var > 0):
+            lo, hi = _logit_wald_ci(float(res.x[0]), float(np.sqrt(var[0])))
+            p_lo, p_hi = _logit_wald_ci(float(res.x[1]), float(np.sqrt(var[1])))
+    except (np.linalg.LinAlgError, FloatingPointError, ValueError):
         pass
 
     degenerate = (
@@ -127,6 +180,8 @@ def fit_occu(y: np.ndarray) -> dict:
         "psi_lo":    round(lo, 4) if lo is not None else None,
         "psi_hi":    round(hi, 4) if hi is not None else None,
         "p":         round(p, 4),
+        "p_lo":      round(p_lo, 4) if p_lo is not None else None,
+        "p_hi":      round(p_hi, 4) if p_hi is not None else None,
         "degenerate": degenerate,
         "converged": converged,
     }
@@ -149,7 +204,9 @@ def fit_naive_vs_verified(
 
     Reads dethist_naive_{sp}.csv and dethist_verified_{sp}.csv from
     occupancy_dir (written by build_occupancy_inputs). Results are logged
-    and written to occupancy_fit.csv.
+    and written to occupancy_fit.csv, with the four estimates of each species
+    (psi and p, naive and verified) and their 95 % Wald confidence limits on the
+    logit scale (see the module docstring for the method).
 
     Args:
         occupancy_dir: Directory with detection history CSVs.
@@ -184,11 +241,15 @@ def fit_naive_vs_verified(
             "psi_naive_lo":        fit_n["psi_lo"],
             "psi_naive_hi":        fit_n["psi_hi"],
             "p_naive":             fit_n["p"],
+            "p_naive_lo":          fit_n["p_lo"],
+            "p_naive_hi":          fit_n["p_hi"],
             "degenerate_naive":    fit_n["degenerate"],
             "psi_verified":        fit_v["psi"],
             "psi_verified_lo":     fit_v["psi_lo"],
             "psi_verified_hi":     fit_v["psi_hi"],
             "p_verified":          fit_v["p"],
+            "p_verified_lo":       fit_v["p_lo"],
+            "p_verified_hi":       fit_v["p_hi"],
             "degenerate_verified": fit_v["degenerate"],
         }
         results.append(row)

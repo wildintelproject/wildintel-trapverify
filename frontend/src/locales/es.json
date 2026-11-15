@@ -316,7 +316,7 @@
     "col_unverified": "Sin revisar",
     "col_total": "Total",
     "occupancy_title": "Estimación de ocupación (naive vs. verificado)",
-    "occupancy_hint": "Comparación de la probabilidad de ocupación (ψ) y de detección (p) estimadas a partir de las detecciones sin revisar frente a las verificadas manualmente. Los intervalos son de confianza al 95%.",
+    "occupancy_hint": "Comparación de la probabilidad de ocupación (ψ) y de detección (p) estimadas a partir de las detecciones sin revisar frente a las verificadas manualmente. Los intervalos son de confianza al 95%. Intervalos de Wald en escala logit (véase el manual).",
     "col_psi_naive": "ψ naive",
     "col_psi_verified": "ψ verificado",
     "col_p_naive": "p naive",

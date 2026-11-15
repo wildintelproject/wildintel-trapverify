@@ -10,6 +10,8 @@ export function formatPsi(
   return `${psi.toFixed(3)} [${ciLo}, ${ciHi}]`
 }
 
-export function formatP(p: number | null): string {
-  return p != null ? p.toFixed(3) : '—'
+export function formatP(p: number | null, lo?: number | null, hi?: number | null): string {
+  if (p == null) return '—'
+  if (lo == null || hi == null) return p.toFixed(3)
+  return `${p.toFixed(3)} [${lo.toFixed(3)}, ${hi.toFixed(3)}]`
 }

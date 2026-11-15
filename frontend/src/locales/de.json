@@ -316,7 +316,7 @@
     "col_unverified": "Nicht überprüft",
     "col_total": "Gesamt",
     "occupancy_title": "Belegungsschätzung (naiv vs. verifiziert)",
-    "occupancy_hint": "Vergleich der geschätzten Belegungswahrscheinlichkeit (ψ) und Entdeckungswahrscheinlichkeit (p) zwischen den ungeprüften und den manuell verifizierten Detektionen. Die Intervalle sind 95%-Konfidenzintervalle.",
+    "occupancy_hint": "Vergleich der geschätzten Belegungswahrscheinlichkeit (ψ) und Entdeckungswahrscheinlichkeit (p) zwischen den ungeprüften und den manuell verifizierten Detektionen. Die Intervalle sind 95%-Konfidenzintervalle. Wald-Intervalle auf der Logit-Skala (siehe Handbuch).",
     "col_psi_naive": "ψ naiv",
     "col_psi_verified": "ψ verifiziert",
     "col_p_naive": "p naiv",
