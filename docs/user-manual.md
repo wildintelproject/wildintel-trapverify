@@ -436,7 +436,11 @@ The lightbox shows:
 - The full-size image with zoom and pan support.
 - Navigation arrows to browse frames within the detection event.
 - The location and sampling occasion in the title bar.
-- Decision buttons and image adjustment controls in the toolbar.
+- A **panel on the left** (on screens at least 900 px wide) with the review progress and the decision buttons, stacked vertically so they are close to the photo. The progress shows the round, how many cards are decided in the round (with a bar), how many at the current location, and how many occasions of the species were resolved before the round. On narrower screens the panel is replaced by a one-line progress and the buttons in a strip at the bottom.
+- **↶ Previous card** (also `Backspace`): goes back to the card you decided just before, through every card decided since the lightbox was opened, so you can correct a mistake. The card shows the decision it had and nothing is undone until you press a different decision.
+- The image adjustment controls in the toolbar.
+
+The **Large view** button in the header opens the lightbox at the first undecided card (or at the first card when you are reviewing a finished species), without having to click a photo.
 
 ### Image Controls
 
@@ -461,7 +465,10 @@ While the lightbox is open:
 | `Y` | Confirm the current detection event |
 | `N` | Reject the current detection event |
 | `U` | Mark the current detection event as **Uncertain** (counts as rejected) |
+| `Backspace` | Go back to the card decided just before (**Previous card**) |
+| `↑` `↓` | Previous / next card at the same location |
 | `←` `→` | Navigate between frames in the detection event |
+| `Esc` | Close the lightbox |
 
 After a decision, the lightbox automatically advances to the next undecided detection event.
 

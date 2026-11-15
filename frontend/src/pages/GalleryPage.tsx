@@ -62,6 +62,11 @@ export default function GalleryPage() {
   const [needsDecision, setNeedsDecision] = useState<Set<string>>(new Set())
   const [lbOpen, setLbOpen] = useState(false)
   const [lbEvIdx, setLbEvIdx] = useState(0)   // which event is shown in the lightbox
+  // Cards the lightbox moved on from after a decision, most recent last: "previous card" walks
+  // back through them to correct a mistake.
+  const [lbHistory, setLbHistory] = useState<number[]>([])
+  // Narrow screens keep the controls in a strip at the bottom instead of a panel on the left.
+  const [lbNarrow, setLbNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 900)
   const [lbIndex, setLbIndex] = useState(0)   // frame index within that event
   const [lbInverted, setLbInverted] = useState(false)
   const [lbBrightness, setLbBrightness] = useState(100)
@@ -97,6 +102,7 @@ export default function GalleryPage() {
   decisionsRef.current = decisions
   completedRef.current = completed
   const decideInLbRef = useRef<(d: Decision) => void>(() => {})
+  const lbBackRef = useRef<() => void>(() => {})
   const lbControllerRef = useRef<ControllerRef>(null)
 
   function iterationColor(iter: number, total: number): string {
@@ -270,6 +276,7 @@ export default function GalleryPage() {
       if (e.key === 'y' || e.key === 'Y') decideInLbRef.current('confirmed')
       if (e.key === 'n' || e.key === 'N') decideInLbRef.current('rejected')
       if ((e.key === 'u' || e.key === 'U') && !completedRef.current) decideInLbRef.current('uncertain')
+      if (e.key === 'Backspace') { e.preventDefault(); lbBackRef.current() }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
         e.stopPropagation()
@@ -290,6 +297,12 @@ export default function GalleryPage() {
     window.addEventListener('keydown', onKey, { capture: true })
     return () => window.removeEventListener('keydown', onKey, { capture: true })
   }, [lbOpen, lbEvIdx, events])
+
+  useEffect(() => {
+    const onResize = () => setLbNarrow(window.innerWidth < 900)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const lbEv = events[lbEvIdx]
   const lbSlides: EventSlide[] = lbEv
@@ -314,6 +327,7 @@ export default function GalleryPage() {
   function openLightbox(evIdx: number, frIdx: number) {
     setLbEvIdx(evIdx)
     setLbIndex(frIdx)
+    setLbHistory([])
     setLbInverted(false)
     setLbOpen(true)
   }
@@ -349,9 +363,11 @@ export default function GalleryPage() {
         .map((e, i) => ({ i, siteId: e.siteId }))
         .filter((x) => x.siteId === ev.siteId)
       const posInSite = siteIndices.findIndex((x) => x.i === lbEvIdx)
+      const from = lbEvIdx
       for (let p = posInSite + 1; p < siteIndices.length; p++) {
         const i = siteIndices[p].i
         if (!updated[events[i].key]) {
+          setLbHistory((h) => [...h, from])
           setLbEvIdx(i)
           setLbIndex(0)
           return
@@ -359,6 +375,7 @@ export default function GalleryPage() {
       }
       for (let i = 0; i < events.length; i++) {
         if (!updated[events[i].key]) {
+          setLbHistory((h) => [...h, from])
           setLbEvIdx(i)
           setLbIndex(0)
           return
@@ -368,6 +385,22 @@ export default function GalleryPage() {
     }
   }
   decideInLbRef.current = decideInLb
+
+  // Back to the card decided just before (or, with no history, the previous one in the list).
+  const lbCanGoBack = lbHistory.length > 0 || lbEvIdx > 0
+  function lbGoBack() {
+    if (lbHistory.length) {
+      const prev = lbHistory[lbHistory.length - 1]
+      setLbHistory((h) => h.slice(0, -1))
+      setLbEvIdx(prev)
+    } else if (lbEvIdx > 0) {
+      setLbEvIdx(lbEvIdx - 1)
+    } else {
+      return
+    }
+    setLbIndex(0)
+  }
+  lbBackRef.current = lbGoBack
 
   function dropCorrection(key: string) {
     setCorrections((prev) => { if (!(key in prev)) return prev; const c = { ...prev }; delete c[key]; return c })
@@ -482,6 +515,86 @@ export default function GalleryPage() {
   const lbDecision  = lbCurrentEv ? decisions[lbCurrentEv.key] : undefined
   const lbReadOnly  = completed && locked
 
+  // Progress shown beside the photos: round, decided in the round, decided at this location and
+  // cells resolved for the species before the round started.
+  const decidedCount = events.reduce((n, e) => n + (decisions[e.key] ? 1 : 0), 0)
+  const lbSiteEvents = lbCurrentEv ? (bySite[lbCurrentEv.siteId] ?? []) : []
+  const lbSiteDone = lbSiteEvents.reduce((n, e) => n + (decisions[e.key] ? 1 : 0), 0)
+  const lbProgressLine = [
+    completed ? '' : t('gallery.round', { n: iteration }),
+    t('gallery.decided_progress', { done: decidedCount, total: events.length }),
+    lbCurrentEv ? t('gallery.lb_site_progress', { site: lbCurrentEv.siteId, done: lbSiteDone, total: lbSiteEvents.length }) : '',
+  ].filter(Boolean).join(' · ')
+  const lbProgress = (
+    <div className="rounded-lg bg-black/55 border border-white/15 px-3 py-2 text-[11px] leading-snug text-white/80" aria-label={t('gallery.lb_progress_label')}>
+      {!completed && <div className="font-semibold text-white">{t('gallery.round', { n: iteration })}</div>}
+      <div>{t('gallery.decided_progress', { done: decidedCount, total: events.length })}</div>
+      <div className="h-1.5 rounded bg-white/15 my-1 overflow-hidden">
+        <div className="h-full bg-sky-500" style={{ width: `${events.length ? Math.round(decidedCount / events.length * 100) : 0}%` }} />
+      </div>
+      {lbCurrentEv && (
+        <div>{t('gallery.lb_site_progress', { site: lbCurrentEv.siteId, done: lbSiteDone, total: lbSiteEvents.length })}</div>
+      )}
+      {!completed && spStats && spStats.n_total_combos > 0 && (
+        <div className="text-white/60">{t('gallery.lb_species_progress', { resolved: spStats.n_resolved, total: spStats.n_total_combos })}</div>
+      )}
+    </div>
+  )
+  const lbDecisionButtons = (wrapClass: string, btnClass: string) => (
+    <div className={wrapClass}>
+      <button
+        className={`${btnClass} text-base rounded font-medium transition-colors disabled:opacity-50 ${
+          lbDecision === 'confirmed'
+            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+            : 'border border-emerald-600 bg-black/40 text-emerald-400 hover:bg-emerald-600 hover:text-white'
+        }`}
+        onClick={() => decideInLb('confirmed')}
+        disabled={lbReadOnly}
+      >
+        {t('gallery.confirmed_btn')} <span className="opacity-60">(Y)</span>
+      </button>
+      <button
+        className={`${btnClass} text-base rounded font-medium transition-colors disabled:opacity-50 ${
+          lbDecision === 'rejected'
+            ? 'bg-red-600 text-white hover:bg-red-700'
+            : 'border border-red-600 bg-black/40 text-red-400 hover:bg-red-600 hover:text-white'
+        }`}
+        onClick={() => decideInLb('rejected')}
+        disabled={lbReadOnly}
+      >
+        {t('gallery.rejected_btn')} <span className="opacity-60">(N)</span>
+      </button>
+      {!completed && (
+        <button
+          className={`${btnClass} text-base rounded font-medium transition-colors disabled:opacity-50 ${
+            lbDecision === 'uncertain'
+              ? 'bg-amber-600 text-white hover:bg-amber-700'
+              : 'border border-amber-600 bg-black/40 text-amber-400 hover:bg-amber-600 hover:text-white'
+          }`}
+          onClick={() => decideInLb('uncertain')}
+          disabled={lbReadOnly}
+          title={t('gallery.uncertain_hint')}
+        >
+          {t('gallery.uncertain_btn')} <span className="opacity-60">(U)</span>
+        </button>
+      )}
+    </div>
+  )
+  const lbCorrectionInput = recordRejection && !completed && lbDecision === 'rejected' && lbCurrentEv ? (
+    <input
+      type="text"
+      list="actual-species-list"
+      className="w-full px-3 py-2 text-sm rounded border border-zinc-500 bg-black/50 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      style={{ maxWidth: 420 }}
+      placeholder={t('gallery.actual_species_placeholder')}
+      title={t('gallery.actual_species_hint')}
+      value={corrections[lbCurrentEv.key] ?? ''}
+      onChange={(e) => setCorrection(lbCurrentEv.key, e.target.value)}
+      onKeyDown={(e) => e.stopPropagation()}
+      readOnly={lbReadOnly}
+    />
+  ) : null
+
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-4">
       <div className="mb-3">
@@ -530,6 +643,18 @@ export default function GalleryPage() {
               <input type="checkbox" checked={showBoxes} onChange={(e) => toggleBoxes(e.target.checked)} />
               {t('gallery.show_boxes')}
             </label>
+          )}
+          {events.length > 0 && (
+            <button
+              className="px-4 py-1.5 text-sm rounded transition-colors border border-zinc-500 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+              title={t('gallery.open_large_view_hint')}
+              onClick={() => {
+                const firstUndecided = completed ? -1 : events.findIndex((e) => !decisions[e.key])
+                openLightbox(firstUndecided >= 0 ? firstUndecided : 0, 0)
+              }}
+            >
+              {t('gallery.open_large_view')}
+            </button>
           )}
           <button
             className="px-4 py-1.5 text-sm rounded transition-colors bg-zinc-700 text-white hover:bg-zinc-600 flex items-center gap-1.5"
@@ -736,92 +861,90 @@ export default function GalleryPage() {
         animation={{ fade: 0, swipe: 0, navigation: 0 }}
         // Photos are scaled up to fill the screen (see the .yarl__slide_image rule); the padding
         // leaves room for the title above and the decision buttons below.
-        styles={{ slide: { padding: '48px 56px 96px' } }}
+        styles={lbNarrow
+          ? { slide: { padding: '48px 56px 150px' } }
+          : { slide: { padding: '48px 56px 56px 224px' }, navigationPrev: { left: 212 } }}
         controller={{ ref: lbControllerRef }}
         on={{ view: ({ index }) => { setLbIndex(index); resetLbFilters() } }}
         zoom={{ maxZoomPixelRatio: 8, scrollToZoom: true }}
         captions={{ showToggle: false }}
         render={{
           controls: () => lbCurrentEv && (
-            <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center gap-3 px-4 pb-6" style={{ zIndex: 10000 }}>
-              {lbCurrentEv.frames.length > 1 && (
-                <div className="flex gap-1">
-                  {lbCurrentEv.frames.map((_, i) => (
-                    <button
-                      key={i}
-                      aria-label={`${i + 1}/${lbCurrentEv.frames.length}`}
-                      onClick={() => {
-                        const delta = i - lbIndex
-                        if (delta === 0) return
-                        if (delta > 0) lbControllerRef.current?.next({ count: delta })
-                        else lbControllerRef.current?.prev({ count: -delta })
-                      }}
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        padding: 0,
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: i === lbIndex ? '#007aff' : 'rgba(255,255,255,.3)',
-                      }}
-                    />
-                  ))}
+            <>
+              {!lbNarrow && (
+                <div
+                  className="absolute left-6 top-14 bottom-6 flex flex-col gap-3 overflow-y-auto"
+                  style={{ zIndex: 10000, width: 168 }}
+                  data-testid="lb-panel"
+                >
+                  {lbProgress}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[11px] leading-tight text-white/70">{t('gallery.lb_decision_title')}</span>
+                    {lbDecisionButtons('flex flex-col gap-2', 'w-full py-3')}
+                  </div>
+                  {lbCorrectionInput}
+                  <button
+                    type="button"
+                    onClick={lbGoBack}
+                    disabled={!lbCanGoBack}
+                    title={t('gallery.prev_card_tooltip')}
+                    className="w-full py-1.5 text-xs rounded border border-white/40 bg-black/50 text-white/90 hover:bg-white/15 disabled:opacity-30 disabled:hover:bg-black/50"
+                  >
+                    ↶ {t('gallery.prev_card')} <span className="opacity-60">(⌫)</span>
+                  </button>
+                  <p className="text-[10px] leading-snug text-white/50">{t('gallery.lb_keys_tip')}</p>
                 </div>
               )}
-              <div className="flex gap-3 w-full" style={{ maxWidth: 420 }}>
-                <button
-                  className={`flex-1 py-2.5 text-base rounded font-medium transition-colors disabled:opacity-50 ${
-                    lbDecision === 'confirmed'
-                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      : 'border border-emerald-600 bg-black/40 text-emerald-400 hover:bg-emerald-600 hover:text-white'
-                  }`}
-                  onClick={() => decideInLb('confirmed')}
-                  disabled={lbReadOnly}
-                >
-                  {t('gallery.confirmed_btn')} <span className="opacity-60">(Y)</span>
-                </button>
-                <button
-                  className={`flex-1 py-2.5 text-base rounded font-medium transition-colors disabled:opacity-50 ${
-                    lbDecision === 'rejected'
-                      ? 'bg-red-600 text-white hover:bg-red-700'
-                      : 'border border-red-600 bg-black/40 text-red-400 hover:bg-red-600 hover:text-white'
-                  }`}
-                  onClick={() => decideInLb('rejected')}
-                  disabled={lbReadOnly}
-                >
-                  {t('gallery.rejected_btn')} <span className="opacity-60">(N)</span>
-                </button>
-                {!completed && (
-                  <button
-                    className={`flex-1 py-2.5 text-base rounded font-medium transition-colors disabled:opacity-50 ${
-                      lbDecision === 'uncertain'
-                        ? 'bg-amber-600 text-white hover:bg-amber-700'
-                        : 'border border-amber-600 bg-black/40 text-amber-400 hover:bg-amber-600 hover:text-white'
-                    }`}
-                    onClick={() => decideInLb('uncertain')}
-                    disabled={lbReadOnly}
-                    title={t('gallery.uncertain_hint')}
-                  >
-                    {t('gallery.uncertain_btn')} <span className="opacity-60">(U)</span>
-                  </button>
+              <div
+                className="absolute bottom-0 right-0 flex flex-col items-center gap-3 px-4 pb-3"
+                style={{ zIndex: 10000, left: lbNarrow ? 0 : 208 }}
+              >
+                {lbCurrentEv.frames.length > 1 && (
+                  <div className="flex gap-1">
+                    {lbCurrentEv.frames.map((_, i) => (
+                      <button
+                        key={i}
+                        aria-label={`${i + 1}/${lbCurrentEv.frames.length}`}
+                        onClick={() => {
+                          const delta = i - lbIndex
+                          if (delta === 0) return
+                          if (delta > 0) lbControllerRef.current?.next({ count: delta })
+                          else lbControllerRef.current?.prev({ count: -delta })
+                        }}
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          padding: 0,
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: i === lbIndex ? '#007aff' : 'rgba(255,255,255,.3)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {lbNarrow && (
+                  <>
+                    <div className="w-full text-center text-[11px] text-white/70">{lbProgressLine}</div>
+                    <div className="flex gap-2 w-full" style={{ maxWidth: 480 }}>
+                      {lbDecisionButtons('flex gap-3 flex-1', 'flex-1 py-2.5')}
+                      <button
+                        type="button"
+                        onClick={lbGoBack}
+                        disabled={!lbCanGoBack}
+                        title={t('gallery.prev_card_tooltip')}
+                        aria-label={t('gallery.prev_card')}
+                        className="px-3 rounded border border-white/40 bg-black/50 text-white/90 disabled:opacity-30"
+                      >
+                        ↶
+                      </button>
+                    </div>
+                    {lbCorrectionInput}
+                  </>
                 )}
               </div>
-              {recordRejection && !completed && lbDecision === 'rejected' && lbCurrentEv && (
-                <input
-                  type="text"
-                  list="actual-species-list"
-                  className="w-full mt-3 px-3 py-2 text-sm rounded border border-zinc-500 bg-black/50 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  style={{ maxWidth: 420 }}
-                  placeholder={t('gallery.actual_species_placeholder')}
-                  title={t('gallery.actual_species_hint')}
-                  value={corrections[lbCurrentEv.key] ?? ''}
-                  onChange={(e) => setCorrection(lbCurrentEv.key, e.target.value)}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  readOnly={lbReadOnly}
-                />
-              )}
-            </div>
+            </>
           ),
         }}
         toolbar={{
