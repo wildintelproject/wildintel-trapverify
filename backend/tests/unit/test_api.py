@@ -1497,3 +1497,78 @@ def test_day_session_still_fits_the_model_and_reports_no_hours(client, setup_ses
 
 def test_negative_occasion_hours_is_rejected(client, camtrap_dir, tmp_path):
     assert _hourly_setup(client, camtrap_dir, tmp_path, -1).status_code == 422
+
+
+# ─── completed species: confirmed event, rounds kept when editing ─────────────
+# Fixture: A/occ1 has two events (rank 1 = o001/o002, rank 2 = o005); A/occ2 and B/occ1 have one.
+
+@pytest.fixture
+def finished_in_two_rounds(client, setup_session):
+    """Round 1 confirms A/occ2 and B/occ1 and rejects A/occ1; round 2 confirms A/occ1's second event (o005)."""
+    ev1 = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    keep = [e["repObsId"] for e in ev1 if e["key"] != "SITE_A_occ1_Vulpes_vulpes"]
+    r1 = client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": keep}).json()
+    assert r1["done"] is False and r1["next_iteration"] == 2
+    ev2 = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 2}).json()
+    assert [e["repObsId"] for e in ev2] == ["o005"]
+    r2 = client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": ["o005"]}).json()
+    assert r2["done"] is True
+    return client
+
+
+def _species_stats(client):
+    return next(s for s in client.get("/api/species").json() if s["species_safe"] == "Vulpes_vulpes")
+
+
+def test_review_shows_the_event_that_was_confirmed_not_the_rank_1_event(finished_in_two_rounds):
+    review = {e["key"]: e for e in finished_in_two_rounds.get("/api/species/Vulpes_vulpes/review").json()}
+    a1 = review["SITE_A_occ1_Vulpes_vulpes"]
+    assert a1["status"] == "confirmed" and a1["rank"] == 2 and a1["repObsId"] == "o005"
+    assert [f["obsId"] for f in a1["frames"]] == ["o005"]                       # not the rank-1 frames o001/o002
+    assert review["SITE_A_occ2_Vulpes_vulpes"]["rank"] == 1                     # confirmed in round 1: unchanged
+
+
+def test_unconfirmed_cells_still_show_their_rank_1_event_in_the_review(finished_in_two_rounds):
+    client = finished_in_two_rounds
+    client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": ["SITE_A_occ2_Vulpes_vulpes"]})
+    a1 = next(e for e in client.get("/api/species/Vulpes_vulpes/review").json() if e["key"] == "SITE_A_occ1_Vulpes_vulpes")
+    assert a1["status"] == "not_confirmed" and a1["rank"] == 1 and a1["repObsId"] == "o001"
+
+
+def test_update_decisions_keeps_the_confirmed_event(finished_in_two_rounds):
+    client = finished_in_two_rounds
+    keys = [e["key"] for e in client.get("/api/species/Vulpes_vulpes/review").json()]
+    client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": keys})          # confirm all again
+    got = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1}).json()["confirmed"]
+    assert "o005" in got and "o001" not in got                                  # the event confirmed in round 2 survives
+    a1 = next(e for e in client.get("/api/species/Vulpes_vulpes/review").json() if e["key"] == "SITE_A_occ1_Vulpes_vulpes")
+    assert a1["rank"] == 2 and a1["repObsId"] == "o005"
+
+
+def test_update_decisions_keeps_the_number_of_rounds_done(finished_in_two_rounds):
+    client = finished_in_two_rounds
+    before = _species_stats(client)
+    assert before["current_iteration"] == 3 and before["n_resolved"] == before["n_total_combos"]
+    # Leave A/occ1 (two events) unconfirmed: it must stay settled as "not detected", not re-open
+    client.put("/api/species/Vulpes_vulpes/decisions",
+               json={"confirmed_keys": ["SITE_A_occ2_Vulpes_vulpes", "SITE_B_occ1_Vulpes_vulpes"]})
+    after = _species_stats(client)
+    assert after["current_iteration"] == 3                                      # rounds done unchanged
+    assert after["n_resolved"] == after["n_total_combos"]                        # nothing re-opened for review
+    assert after["n_confirmed_combos"] == 2
+
+
+def test_update_decisions_with_nothing_confirmed_keeps_the_rounds(finished_in_two_rounds):
+    client = finished_in_two_rounds
+    client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": []})
+    stats = _species_stats(client)
+    assert stats["current_iteration"] == 3 and stats["n_resolved"] == stats["n_total_combos"]
+    assert client.get("/api/results").json()["unverified"] == 0
+
+
+def test_effort_report_uses_the_real_rank_of_the_confirmed_event_after_an_edit(finished_in_two_rounds):
+    client = finished_in_two_rounds
+    keys = [e["key"] for e in client.get("/api/species/Vulpes_vulpes/review").json()]
+    client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": keys})
+    tot = next(r for r in client.get("/api/results").json()["effort_by_species"] if r["species"] == "TOTAL")
+    assert tot["cells_detection"] == 3 and tot["events_inspected"] == 4          # A/occ1 needed 2 events, the others 1

@@ -139,7 +139,23 @@ export default function GalleryPage() {
     }
   }, [species])
 
-  useEffect(() => { loadEvents(iteration) }, [loadEvents, iteration])
+  // Open a species at its current round (the one the index shows), not always at round 1:
+  // coming back to a species mid-review used to re-present occasions already rejected.
+  const [roundReady, setRoundReady] = useState(false)
+  useEffect(() => {
+    if (!species) return
+    let live = true
+    api.getSpecies()
+      .then((all) => {
+        const sp = all.find((s) => s.species_safe === species)
+        if (live && sp && sp.current_iteration > 0) setIteration(sp.current_iteration)
+      })
+      .catch(() => { /* fall back to round 1 */ })
+      .finally(() => { if (live) setRoundReady(true) })
+    return () => { live = false }
+  }, [species])
+
+  useEffect(() => { if (roundReady) loadEvents(iteration) }, [loadEvents, iteration, roundReady])
 
   useEffect(() => {
     if (!lbOpen) return
