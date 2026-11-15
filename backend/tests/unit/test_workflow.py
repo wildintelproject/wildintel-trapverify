@@ -2188,3 +2188,12 @@ def test_effort_report_shows_the_cutoff_of_each_species(candidates, decisions_di
     assert df.iloc[0]["min_score"] == 0.7 and pd.isna(df.iloc[-1]["min_score"])  # the TOTAL row has no single cut-off
     old = build_species_effort(candidates, decisions_dir, tmp_path / "o2", exclusions=ex.drop(columns="min_score"))
     assert old["min_score"].isna().all() and old.iloc[0]["excluded_photos"] == 1  # sessions made before the column existed
+
+
+def test_validation_checks_only_the_first_rows(tmp_path, monkeypatch):
+    import camtrap_workflow
+    dp_path = _write_datapackage(tmp_path, deployments_required=True)
+    (tmp_path / "deployments.csv").write_text("deploymentID,latitude\nDEP1,40.5\nDEP2,\nDEP3,\n")   # rows 3-4 are invalid
+    assert validate_camtrapdp_datapackage(dp_path)                                     # all rows by default here
+    monkeypatch.setattr(camtrap_workflow, "VALIDATION_ROW_LIMIT", 1)
+    assert validate_camtrapdp_datapackage(dp_path) == []                               # beyond the limit: not looked at

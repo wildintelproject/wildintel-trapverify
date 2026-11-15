@@ -605,6 +605,8 @@ Each session is saved in a timestamped subfolder inside the output directory (e.
 
 **`camtrap_dp_verified/`** — verified CamtrapDP package
 
+Saving a round does not rewrite this package (rewriting the whole observations table on every save is the slowest step on a large archive). It is brought up to date when you **open the Results page**, **download the results** or **open the session folder**, so it always reflects your latest decisions by the time you use it. If you read the files directly from the session folder right after saving, open Results first. The occupancy inputs and the effort report are updated on every save.
+
 | File | Description |
 |---|---|
 | `deployments.csv` | Original deployment table (unchanged). |
