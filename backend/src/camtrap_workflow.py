@@ -1149,6 +1149,23 @@ def load_all_decisions(decisions_dir: Path) -> pd.DataFrame:
     return pd.concat([pd.read_csv(f, dtype=str) for f in files], ignore_index=True)
 
 
+def confirmed_observations(decisions_dir: Path, species_cands: pd.DataFrame) -> dict[str, str]:
+    """``site_occasion_key`` -> confirmed ``observationID`` for the cells of one species.
+
+    Only confirmations whose observation belongs to ``species_cands`` are returned,
+    so a cell can be shown with the detection event that was actually confirmed
+    (which may come from a later round), not just with its rank-1 event.
+    """
+    dec = load_all_decisions(decisions_dir)
+    if dec.empty:
+        return {}
+    keys = set(species_cands["site_occasion_key"])
+    obs = set(species_cands["observationID"].astype(str))
+    dec = dec[dec["site_occasion_key"].isin(keys) & dec["observationID"].astype(str).isin(obs)]
+    dec = dec.drop_duplicates("site_occasion_key", keep="last")
+    return dict(zip(dec["site_occasion_key"], dec["observationID"].astype(str)))
+
+
 def confirmed_keys_set(decisions_dir: Path) -> set[str]:
     """Return the set of confirmed ``site_occasion_key`` values across all decision files.
 
@@ -1599,9 +1616,11 @@ def get_review_events(
 ) -> list[dict]:
     """Return all cells for a completed species with their decision status.
 
-    Uses rank-1 frames for display (highest-confidence burst per cell). Each
-    event includes a ``status`` field so the review screen can pre-mark cards
-    as confirmed or not confirmed without reloading decisions separately.
+    A confirmed cell is shown with the detection event that was confirmed (which
+    may come from a later round); an unconfirmed one with its rank-1 event
+    (highest-confidence burst). Each event includes a ``status`` field so the
+    review screen can pre-mark cards as confirmed or not confirmed without
+    reloading decisions separately.
 
     Used by the locked review screen so the expert can audit or correct
     decisions without starting a new session.
@@ -1623,11 +1642,22 @@ def get_review_events(
         Sorted by ``siteId`` then ``occasion``.
     """
     conf_keys = confirmed_keys_set(decisions_dir)
-    rank1 = species_cands[species_cands["rank"] == 1].copy()
     total_seqs_by_key = species_cands.groupby("site_occasion_key")["rank"].max().to_dict()
 
+    # Confirmed cells show the confirmed event; the others their rank-1 event.
+    confirmed_obs = confirmed_observations(decisions_dir, species_cands)
+    conf_bursts = (
+        species_cands[species_cands["observationID"].astype(str).isin(set(confirmed_obs.values()))]
+        [["site_occasion_key", "burst_id"]].drop_duplicates("site_occasion_key")
+    )
+    rank1_bursts = species_cands.loc[species_cands["rank"] == 1, ["site_occasion_key", "burst_id"]] \
+        .drop_duplicates("site_occasion_key")
+    rank1_bursts = rank1_bursts[~rank1_bursts["site_occasion_key"].isin(set(conf_bursts["site_occasion_key"]))]
+    bursts = pd.concat([conf_bursts, rank1_bursts], ignore_index=True)
+    shown = species_cands.merge(bursts, on=["site_occasion_key", "burst_id"])
+
     events = []
-    for key, group in _sort_frames(rank1, ["burst_id", "ts"]).groupby(
+    for key, group in _sort_frames(shown, ["burst_id", "ts"]).groupby(
         "site_occasion_key", sort=False
     ):
         group = _sort_frames(group, ["burst_id", "ts"])
@@ -1666,9 +1696,9 @@ def get_review_events(
             "key": key,
             "siteId": str(group["siteID"].iloc[0]),
             "occasion": int(group["occasion"].iloc[0]),
-            "rank": 1,
+            "rank": int(group["rank"].iloc[0]),
             "totalSeqs": int(total_seqs_by_key.get(key, 1)),
-            "repObsId": rep_obs,
+            "repObsId": confirmed_obs[key] if confirmed_obs.get(key) in {str(f["obsId"]) for f in frames} else rep_obs,
             "maxProb": max_prob,
             "frames": frames,
             "status": "confirmed" if key in conf_keys else "not_confirmed",

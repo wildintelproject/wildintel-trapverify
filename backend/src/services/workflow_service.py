@@ -20,6 +20,7 @@ from camtrap_workflow import (
     build_false_positive_sources,
     build_species_effort,
     compute_min_score_exclusions,
+    confirmed_observations,
     load_review_log,
     rounds_completed,
     clear_media_caches,
@@ -156,8 +157,13 @@ def replace_species_decisions(species_safe: str, confirmed_keys: list[str]) -> i
     """Replace all decisions for a species with a corrected set and regenerate outputs.
 
     Deletes existing decision CSVs for the species, writes a fresh iter1.csv
-    from confirmed_keys (using the rank-1 representative per key), then
+    from confirmed_keys (keeping the detection event already confirmed for a
+    cell, or the rank-1 representative for a newly confirmed one), then
     regenerates all output files.
+
+    The number of rounds already done is preserved (an empty file for the last
+    round is kept), so cells the expert leaves unconfirmed stay settled as "not
+    detected" instead of re-opening for review.
 
     Returns:
         Number of confirmed keys saved.
@@ -169,14 +175,22 @@ def replace_species_decisions(species_safe: str, confirmed_keys: list[str]) -> i
     p["decisions"].mkdir(parents=True, exist_ok=True)
     candidates = session_service.get_candidates()
     sp_cands = candidates[candidates["species_safe"] == species_safe]
+    rounds_done = rounds_completed(p["decisions"]).get(species_safe, 0)
+    previous = confirmed_observations(p["decisions"], sp_cands)       # cell -> event already confirmed
 
     for f in p["decisions"].glob(f"decisions_{species_safe}_iter*.csv"):
         f.unlink()
 
     if confirmed_keys:
         rank1 = sp_cands[sp_cands["rank"] == 1]
+        obs_ids = sp_cands["observationID"].astype(str)
         confirmed_rows = []
         for key in confirmed_keys:
+            if key in previous:                                       # keep the event that was confirmed
+                kept = sp_cands[obs_ids == previous[key]]
+                if not kept.empty:
+                    confirmed_rows.append(kept.iloc[0])
+                    continue
             key_cands = rank1[rank1["site_occasion_key"] == key]
             if not key_cands.empty:
                 prob_col = pd.to_numeric(
@@ -188,6 +202,12 @@ def replace_species_decisions(species_safe: str, confirmed_keys: list[str]) -> i
                     "scientificName", "siteID", "occasion"]
             csv_path = p["decisions"] / f"decisions_{species_safe}_iter1.csv"
             pd.DataFrame(confirmed_rows)[cols].to_csv(csv_path, index=False)
+
+    # Keep the number of rounds done: an empty file for the last round if the edit left none.
+    last_round = p["decisions"] / f"decisions_{species_safe}_iter{max(rounds_done, 1)}.csv"
+    if rounds_done and not last_round.exists():
+        pd.DataFrame(columns=["observationID", "site_occasion_key", "mediaID",
+                              "scientificName", "siteID", "occasion"]).to_csv(last_round, index=False)
 
     rebuild_outputs()
     return len(confirmed_keys)
