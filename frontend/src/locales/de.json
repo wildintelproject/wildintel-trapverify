@@ -204,7 +204,10 @@
     "reviewed_periods": "{{resolved}} von {{total}} Stichprobenanlässen überprüft ({{pct}}%)",
     "complete": "Abgeschlossen",
     "round": "Runde {{n}}",
-    "no_species": "Keine Arten mit Kandidaten. Überprüfen Sie Ihre Konfiguration."
+    "no_species": "Keine Arten mit Kandidaten. Überprüfen Sie Ihre Konfiguration.",
+    "pending": "{{n}} zur Expertenprüfung offen",
+    "pending_badge": "{{n}} zur Expertenprüfung offen",
+    "see_results_pending": "Ergebnisse anzeigen ({{n}} offene Stichprobenanlässe erscheinen als NA)"
   },
   "gallery": {
     "title": "Erkennungsüberprüfung",
@@ -214,7 +217,7 @@
     "intro_hint": "Im Folgenden werden Detektionsereignisse gezeigt, die durch <strong style='color:#10b981'>{{gap}} Sekunden</strong> getrennt sind und an verschiedenen Standorten und Stichprobenanlässen von <strong style='color:#10b981'>{{days}} Tagen</strong> aufgenommen wurden, entsprechend Beobachtungen mit einer Erkennungskonfidenz von <strong style='color:#10b981'>{{minScore}}</strong> oder höher. Bestätigen Sie für jedes von ihnen, ob das Detektionsereignis ein oder mehrere Exemplare der Art <strong style='color:#10b981'>{{species}}</strong> enthält. Wenn Sie das Vorhandensein der Art in einem Detektionsereignis bestätigen, gilt ihr Vorkommen an diesem Standort während des entsprechenden Anlasses als verifiziert, und es müssen keine weiteren Detektionsereignisse desselben Anlasses überprüft werden. Wenn Sie das Vorhandensein nicht bestätigen können, wird ein neues Detektionsereignis vom selben Standort und Anlass angezeigt, um die Überprüfung fortzusetzen.",
     "intro_hint_hours_one": "Im Folgenden werden Detektionsereignisse gezeigt, die durch <strong style='color:#10b981'>{{gap}} Sekunden</strong> getrennt sind und an verschiedenen Standorten und Stichprobenanlässen von <strong style='color:#10b981'>{{count}} Stunde</strong> aufgenommen wurden, entsprechend Beobachtungen mit einer Erkennungskonfidenz von <strong style='color:#10b981'>{{minScore}}</strong> oder höher. Bestätigen Sie für jedes von ihnen, ob das Detektionsereignis ein oder mehrere Exemplare der Art <strong style='color:#10b981'>{{species}}</strong> enthält. Wenn Sie das Vorhandensein der Art in einem Detektionsereignis bestätigen, gilt ihr Vorkommen an diesem Standort während des entsprechenden Anlasses als verifiziert, und es müssen keine weiteren Detektionsereignisse desselben Anlasses überprüft werden. Wenn Sie das Vorhandensein nicht bestätigen können, wird ein neues Detektionsereignis vom selben Standort und Anlass angezeigt, um die Überprüfung fortzusetzen.",
     "intro_hint_hours_other": "Im Folgenden werden Detektionsereignisse gezeigt, die durch <strong style='color:#10b981'>{{gap}} Sekunden</strong> getrennt sind und an verschiedenen Standorten und Stichprobenanlässen von <strong style='color:#10b981'>{{count}} Stunden</strong> aufgenommen wurden, entsprechend Beobachtungen mit einer Erkennungskonfidenz von <strong style='color:#10b981'>{{minScore}}</strong> oder höher. Bestätigen Sie für jedes von ihnen, ob das Detektionsereignis ein oder mehrere Exemplare der Art <strong style='color:#10b981'>{{species}}</strong> enthält. Wenn Sie das Vorhandensein der Art in einem Detektionsereignis bestätigen, gilt ihr Vorkommen an diesem Standort während des entsprechenden Anlasses als verifiziert, und es müssen keine weiteren Detektionsereignisse desselben Anlasses überprüft werden. Wenn Sie das Vorhandensein nicht bestätigen können, wird ein neues Detektionsereignis vom selben Standort und Anlass angezeigt, um die Überprüfung fortzusetzen.",
-    "round_hint": "In Runde {{n}} wird jeder Stichprobenanlass durch das Detektionsereignis mit der höchsten Erkennungskonfidenz unter den noch nicht überprüften repräsentiert.",
+    "round_hint": "In Runde {{n}} wird jeder Stichprobenanlass durch das Detektionsereignis mit der höchsten Erkennungskonfidenz unter den noch nicht überprüften repräsentiert. Wenn Sie unsicher sind, markieren Sie es als «Unsicher»: Es zählt für die nächste Runde als nicht bestätigt, aber der Stichprobenanlass gilt erst als nicht nachgewiesen, wenn jemand ihn geprüft hat.",
     "back": "Zurück",
     "confirm_all": "Alle bestätigen",
     "finish_round": "Runde abschließen",
@@ -262,8 +265,8 @@
     "show_boxes_hint": "Zeichnet einen Rahmen um das zu prüfende Tier, wenn die Daten Begrenzungsrahmen enthalten. Der Rahmen der geprüften Art ist bernsteinfarben; weitere Rahmen derselben Art im Foto sind heller.",
     "actual_species_placeholder": "Tatsächliche Art (optional)…",
     "actual_species_hint": "Was ist es wirklich? Wählen Sie ein Taxon aus dem Datensatz oder geben Sie einen beliebigen Namen ein. Die Ablehnung bleibt unverändert.",
-    "uncertain_btn": "? Unsicher",
-    "uncertain_hint": "Bestimmung möglich, aber unsicher (z. B. Tier nur teilweise sichtbar, schnelle Bewegung in dunklem Bild). Zählt für die Besetzung als abgelehnt und wird gesondert ausgewiesen.",
+    "unsure_btn": "? Unsicher",
+    "unsure_hint": "Nicht eindeutig: In der nächsten Runde wird ein weiteres Detektionsereignis dieses Stichprobenanlasses gezeigt. Wird keines bestätigt, bleibt der Stichprobenanlass zur Expertenprüfung offen, statt als nicht nachgewiesen zu gelten.",
     "zoom": "Vollbild öffnen",
     "lb_title": "Standort: {{site}} — Stichprobenanlass {{occasion}} — Bild {{idx}}/{{total}} ({{meta}})",
     "toast_done": "Art abgeschlossen. Zurück zum Index…",
@@ -285,7 +288,12 @@
     "toast_updated": "Entscheidungen aktualisiert. Ergebnisse neu generiert.",
     "context_frame": "Kontext",
     "image_permission_denied": "Zugriff verweigert. Überprüfen Sie die Zugriffsberechtigungen.",
-    "round_hint_time": "In Runde {{n}} wird jeder Beprobungszeitraum durch sein frühestes noch nicht geprüftes Detektionsereignis vertreten (Reihenfolge: nach Zeit)."
+    "round_hint_time": "In Runde {{n}} wird jeder Stichprobenanlass durch sein frühestes noch nicht geprüftes Detektionsereignis vertreten. Wenn Sie unsicher sind, markieren Sie es als «Unsicher»: Es zählt für die nächste Runde als nicht bestätigt, aber der Stichprobenanlass gilt erst als nicht nachgewiesen, wenn jemand ihn geprüft hat.",
+    "pending_badge": "Expertenprüfung offen",
+    "pending_hint": "Bei diesen Stichprobenanlässen sind alle Detektionsereignisse ohne Bestätigung aufgebraucht, und mindestens eines wurde als unsicher markiert. Bestätigen Sie jeweils das Vorkommen (das angezeigte Ereignis wird gespeichert), lehnen Sie ab oder lassen Sie es unsicher, damit jemand anderes es prüft. Sie können speichern, ohne alle zu entscheiden.",
+    "pending_save": "Urteile speichern",
+    "pending_saved": "Gespeichert: {{confirmed}} bestätigt, {{rejected}} nicht nachgewiesen. Der Rest bleibt offen.",
+    "toast_rounds_done_pending": "Runden abgeschlossen. {{n}} Stichprobenanlässe warten auf Expertenprüfung: Prüfen Sie sie jetzt oder exportieren Sie die Sitzung, damit jemand anderes sie abschließt."
   },
   "help": {
     "title": "Hilfe — CamTrap Verify",
@@ -357,8 +365,8 @@
     "fp_col_events": "Abgelehnte Ereignisse",
     "fp_col_pct": "% der abgelehnten Ereignisse",
     "fp_not_recorded": "nicht erfasst",
-    "effort_col_uncertain": "Unsichere Ereignisse",
-    "effort_col_uncertain_hint": "Als unsicher markierte Ereignisse; sie zählen in den Nachweishistorien als abgelehnt.",
+    "effort_col_unsure": "Unsichere Ereignisse",
+    "effort_col_unsure_hint": "Als unsicher markierte Ereignisse. In den Runden zählen sie als nicht bestätigt (das nächste Ereignis des Zeitraums wird gezeigt); eine Zelle, die nur unsichere Ereignisse behält, wartet auf die Expertenprüfung.",
     "cutoff_notice": "Es wurde ein Mindestwert von {{score}} angewendet: Fotos darunter wurden nie zur Prüfung angezeigt. Einsparungen und Ergebnisse gelten nur für Kandidaten ab dem Schwellenwert.",
     "excluded_title": "Durch den Mindestwert ausgeschlossen",
     "excluded_col_photos": "Ausgeschlossene Fotos",
@@ -394,7 +402,11 @@
     "col_psi_verified": "ψ verifiziert",
     "col_p_naive": "p naiv",
     "col_p_verified": "p verifiziert",
-    "degenerate": "Entartet"
+    "degenerate": "Entartet",
+    "pending_hint": "Sie erscheinen in <code>dethist_verified_*.csv</code> als NA, genau wie Stichprobenanlässe mit inaktiver Kamera. Zur Unterscheidung siehe <code>cell_status_*.csv</code> (Werte <code>pending</code> und <code>inactive</code>). Sie können die Sitzung im Artenindex exportieren, damit jemand anderes sie prüft.",
+    "pending": "Ausstehende Expertenprüfung",
+    "col_pending": "Ausstehend",
+    "effort_col_cells_pending": "Zellen ausstehend"
   },
   "footer": {
     "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Alle Rechte vorbehalten.",

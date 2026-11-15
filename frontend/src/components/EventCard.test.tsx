@@ -129,7 +129,7 @@ describe('EventCard', () => {
     expect(screen.getByText('Contexto')).toBeInTheDocument()
   })
 
-  it('offers an Uncertain button that reports the decision', async () => {
+  it('offers an Unsure button that reports the decision', async () => {
     const onDecide = vi.fn()
     render(
       <EventCard
@@ -142,14 +142,14 @@ describe('EventCard', () => {
       />,
     )
     await userEvent.click(screen.getByRole('button', { name: /^\?/ }))
-    expect(onDecide).toHaveBeenCalledWith('site1|1', 'obs-1', 'uncertain')
+    expect(onDecide).toHaveBeenCalledWith('site1|1', 'obs-1', 'unsure')
   })
 
-  it('highlights uncertain events and can hide the Uncertain button', () => {
+  it('highlights unsure events and can hide the Unsure button', () => {
     const { container, rerender } = render(
       <EventCard
         event={makeEvent()}
-        decision="uncertain"
+        decision="unsure"
         needsDecision={false}
         onDecide={vi.fn()}
         onOpenLightbox={vi.fn()}
@@ -166,7 +166,7 @@ describe('EventCard', () => {
         onDecide={vi.fn()}
         onOpenLightbox={vi.fn()}
         eventIdx={0}
-        allowUncertain={false}
+        allowUnsure={false}
       />,
     )
     expect(screen.queryByRole('button', { name: /^\?/ })).toBeNull()

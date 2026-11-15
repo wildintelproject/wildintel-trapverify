@@ -48,7 +48,7 @@ def test_review_tags_are_added_next_to_the_combination_tags(client, archive, tmp
     ev = client.get("/api/species/Dama_dama/events", params={"iteration": 1}).json()
     assert ev
     client.post("/api/decisions", json={"species": "Dama_dama", "iteration": 1, "confirmed": [ev[0]["repObsId"]],
-                                        "uncertain": [ev[1]["repObsId"]] if len(ev) > 1 else []})
+                                        "unsure": [ev[1]["repObsId"]] if len(ev) > 1 else []})
     client.get("/api/results")
     v = pd.read_csv(sd / "camtrap_dp_verified" / "observations.csv", dtype=str).fillna("")
     tags = v["observationTags"]

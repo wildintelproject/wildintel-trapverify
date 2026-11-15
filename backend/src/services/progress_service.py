@@ -19,7 +19,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 COLS = ["observationID", "decision", "actual_species", "decided_at"]
-DECISIONS = ("confirmed", "rejected", "uncertain")
+DECISIONS = ("confirmed", "rejected", "unsure")
 
 
 def _file(decisions_dir: Path, species_safe: str, iteration: int) -> Path:

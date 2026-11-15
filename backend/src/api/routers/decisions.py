@@ -13,7 +13,7 @@ from camtrap_workflow import (
     save_decisions,
     save_rejection_corrections,
     save_review_log,
-    save_uncertain,
+    save_unsure,
 )
 from schemas.requests import DecisionsRequest, RejectRequest, UnrejectRequest
 from services import progress_service, session_service, workflow_service
@@ -24,15 +24,15 @@ logger = logging.getLogger(__name__)
 
 @router.get("/decisions")
 def get_decisions(species: str, iteration: int) -> dict:
-    """Return confirmed and uncertain observationID values for a species and round."""
+    """Return confirmed and unsure observationID values for a species and round."""
     p = session_service.paths()
     path = p["decisions"] / f"decisions_{species}_iter{iteration}.csv"
-    upath = p["decisions"] / f"uncertain_{species}_iter{iteration}.csv"
+    upath = p["decisions"] / f"unsure_{species}_iter{iteration}.csv"
     confirmed = pd.read_csv(path, dtype=str)["observationID"].tolist() if path.exists() else []
-    uncertain = pd.read_csv(upath, dtype=str)["observationID"].tolist() if upath.exists() else []
+    unsure = pd.read_csv(upath, dtype=str)["observationID"].tolist() if upath.exists() else []
     corr = load_rejection_corrections(p["corrections"])
     corr = corr[(corr["species_safe"] == species) & (corr["iteration"] == str(iteration))]
-    return {"confirmed": confirmed, "uncertain": uncertain,
+    return {"confirmed": confirmed, "unsure": unsure,
             "corrections": dict(zip(corr["observationID"], corr["actual_species"]))}
 
 
@@ -49,18 +49,18 @@ def post_decisions(req: DecisionsRequest) -> dict:
         req.species, req.iteration, len(req.confirmed),
     )
     save_decisions(p["decisions"], candidates, req.species, req.iteration, req.confirmed)
-    save_uncertain(
+    save_unsure(
         p["decisions"], candidates, req.species, req.iteration,
-        [u for u in req.uncertain if u not in set(req.confirmed)],
+        [u for u in req.unsure if u not in set(req.confirmed)],
     )
 
     save_review_log(
         p["review_log"], candidates, req.species, req.iteration,
-        req.confirmed, [u for u in req.uncertain if u not in set(req.confirmed)], req.decision_times,
+        req.confirmed, [u for u in req.unsure if u not in set(req.confirmed)], req.decision_times,
     )
 
     if config.get("record_rejection_species"):
-        skip = set(req.confirmed) | set(req.uncertain)
+        skip = set(req.confirmed) | set(req.unsure)
         save_rejection_corrections(
             p["corrections"], candidates, req.species, req.iteration,
             {k: v for k, v in req.corrections.items() if k not in skip},

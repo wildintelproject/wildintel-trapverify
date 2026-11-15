@@ -11,6 +11,7 @@ interface SpeciesRow {
   species: string
   confirmed: number
   rejected: number
+  pending?: number
   unverified: number
 }
 
@@ -18,6 +19,7 @@ interface EffortRow {
   species: string
   cells_detection: number
   cells_non_detection: number
+  cells_pending?: number
   cells_unverified: number
   candidate_events: number
   events_inspected: number
@@ -32,7 +34,7 @@ interface EffortRow {
   rejected_score_median: number | null
   rejected_score_max: number | null
   confirmed_score_median: number | null
-  uncertain_events: number | null
+  unsure_events: number | null
   review_active_seconds: number | null
   review_decisions_timed: number | null
   review_seconds_per_decision: number | null
@@ -58,6 +60,7 @@ interface Results {
   confirmed: number
   rejected: number
   unverified: number
+  pending?: number
   by_species: SpeciesRow[]
   seq_total: number
   seq_confirmed: number
@@ -130,15 +133,16 @@ export default function ResultsPage() {
     </div>
   )
 
-  function StatsCards({ confirmed, rejected, unverified, total }: {
-    confirmed: number; rejected: number; unverified: number; total: number
+  function StatsCards({ confirmed, rejected, unverified, total, pending = 0 }: {
+    confirmed: number; rejected: number; unverified: number; total: number; pending?: number
   }) {
+    const pP = total > 0 ? Math.round(pending / total * 100) : 0
     const pC = total > 0 ? Math.round(confirmed  / total * 100) : 0
     const pR = total > 0 ? Math.round(rejected   / total * 100) : 0
     const pU = total > 0 ? Math.round(unverified / total * 100) : 0
     return (
       <>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+        <div className={`grid grid-cols-1 ${pending > 0 ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 mb-3`}>
           <div className="rounded-lg border border-emerald-500 bg-white dark:bg-zinc-900 text-center p-4">
             <div className="text-4xl font-bold text-emerald-500 mb-1">{confirmed}</div>
             <div className="text-zinc-500 dark:text-zinc-400 text-sm">{t('results.confirmed')}</div>
@@ -149,6 +153,13 @@ export default function ResultsPage() {
             <div className="text-zinc-500 dark:text-zinc-400 text-sm">{t('results.rejected')}</div>
             <div className="text-red-500 text-xs">{t('results.pct_total', { pct: pR })}</div>
           </div>
+          {pending > 0 && (
+            <div className="rounded-lg border border-amber-500 bg-white dark:bg-zinc-900 text-center p-4" title={t('results.pending_hint')}>
+              <div className="text-4xl font-bold text-amber-500 mb-1">{pending}</div>
+              <div className="text-zinc-500 dark:text-zinc-400 text-sm">{t('results.pending')}</div>
+              <div className="text-amber-500 text-xs">{t('results.pct_total', { pct: pP })}</div>
+            </div>
+          )}
           <div className="rounded-lg border border-zinc-400 bg-white dark:bg-zinc-900 text-center p-4">
             <div className="text-4xl font-bold text-zinc-400 mb-1">{unverified}</div>
             <div className="text-zinc-500 dark:text-zinc-400 text-sm">{t('results.unverified')}</div>
@@ -158,6 +169,7 @@ export default function ResultsPage() {
         <div className="flex w-full rounded-full overflow-hidden mb-4" style={{ height: 12 }}>
           <div className="bg-emerald-500 transition-all" style={{ width: `${pC}%` }} />
           <div className="bg-red-500 transition-all"     style={{ width: `${pR}%` }} />
+          <div className="bg-amber-500 transition-all"   style={{ width: `${pP}%` }} />
           <div className="bg-zinc-400 transition-all"    style={{ width: `${pU}%` }} />
         </div>
       </>
@@ -217,6 +229,7 @@ export default function ResultsPage() {
                 <>
                   <th className={th}>{t('results.effort_col_cells_det')}</th>
                   <th className={th}>{t('results.effort_col_cells_non')}</th>
+                  <th className={th} title={t('results.pending_hint')}>{t('results.effort_col_cells_pending')}</th>
                   <th className={th}>{t('results.effort_col_cells_unv')}</th>
                   <th className={th}>{t('results.effort_col_events')}</th>
                   <th className={th}>{t('results.effort_col_inspected')}</th>
@@ -238,7 +251,7 @@ export default function ResultsPage() {
                   <th className={th}>{t('results.effort_col_before')}</th>
                   <th className={th}>{t('results.effort_col_rej_score')}</th>
                   <th className={th}>{t('results.effort_col_conf_score')}</th>
-                  <th className={th} title={t('results.effort_col_uncertain_hint')}>{t('results.effort_col_uncertain')}</th>
+                  <th className={th} title={t('results.effort_col_unsure_hint')}>{t('results.effort_col_unsure')}</th>
                 </>
               )}
             </tr>
@@ -253,6 +266,7 @@ export default function ResultsPage() {
                     <>
                       <td className={td}>{r.cells_detection}</td>
                       <td className={td}>{r.cells_non_detection}</td>
+                      <td className={td}>{r.cells_pending ?? 0}</td>
                       <td className={td}>{r.cells_unverified}</td>
                       <td className={td}>{r.candidate_events}</td>
                       <td className={td}>{r.events_inspected}</td>
@@ -274,7 +288,7 @@ export default function ResultsPage() {
                       <td className={td}>{fmt(r.rejections_before_confirm_mean)} / {fmt(r.rejections_before_confirm_max)}</td>
                       <td className={td}>{fmt(r.rejected_score_min)} / {fmt(r.rejected_score_median)} / {fmt(r.rejected_score_max)}</td>
                       <td className={td}>{fmt(r.confirmed_score_median)}</td>
-                      <td className={td}>{fmt(r.uncertain_events)}</td>
+                      <td className={td}>{fmt(r.unsure_events)}</td>
                     </>
                   )}
                 </tr>
@@ -295,18 +309,23 @@ export default function ResultsPage() {
               <th className="text-left py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_species')}</th>
               <th className="text-right py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{t('results.col_confirmed')}</th>
               <th className="text-right py-2 px-3 font-semibold text-red-600 dark:text-red-400">{t('results.col_rejected')}</th>
+              {rows.some((r) => (r.pending ?? 0) > 0) && (
+                <th className="text-right py-2 px-3 font-semibold text-amber-600 dark:text-amber-400">{t('results.col_pending')}</th>
+              )}
               <th className="text-right py-2 px-3 font-semibold text-zinc-500">{t('results.col_unverified')}</th>
               <th className="text-right py-2 px-3 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_total')}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
-              const tot = row.confirmed + row.rejected + row.unverified
+              const tot = row.confirmed + row.rejected + (row.pending ?? 0) + row.unverified
+              const showPending = rows.some((r) => (r.pending ?? 0) > 0)
               return (
                 <tr key={row.species} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                   <td className="py-2 px-3 font-mono text-zinc-900 dark:text-zinc-100">{row.species}</td>
                   <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">{row.confirmed}</td>
                   <td className="py-2 px-3 text-right text-red-600 dark:text-red-400">{row.rejected}</td>
+                  {showPending && <td className="py-2 px-3 text-right text-amber-600 dark:text-amber-400">{row.pending ?? 0}</td>}
                   <td className="py-2 px-3 text-right text-zinc-500">{row.unverified}</td>
                   <td className="py-2 px-3 text-right text-zinc-700 dark:text-zinc-300">{tot}</td>
                 </tr>
@@ -401,6 +420,7 @@ export default function ResultsPage() {
         confirmed={results.confirmed}
         rejected={results.rejected}
         unverified={results.unverified}
+        pending={results.pending ?? 0}
         total={results.total}
       />
       {results.by_species.length > 0 && (

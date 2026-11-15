@@ -493,7 +493,7 @@ While the lightbox is open:
 |---|---|
 | `Y` | Confirm the current detection event |
 | `N` | Reject the current detection event |
-| `U` | Mark the current detection event as **Uncertain** (counts as rejected) |
+| `U` | Mark the current detection event as **Unsure** (not confirmed; see [Unsure cases](#unsure-cases-and-pending-expert-review)) |
 | `Backspace` | Go back to the card decided just before (**Previous card**) |
 | `↑` `↓` | Previous / next card at the same location |
 | `←` `→` | Navigate between frames in the detection event |
@@ -501,13 +501,17 @@ While the lightbox is open:
 
 After a decision, the lightbox automatically advances to the next undecided detection event.
 
-### Uncertain cases
+### Unsure cases and pending expert review
 
-Sometimes the assigned label is possible but you cannot be sure, for example an animal that is only partly visible or moving quickly through a dark frame. The tool gives no third answer to occupancy, so the recommended rule is: **if you cannot confirm the species with reasonable confidence, do not confirm it**.
+Sometimes the assigned label is possible but you cannot be sure, for example an animal that is only partly visible or moving quickly through a dark frame. **If you cannot confirm the species with reasonable confidence, do not confirm it.** What you can do beyond rejecting it is mark it **Unsure** (third button on the card, or `U` in the lightbox).
 
-Use **Uncertain** (button on the card, or `U` in the lightbox) for these cases. For the analysis an uncertain detection event behaves **exactly like a rejection**: it never confirms a sampling occasion, the next-best detection event of that occasion is shown in the following round, and the detection histories are identical to those obtained by rejecting it. The reason is that a possible error is then absorbed by the detection probability *p* of the occupancy model, which is safer than counting a doubtful record as a detection.
+- **During the rounds**, an unsure detection event is *not confirmed*: the next most confident detection event of that sampling occasion is shown in the following round, exactly as after a rejection. If one of them is confirmed, the occasion is a detection and the doubt no longer matters.
+- **If the occasion runs out of detection events with none confirmed and at least one was marked unsure**, it is **not** recorded as a non-detection. It becomes **pending expert review**: unknown, not a true zero. The species card on the index shows the amber *pending expert review* count, and the gallery then opens a **Pending expert review** view with those occasions, showing every detection event that was marked unsure.
+- **In that view**, for each pending occasion you can **confirm** it (the detection event you are looking at is the one recorded), mark it **Rejected** (settled as not detected, a verified 0) or leave it **Unsure** (it stays pending). Saving does not require deciding all of them, so the work can be split between people (see *Continuing a session on another computer*).
+- **In the results**, pending occasions are **NA** in `dethist_verified_<species>.csv`, like occasions with an inactive camera. `cell_status_<species>.csv` has the same layout and tells them apart (`1`, `0`, `pending`, `unreviewed` for occasions whose rounds are not finished, which are written as 0 in the verified history, and `inactive`). `verification_summary.csv` and `review_effort.csv` give `pending_cells`, and `effort_report.csv` gives `cells_pending` and `events_inspected_in_pending_cells` apart from the non-detections, plus `unsure_events` (events marked unsure that were not confirmed later). Results shows an amber *pending* count.
+- **What to do with them in the analysis.** Settle them in the pending view if you can. If some stay pending you have two honest options, and it is worth reporting both: treat them as missing (what the histories already do) or treat them as non-detections (set the NA of `cell_status` equal to `pending` to 0). A large share of pending cells for a species means it is hard to verify from the photos.
 
-The difference is that uncertain events are **recorded and counted**: the Results page and `effort_report.csv` give, per species, the number of `uncertain_events` and the non-detection cells that contain at least one (`non_detection_cells_with_uncertain`). A large share of uncertain events for a species is a sign that it is hard to verify from the photos, or that the occupancy estimate for it deserves extra care. Uncertain decisions are stored in `uncertain_<species>_iter<N>.csv` next to the decision files, are restored when you reopen a round, and do not change any other output. An event that is later confirmed is no longer counted as uncertain.
+Unsure decisions are stored in `unsure_<species>_iter<N>.csv` next to the decision files and are restored when you reopen a round. Pending verdicts are stored in `decisions_<species>_pending.csv` (confirmed) and `unsure_cleared_<species>.csv` (settled as not detected); once any exists, the last round cannot be reopened, and editing a completed species settles the pending cells it leaves unconfirmed.
 
 ### Recording the actual species of rejected events
 
@@ -532,7 +536,7 @@ Where the boxes come from: the CamtrapDP columns `bboxX`, `bboxY`, `bboxWidth` a
 
 ### Review time
 
-The app records **when** each decision is made, in `review_log.csv` in the session folder (one row per detection event: its decision, `confirmed`, `rejected` or `uncertain`, and a UTC timestamp), so the effort can be reported in hours and not only in photos or events. The timestamp is taken when you click; if you change a decision before saving the round, the time of the last change is kept.
+The app records **when** each decision is made, in `review_log.csv` in the session folder (one row per detection event: its decision, `confirmed`, `rejected` or `unsure`, and a UTC timestamp), so the effort can be reported in hours and not only in photos or events. The timestamp is taken when you click; if you change a decision before saving the round, the time of the last change is kept.
 
 The **active review time** is computed from the time between consecutive decisions, over the whole session and all species:
 
@@ -560,7 +564,7 @@ The gallery shows **one location per page**, so a round with thousands of detect
 
 ### Saving progress and going back a round
 
-You do not have to finish a round in one sitting. Your decisions (including *Uncertain* flags and any typed *actual species*) are **saved automatically** in the session folder a couple of seconds after each click, when you press **Save progress**, and when you close the page. The button shows when the last save happened. Open the species again, from any browser, and the round comes back as you left it; the progress also travels with the session when you export it (see *Continuing a session on another computer*). Progress is stored in `decisions/progress_<species>_iter<N>.csv` and **changes no result** until you press **Finish round**, which removes it.
+You do not have to finish a round in one sitting. Your decisions (including *Unsure* flags and any typed *actual species*) are **saved automatically** in the session folder a couple of seconds after each click, when you press **Save progress**, and when you close the page. The button shows when the last save happened. Open the species again, from any browser, and the round comes back as you left it; the progress also travels with the session when you export it (see *Continuing a session on another computer*). Progress is stored in `decisions/progress_<species>_iter<N>.csv` and **changes no result** until you press **Finish round**, which removes it.
 
 If you notice a mistake in a round that is already finished, press **← Back to round N** next to the round badge. That round is reopened with its decisions (flags, actual species and times included) so you can correct them; until you finish it again nothing from it counts. Finishing it again writes the same files as deciding it once. The round's old files are kept as a backup in `decisions/reopened/`, and your progress in the later round is kept. This is not available once the species' decisions were edited as a whole with the lock button (🔒) on a completed species.
 
@@ -659,7 +663,7 @@ Saving a round does not rewrite this package (rewriting the whole observations t
 |---|---|
 | `camtrapverify:confirmed` | Confirmed (the same photos that are marked `human`; with *extended confirmation*, every photo of the event). |
 | `camtrapverify:rejected` | The photo that represented an event that was inspected and rejected, including earlier events of a cell confirmed later. |
-| `camtrapverify:uncertain` | Same, but the reviewer marked it *Uncertain* (it behaves as a rejection in the detection histories and is reported apart). |
+| `camtrapverify:unsure` | Same, but the reviewer marked it *Unsure* and its occasion is still pending expert review (once an expert settles the occasion as not detected, it is tagged `rejected`). |
 | `camtrapverify-actual-species:<name>` | Added to a rejected event when *Record the actual species* was on and a species was typed. |
 
 Events that were never inspected (because a cell was already confirmed or no round reached them) get no tag. Example: `travelDirection:left|camtrapverify:rejected|camtrapverify-actual-species:Canis lupus`.
@@ -726,7 +730,7 @@ The score is used only to **order** the detection events within each site and sa
 
 ### Guidance for reviewers
 
-- **Uncertain cases.** If you cannot confirm the species with reasonable confidence, do not confirm it. Mark it **Uncertain** (counted as a rejection, but recorded), as explained in [Uncertain cases](#uncertain-cases).
+- **Unsure cases.** If you cannot confirm the species with reasonable confidence, do not confirm it. Mark it **Unsure** (not confirmed, and an occasion left with only unsure events waits for an expert instead of counting as a non-detection), as explained in [Unsure cases and pending expert review](#unsure-cases-and-pending-expert-review).
 - **Who reviewed.** The app does not record reviewers. When you report the verification, state how many people reviewed, their expertise with the species in the study area, and whether any photos were checked by a second person. The *Classified by* setting writes a name or team label into the verified data.
 - **Double verification.** A session has one reviewer. To check agreement between two people, each reviews the same data in their own session; the decision files (`decisions/`) can then be compared.
 - **Species easily confused.** Records of species that look alike (for example red and fallow deer at night) are the likeliest source of reviewer error. Record the actual species of rejected events if you want to quantify the main false-positive sources (see [Recording the actual species of rejected events](#recording-the-actual-species-of-rejected-events)).

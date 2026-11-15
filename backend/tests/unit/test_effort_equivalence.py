@@ -6,11 +6,11 @@ import pytest
 from camtrap_workflow import _effort_accumulate
 
 
-def _reference(sp_df, conf_ids, unc_ids, done):
+def _reference(sp_df, conf_ids, unc_ids, done, cleared=frozenset()):
     """The original cell-by-cell implementation (kept here as the specification)."""
-    acc = {"det": 0, "non": 0, "unv": 0, "events": 0, "insp": 0, "photos": 0, "unc": 0, "unc_cells": 0,
-           "photos_insp": 0, "insp_det": 0, "insp_non": 0, "before": [], "rej_scores": [], "conf_scores": []}
-    for _, cell in sp_df.groupby("site_occasion_key"):
+    acc = {"det": 0, "non": 0, "unv": 0, "events": 0, "insp": 0, "photos": 0, "unc": 0, "pend": 0,
+           "photos_insp": 0, "insp_det": 0, "insp_non": 0, "insp_pend": 0, "before": [], "rej_scores": [], "conf_scores": []}
+    for key, cell in sp_df.groupby("site_occasion_key"):
         ev = cell.groupby("burst_id").agg(rank=("rank", "first"), score=("_score", "max"))
         acc["events"] += len(ev)
         acc["photos"] += len(cell)
@@ -30,10 +30,13 @@ def _reference(sp_df, conf_ids, unc_ids, done):
             seen = ev if done is None else ev[ev["rank"] <= done]
             if len(seen) < len(ev):
                 acc["unv"] += 1
+                acc["insp_non"] += len(seen)
+            elif n_unc and key not in cleared:                      # events ran out with an unsure one: pending
+                acc["pend"] += 1
+                acc["insp_pend"] += len(seen)
             else:
                 acc["non"] += 1
-                acc["unc_cells"] += 1 if n_unc else 0
-            acc["insp_non"] += len(seen)
+                acc["insp_non"] += len(seen)
             acc["rej_scores"] += seen["score"].dropna().tolist()
         acc["insp"] += len(seen)
         acc["photos_insp"] += int(cell["burst_id"].isin(cell[cell["rank"].isin(seen["rank"])]["burst_id"]).sum())
@@ -41,8 +44,8 @@ def _reference(sp_df, conf_ids, unc_ids, done):
 
 
 def _fresh():
-    return {"det": 0, "non": 0, "unv": 0, "events": 0, "insp": 0, "photos": 0, "unc": 0, "unc_cells": 0,
-            "photos_insp": 0, "insp_det": 0, "insp_non": 0, "before": [], "rej_scores": [], "conf_scores": []}
+    return {"det": 0, "non": 0, "unv": 0, "events": 0, "insp": 0, "photos": 0, "unc": 0, "pend": 0,
+            "photos_insp": 0, "insp_det": 0, "insp_non": 0, "insp_pend": 0, "before": [], "rej_scores": [], "conf_scores": []}
 
 
 def _random_species(seed: int, n_cells: int = 25) -> pd.DataFrame:
@@ -75,10 +78,11 @@ def test_vectorised_effort_matches_the_cell_walk(seed, done):
     ids = df["observationID"].tolist()
     conf = set(rng.choice(ids, size=len(ids) // 10, replace=False))
     unc = set(rng.choice(ids, size=len(ids) // 8, replace=False)) - conf
-    assert _canon(_effort_accumulate(df, conf, unc, done, _fresh())) == _canon(_reference(df, conf, unc, done))
+    cleared = set(rng.choice(df["site_occasion_key"].unique(), size=4, replace=False))
+    assert _canon(_effort_accumulate(df, conf, unc, done, _fresh(), cleared)) == _canon(_reference(df, conf, unc, done, cleared))
 
 
-def test_no_confirmations_and_no_uncertain():
+def test_no_confirmations_and_no_unsure():
     df = _random_species(1)
     assert _canon(_effort_accumulate(df, set(), set(), 2, _fresh())) == _canon(_reference(df, set(), set(), 2))
 
@@ -143,6 +147,7 @@ def _review_effort_reference(candidates, dec):
 def test_review_effort_matches_the_cell_walk(seed, tmp_path):
     from camtrap_workflow import build_review_effort
     df = _random_species(seed, 30)
+    df = df.assign(species_safe="Vulpes_vulpes", scientificName="Vulpes vulpes", siteID="S1", occasion=1)
     rng = np.random.default_rng(seed + 7)
     cells = df["site_occasion_key"].unique()
     conf_rows = []

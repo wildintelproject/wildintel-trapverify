@@ -21,7 +21,11 @@ from camtrap_workflow import (
     build_species_effort,
     compute_min_score_exclusions,
     dataset_fingerprint,
+    cell_states,
+    cleared_keys_set,
+    load_all_unsure,
     confirmed_observations,
+    resolve_pending,
     get_events,
     load_rejection_corrections,
     load_review_log,
@@ -238,8 +242,14 @@ def replace_species_decisions(species_safe: str, confirmed_keys: list[str]) -> i
     rounds_done = rounds_completed(p["decisions"]).get(species_safe, 0)
     previous = confirmed_observations(p["decisions"], sp_cands)       # cell -> event already confirmed
 
-    for f in p["decisions"].glob(f"decisions_{species_safe}_iter*.csv"):
-        f.unlink()
+    # Cells pending expert review before the edit are settled by it.
+    states = cell_states(sp_cands, p["decisions"])
+    was_pending = set(states.loc[states["status"] == "pending", "site_occasion_key"])
+    flagged = set(load_all_unsure(p["decisions"], species_safe)["site_occasion_key"].dropna())
+
+    for pattern in (f"decisions_{species_safe}_iter*.csv", f"decisions_{species_safe}_pending.csv"):
+        for f in p["decisions"].glob(pattern):
+            f.unlink()
 
     if confirmed_keys:
         rank1 = sp_cands[sp_cands["rank"] == 1]
@@ -269,6 +279,13 @@ def replace_species_decisions(species_safe: str, confirmed_keys: list[str]) -> i
         pd.DataFrame(columns=["observationID", "site_occasion_key", "mediaID",
                               "scientificName", "siteID", "occasion"]).to_csv(last_round, index=False)
 
+    # Unsure cells the edit left unconfirmed are settled as not detected (they no longer wait for a verdict).
+    settled = sorted((flagged | was_pending) - set(confirmed_keys))
+    if settled:
+        cleared = p["decisions"] / f"unsure_cleared_{species_safe}.csv"
+        existing = pd.read_csv(cleared, dtype=str) if cleared.exists() else pd.DataFrame(columns=["site_occasion_key"])
+        pd.concat([existing, pd.DataFrame({"site_occasion_key": settled})]).drop_duplicates("site_occasion_key").to_csv(cleared, index=False)
+
     # Remember the species was edited as a whole: the rounds no longer describe what was decided
     # in each, so the last one cannot be reopened any more.
     pd.DataFrame({"edited_at": [datetime.now().isoformat(timespec="seconds")]}).to_csv(
@@ -276,6 +293,17 @@ def replace_species_decisions(species_safe: str, confirmed_keys: list[str]) -> i
     progress_service.clear_progress(p["decisions"], species_safe)
     rebuild_outputs()
     return len(confirmed_keys)
+
+
+def settle_pending(species_safe: str, confirmed_ids: list[str], rejected_keys: list[str]) -> dict:
+    """Apply an expert's verdict on pending cells and refresh the outputs."""
+    p = session_service.paths()
+    n_conf, n_rej = resolve_pending(
+        p["decisions"], session_service.get_candidates(), species_safe, confirmed_ids, rejected_keys,
+    )
+    rebuild_outputs(export=False)
+    logger.info("Pending cells settled for %s: confirmed=%d rejected=%d", species_safe, n_conf, n_rej)
+    return {"success": True, "confirmed": n_conf, "rejected": n_rej}
 
 
 def reopen_last_round(species_safe: str) -> dict:
@@ -298,10 +326,16 @@ def reopen_last_round(species_safe: str) -> dict:
             "Las decisiones de esta especie se han editado en bloque; para corregir algo, "
             "usa la edición de la especie (candado).",
         )
+    if (d / f"decisions_{species_safe}_pending.csv").exists() or (d / f"unsure_cleared_{species_safe}.csv").exists():
+        raise HTTPException(
+            400,
+            "Ya se han resuelto ocasiones pendientes de revisión por un experto; para corregir algo, "
+            "usa la edición de la especie (candado) cuando esté completa.",
+        )
     dec_file = d / f"decisions_{species_safe}_iter{rounds}.csv"
-    unc_file = d / f"uncertain_{species_safe}_iter{rounds}.csv"
+    unc_file = d / f"unsure_{species_safe}_iter{rounds}.csv"
     confirmed_ids = set(pd.read_csv(dec_file, dtype=str)["observationID"].dropna()) if dec_file.exists() else set()
-    uncertain_ids = set(pd.read_csv(unc_file, dtype=str)["observationID"].dropna()) if unc_file.exists() else set()
+    unsure_ids = set(pd.read_csv(unc_file, dtype=str)["observationID"].dropna()) if unc_file.exists() else set()
 
     backup = d / "reopened"
     backup.mkdir(parents=True, exist_ok=True)
@@ -317,7 +351,7 @@ def reopen_last_round(species_safe: str) -> dict:
         return ev["repObsId"] in ids or any(f["obsId"] in ids for f in ev["frames"])
 
     decisions = {
-        ev["repObsId"]: "confirmed" if _of(ev, confirmed_ids) else "uncertain" if _of(ev, uncertain_ids) else "rejected"
+        ev["repObsId"]: "confirmed" if _of(ev, confirmed_ids) else "unsure" if _of(ev, unsure_ids) else "rejected"
         for ev in events
     }
     corr = load_rejection_corrections(p["corrections"])

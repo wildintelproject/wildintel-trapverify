@@ -10,7 +10,7 @@ import { api } from '../api'
 import EventCard, { type Decision } from '../components/EventCard'
 import { frameSrc } from '../utils/frameImage'
 import { effectiveMinScore } from '../utils/minScore'
-import type { DetectionEvent } from '../types'
+import type { DetectionEvent, SpeciesStats } from '../types'
 
 interface EventSlide extends SlideImage {
   eventKey: string
@@ -29,7 +29,7 @@ function progressBody(
   times: Record<string, number>,
   iteration: number,
 ) {
-  const dec: Record<string, 'confirmed' | 'rejected' | 'uncertain'> = {}
+  const dec: Record<string, 'confirmed' | 'rejected' | 'unsure'> = {}
   const corr: Record<string, string> = {}
   const tm: Record<string, number> = {}
   events.forEach((e) => {
@@ -77,6 +77,10 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [completed, setCompleted] = useState(false)
+  // Pending expert review: the cells whose events ran out with an unsure event. Shown after the rounds;
+  // each can be confirmed (the event being looked at), settled as not detected, or left unsure.
+  const [pendingMode, setPendingMode] = useState(false)
+  const chosenRepRef = useRef<Record<string, string>>({})     // cell key -> event confirmed while looking at it
   const [recordRejection, setRecordRejection] = useState(false)
   const [showBoxes, setShowBoxes] = useState<boolean>(() => {
     try { return localStorage.getItem('camtrapShowBoxes') !== '0' } catch { return true }
@@ -124,12 +128,7 @@ export default function GalleryPage() {
     setLoading(true)
     setError(null)
     try {
-      const [evts, saved, allStats, state] = await Promise.all([
-        api.getEvents(species, iter),
-        api.getDecisions(species, iter),
-        api.getSpecies(),
-        api.getState(),
-      ])
+      const [allStats, state] = await Promise.all([api.getSpecies().catch(() => [] as SpeciesStats[]), api.getState()])
       const sp = allStats.find((s) => s.species_safe === species)
       if (sp) setSpStats(sp)
       if (state.config?.total_iterations) setTotalIterations(state.config.total_iterations)
@@ -140,6 +139,20 @@ export default function GalleryPage() {
       }
       if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, occasion_hours: state.config.occasion_hours ?? 0, min_score: state.config.min_score, min_score_by_species: state.config.min_score_by_species, review_order: state.config.review_order })
 
+      setPendingMode(false)
+      setCompleted(false)
+      if (sp && sp.phase === 'pending') {
+        const pend = await api.getPending(species)
+        setPendingMode(true)
+        setEvents(pend)
+        setSiteIdx(0)
+        setDecisions({})
+        setCorrections({})
+        setNeedsDecision(new Set())
+        decidedAtRef.current = {}
+        chosenRepRef.current = {}
+        return
+      }
       if (sp && sp.n_resolved >= sp.n_total_combos) {
         setCompleted(true)
         const reviewEvts = await api.getReview(species)
@@ -152,6 +165,9 @@ export default function GalleryPage() {
         return
       }
 
+      // Only a species still in its rounds needs the events of this round (a complete one shows its
+      // review, one with only pending cells shows those).
+      const [evts, saved] = await Promise.all([api.getEvents(species, iter), api.getDecisions(species, iter)])
       setEvents(evts)
       setSiteIdx(0)
       const pre: Record<string, Decision> = {}
@@ -159,9 +175,9 @@ export default function GalleryPage() {
         const ev = evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
         if (ev) pre[ev.key] = 'confirmed'
       })
-      ;(saved.uncertain ?? []).forEach((id) => {
+      ;(saved.unsure ?? []).forEach((id) => {
         const ev = evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
-        if (ev && !pre[ev.key]) pre[ev.key] = 'uncertain'
+        if (ev && !pre[ev.key]) pre[ev.key] = 'unsure'
       })
       setDecisions(pre)
       const corr: Record<string, string> = {}
@@ -224,11 +240,11 @@ export default function GalleryPage() {
   // Save the progress a couple of seconds after the last click, with the "Save progress"
   // button, and when the page is closed. Nothing counts as a result until the round is finished.
   const progressPayload = useCallback(() => {
-    if (!species || completed || loading || saving || finishedRef.current || events.length === 0) return null
+    if (!species || completed || pendingMode || loading || saving || finishedRef.current || events.length === 0) return null
     const body = progressBody(events, decisions, corrections, decidedAtRef.current, iteration)
     const json = JSON.stringify(body)
     return json === lastSavedRef.current ? null : { body, json }
-  }, [species, completed, loading, saving, events, decisions, corrections, iteration])
+  }, [species, completed, pendingMode, loading, saving, events, decisions, corrections, iteration])
 
   const flushProgress = useCallback(async (opts: { keepalive?: boolean; announce?: boolean } = {}) => {
     if (progressTimerRef.current) { window.clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
@@ -278,7 +294,7 @@ export default function GalleryPage() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'y' || e.key === 'Y') decideInLbRef.current('confirmed')
       if (e.key === 'n' || e.key === 'N') decideInLbRef.current('rejected')
-      if ((e.key === 'u' || e.key === 'U') && !completedRef.current) decideInLbRef.current('uncertain')
+      if ((e.key === 'u' || e.key === 'U') && !completedRef.current) decideInLbRef.current('unsure')
       if (e.key === 'Backspace') { e.preventDefault(); lbBackRef.current() }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
@@ -346,6 +362,7 @@ export default function GalleryPage() {
     if (completed && locked) return
     const ev = events[lbEvIdx]
     if (!ev) return
+    if (d === 'confirmed') chosenRepRef.current[ev.key] = ev.frames[lbIndex]?.burstRepObsId ?? ev.repObsId
     setDecisions((prev) => ({ ...prev, [ev.key]: d }))
     decidedAtRef.current[ev.key] = Date.now()
     if (d !== 'rejected') dropCorrection(ev.key)
@@ -414,7 +431,8 @@ export default function GalleryPage() {
     setCorrections((prev) => ({ ...prev, [key]: value }))
   }, [])
 
-  const decide = useCallback((key: string, _repObsId: string, d: Decision) => {
+  const decide = useCallback((key: string, repObsId: string, d: Decision) => {
+    if (d === 'confirmed') chosenRepRef.current[key] = repObsId
     setDecisions((prev) => ({ ...prev, [key]: d }))
     decidedAtRef.current[key] = Date.now()
     if (d !== 'rejected') dropCorrection(key)
@@ -446,7 +464,26 @@ export default function GalleryPage() {
     gridTopRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }
 
+  // Pending expert review: nothing has to be decided; cells left unsure stay pending.
+  async function handleSettlePending() {
+    if (!species) return
+    setSaving(true)
+    try {
+      const confirmedIds = events.filter((e) => decisions[e.key] === 'confirmed').map((e) => chosenRepRef.current[e.key] ?? e.repObsId)
+      const rejectedKeys = events.filter((e) => decisions[e.key] === 'rejected').map((e) => e.key)
+      const r = await api.settlePending(species, confirmedIds, rejectedKeys)
+      showToast(t('gallery.pending_saved', { confirmed: r.confirmed, rejected: r.rejected }), 'success')
+      setLbOpen(false)
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : t('gallery.toast_error'), 'danger')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleSave() {
+    if (pendingMode) { await handleSettlePending(); return }
     const undecided = events.filter((e) => !decisions[e.key])
     if (undecided.length > 0) {
       setNeedsDecision(new Set(undecided.map((e) => e.key)))
@@ -465,8 +502,8 @@ export default function GalleryPage() {
       const confirmedIds = events
         .filter((e) => decisions[e.key] === 'confirmed')
         .map((e) => e.repObsId)
-      const uncertainIds = events
-        .filter((e) => decisions[e.key] === 'uncertain')
+      const unsureIds = events
+        .filter((e) => decisions[e.key] === 'unsure')
         .map((e) => e.repObsId)
       const correctionIds: Record<string, string> = {}
       events.forEach((e) => {
@@ -478,11 +515,19 @@ export default function GalleryPage() {
         const at = decidedAtRef.current[e.key]
         if (decisions[e.key] && at) decisionTimes[e.repObsId] = at
       })
-      const result = await api.saveDecisions(species, iteration, confirmedIds, uncertainIds, correctionIds, decisionTimes)
+      const result = await api.saveDecisions(species, iteration, confirmedIds, unsureIds, correctionIds, decisionTimes)
       finishedRef.current = true                           // the server dropped the progress with the round
       if (result.done) {
-        showToast(t('gallery.toast_done'), 'success')
-        setTimeout(() => navigate('/species'), 1500)
+        // The rounds are over: cells with an unsure event and no event left are now pending expert review.
+        const after = await api.getSpecies().catch(() => [] as SpeciesStats[])
+        const nPending = after.find((x) => x.species_safe === species)?.n_pending ?? 0
+        if (nPending > 0) {
+          showToast(t('gallery.toast_rounds_done_pending', { n: nPending }), 'success')
+          setReloadKey((k) => k + 1)                     // opens the pending cells
+        } else {
+          showToast(t('gallery.toast_done'), 'success')
+          setTimeout(() => navigate('/species'), 1500)
+        }
       } else {
         showToast(t('gallery.toast_saved', { n: result.next_iteration, remaining: result.remaining }), 'success')
         setIteration(result.next_iteration!)
@@ -565,13 +610,13 @@ export default function GalleryPage() {
   const lbSiteEvents = lbCurrentEv ? (bySite[lbCurrentEv.siteId] ?? []) : []
   const lbSiteDone = lbSiteEvents.reduce((n, e) => n + (decisions[e.key] ? 1 : 0), 0)
   const lbProgressLine = [
-    completed ? '' : t('gallery.round', { n: iteration }),
+    completed ? '' : pendingMode ? t('gallery.pending_badge') : t('gallery.round', { n: iteration }),
     t('gallery.decided_progress', { done: decidedCount, total: events.length }),
     lbCurrentEv ? t('gallery.lb_site_progress', { site: lbCurrentEv.siteId, done: lbSiteDone, total: lbSiteEvents.length }) : '',
   ].filter(Boolean).join(' · ')
   const lbProgress = (
     <div className="rounded-lg bg-black/55 border border-white/15 px-3 py-2 text-[11px] leading-snug text-white/80" aria-label={t('gallery.lb_progress_label')}>
-      {!completed && <div className="font-semibold text-white">{t('gallery.round', { n: iteration })}</div>}
+      {!completed && <div className="font-semibold text-white">{pendingMode ? t('gallery.pending_badge') : t('gallery.round', { n: iteration })}</div>}
       <div>{t('gallery.decided_progress', { done: decidedCount, total: events.length })}</div>
       <div className="h-1.5 rounded bg-white/15 my-1 overflow-hidden">
         <div className="h-full bg-sky-500" style={{ width: `${events.length ? Math.round(decidedCount / events.length * 100) : 0}%` }} />
@@ -611,15 +656,15 @@ export default function GalleryPage() {
       {!completed && (
         <button
           className={`${btnClass} text-base rounded font-medium transition-colors disabled:opacity-50 ${
-            lbDecision === 'uncertain'
+            lbDecision === 'unsure'
               ? 'bg-amber-600 text-white hover:bg-amber-700'
               : 'border border-amber-600 bg-black/40 text-amber-400 hover:bg-amber-600 hover:text-white'
           }`}
-          onClick={() => decideInLb('uncertain')}
+          onClick={() => decideInLb('unsure')}
           disabled={lbReadOnly}
-          title={t('gallery.uncertain_hint')}
+          title={t('gallery.unsure_hint')}
         >
-          {t('gallery.uncertain_btn')} <span className="opacity-60">(U)</span>
+          {t('gallery.unsure_btn')} <span className="opacity-60">(U)</span>
         </button>
       )}
     </div>
@@ -699,6 +744,10 @@ export default function GalleryPage() {
                   {locked ? '🔒' : '🔓'}
                 </button>
               </span>
+            ) : pendingMode ? (
+              <span className="px-2 py-0.5 text-xs font-medium bg-amber-500 text-white rounded-full">
+                {t('gallery.pending_badge')}
+              </span>
             ) : (
               <span className="flex items-center gap-2">
                 <span className="px-2 py-0.5 text-xs font-medium bg-zinc-600 text-zinc-200 rounded-full">
@@ -750,7 +799,7 @@ export default function GalleryPage() {
           </div>
         </div>
 
-        {!completed && reviewParams && (
+        {!completed && !pendingMode && reviewParams && (
           <p
             className="text-zinc-500 dark:text-zinc-400 text-sm mb-3"
             dangerouslySetInnerHTML={{
@@ -788,7 +837,9 @@ export default function GalleryPage() {
                   <path d="M7.5 1C3.91 1 1 3.91 1 7.5S3.91 14 7.5 14 14 11.09 14 7.5 11.09 1 7.5 1zm.75 10.5h-1.5V7h1.5v4.5zm0-6h-1.5V4h1.5v1.5z" fill="currentColor"/>
                 </svg>
                 <span>
-                  {completed
+                  {pendingMode
+                    ? t('gallery.pending_hint')
+                    : completed
                     ? (locked ? t('gallery.review_hint_locked') : t('gallery.review_hint_unlocked'))
                     : t(reviewParams?.review_order === 'time' ? 'gallery.round_hint_time' : 'gallery.round_hint', { n: iteration })}
                 </span>
@@ -812,6 +863,7 @@ export default function GalleryPage() {
             </svg>
             {t('gallery.confirm_all_site')}
           </button>
+          {!pendingMode && (
           <button
             className="px-5 py-2.5 bg-blue-600 text-white rounded-lg shadow-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex flex-col items-center leading-tight"
             onClick={() => flushProgress({ announce: true })}
@@ -827,6 +879,7 @@ export default function GalleryPage() {
                 : t('gallery.progress_none')}
             </span>
           </button>
+          )}
           <button
             className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg shadow-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
             onClick={handleSave}
@@ -838,7 +891,7 @@ export default function GalleryPage() {
                 <path d="M5 13.5V9.5h6v4M5 2.5v3h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             )}
-            {saving ? t('gallery.saving') : t('gallery.finish_round')}
+            {saving ? t('gallery.saving') : pendingMode ? t('gallery.pending_save') : t('gallery.finish_round')}
           </button>
         </div>
       )}
@@ -899,7 +952,7 @@ export default function GalleryPage() {
                     decision={decisions[ev.key] ?? null}
                     needsDecision={needsDecision.has(ev.key)}
                     onDecide={decide}
-                    allowUncertain={!completed}
+                    allowUnsure={!completed}
                     showBoxes={showBoxes}
                     recordCorrection={recordRejection && !completed}
                     correction={corrections[ev.key] ?? ''}

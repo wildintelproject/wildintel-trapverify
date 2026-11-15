@@ -33,7 +33,7 @@
     - Brightness and contrast controls
     - Tonal inversion (useful for night-vision / near-infrared images)
     - Left / right arrows to move between occasions without closing
-- **Keyboard navigation** — arrow keys advance frames; `C` confirms, `R` rejects (configurable); `U` marks a detection event as uncertain (counted as a rejection, reported separately).
+- **Keyboard navigation** — arrow keys advance frames; `C` confirms, `R` rejects (configurable); `U` marks a detection event as unsure.
 - **Per-species progress bars** — a coloured badge on each species card shows the current round; the bar fills as cells are resolved.
 
 ---
@@ -59,7 +59,7 @@
     | `classifiedBy` | configurable (default `"expert_review"`) |
     | `classificationTimestamp` | current UTC timestamp |
 
-- **Review recorded in `observationTags`** — the verified CamtrapDP tags the photos the reviewer looked at: `camtrapverify:confirmed`, `camtrapverify:rejected`, `camtrapverify:uncertain` (a rejection counted apart) and, when recorded, `camtrapverify-actual-species:<name>`. Pipe-separated `key:value` pairs as CamtrapDP defines; existing tags are kept.
+- **Review recorded in `observationTags`** — the verified CamtrapDP tags the photos the reviewer looked at: `camtrapverify:confirmed`, `camtrapverify:rejected`, `camtrapverify:unsure` (pending expert review) and, when recorded, `camtrapverify-actual-species:<name>`. Pipe-separated `key:value` pairs as CamtrapDP defines; existing tags are kept.
 - **Configurable `classifiedBy` label** — the value written to `classifiedBy` can be set per session (e.g. `"expert_review"`, `"ornithologist_A"`).
 - **Extended confirmation** — when enabled, all observations in the confirmed burst (not just the highest-confidence representative frame) are marked as human-verified in the output.
 - **`occupancy_inputs/`** — ready-to-use files for single-species occupancy models:
@@ -86,7 +86,7 @@
 - **Designed for occupancy models** — only one detection event per cell is verified, so the verified data are not suitable for counting events, activity patterns or abundance; time-to-first-detection needs care because the highest-scoring event is shown first, not the earliest.
 - **The score only orders the events** — it does not need to be calibrated (raw model outputs work with the minimum score set to 0); without scores the events are shown in a seeded random order.
 - **Corrects false positives, not missed detections** — animals the classifier missed or labelled as another species are not recovered.
-- **Uncertain cases** — mark them *Uncertain*: they are counted as rejections and reported separately.
+- **Unsure cases and pending expert review** — mark a doubtful event *Unsure*: the next event of the occasion is shown, and an occasion that runs out with an unsure event and no confirmation waits for an expert (NA in the verified history, `cell_status_<sp>.csv`) instead of counting as not detected.
 
 ---
 

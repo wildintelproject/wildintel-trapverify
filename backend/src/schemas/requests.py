@@ -36,10 +36,16 @@ class SetupRequest(BaseModel):
     review_idle_seconds: int = 120
 
 
+class PendingDecisionsRequest(BaseModel):
+    """An expert's verdict on cells pending expert review; cells not mentioned stay pending."""
+    confirmed: list[str] = []          # observationID of the detection event confirmed for each cell
+    rejected_keys: list[str] = []      # cells settled as not detected
+
+
 class ProgressRequest(BaseModel):
     """Unfinished decisions of one round, saved while the reviewer works."""
     iteration: int
-    # observationID of the event's representative detection -> confirmed | rejected | uncertain
+    # observationID of the event's representative detection -> confirmed | rejected | unsure
     decisions: dict[str, str] = {}
     corrections: dict[str, str] = {}
     decision_times: dict[str, int] = {}
@@ -49,8 +55,8 @@ class DecisionsRequest(BaseModel):
     species: str
     iteration: int
     confirmed: list[str]
-    # Events marked "uncertain": counted as rejections, only recorded for reporting.
-    uncertain: list[str] = []
+    # Events marked "unsure": counted as rejections, only recorded for reporting.
+    unsure: list[str] = []
     # observationID -> actual species typed for a rejected event (only used when the
     # session has record_rejection_species on). Never affects presence logic.
     corrections: dict[str, str] = {}

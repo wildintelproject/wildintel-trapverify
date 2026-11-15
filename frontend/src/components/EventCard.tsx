@@ -12,7 +12,7 @@ function bestFrameIndex(frames: DetectionEvent['frames']): number {
   return best
 }
 
-export type Decision = 'confirmed' | 'rejected' | 'uncertain'
+export type Decision = 'confirmed' | 'rejected' | 'unsure'
 
 interface Props {
   event: DetectionEvent
@@ -22,7 +22,7 @@ interface Props {
   onOpenLightbox: (eventIdx: number, frameIdx: number) => void
   eventIdx: number
   readOnly?: boolean
-  allowUncertain?: boolean
+  allowUnsure?: boolean
   showBoxes?: boolean
   recordCorrection?: boolean
   correction?: string
@@ -43,7 +43,7 @@ function EventCard({
   onOpenLightbox,
   eventIdx,
   readOnly = false,
-  allowUncertain = true,
+  allowUnsure = true,
   showBoxes = false,
   recordCorrection = false,
   correction = '',
@@ -54,6 +54,8 @@ function EventCard({
   const [activeIndex, setActiveIndex] = useState(() => bestFrameIndex(event.frames))
   const n = event.frames.length
   const frame = event.frames[Math.min(activeIndex, n - 1)]
+  // On a pending card the decision is about the detection event of the photo being looked at.
+  const repObsId = frame?.burstRepObsId ?? event.repObsId
 
   // Warm the browser cache with the neighbouring frames once the pointer is over the card, so the
   // arrows switch frames instantly. Not before, so a page of cards does not download every neighbour.
@@ -76,7 +78,7 @@ function EventCard({
     ? 'border-2 border-emerald-500'
     : decision === 'rejected'
     ? 'border-2 border-red-500'
-    : decision === 'uncertain'
+    : decision === 'unsure'
     ? 'border-2 border-amber-500'
     : needsDecision
     ? 'border-2 border-amber-400'
@@ -191,7 +193,7 @@ function EventCard({
               ? 'bg-emerald-600 text-white hover:bg-emerald-700'
               : 'border border-emerald-600 text-emerald-400 hover:bg-emerald-600 hover:text-white'
           }`}
-          onClick={() => onDecide(event.key, event.repObsId, 'confirmed')}
+          onClick={() => onDecide(event.key, repObsId, 'confirmed')}
           disabled={readOnly}
         >
           {t('gallery.confirmed_btn')}
@@ -202,23 +204,23 @@ function EventCard({
               ? 'bg-red-600 text-white hover:bg-red-700'
               : 'border border-red-600 text-red-400 hover:bg-red-600 hover:text-white'
           }`}
-          onClick={() => onDecide(event.key, event.repObsId, 'rejected')}
+          onClick={() => onDecide(event.key, repObsId, 'rejected')}
           disabled={readOnly}
         >
           {t('gallery.rejected_btn')}
         </button>
-        {allowUncertain && (
+        {allowUnsure && (
           <button
             className={`flex-1 py-1.5 text-sm rounded font-medium transition-colors disabled:opacity-50 ${
-              decision === 'uncertain'
+              decision === 'unsure'
                 ? 'bg-amber-600 text-white hover:bg-amber-700'
                 : 'border border-amber-600 text-amber-400 hover:bg-amber-600 hover:text-white'
             }`}
-            onClick={() => onDecide(event.key, event.repObsId, 'uncertain')}
+            onClick={() => onDecide(event.key, repObsId, 'unsure')}
             disabled={readOnly}
-            title={t('gallery.uncertain_hint')}
+            title={t('gallery.unsure_hint')}
           >
-            {t('gallery.uncertain_btn')}
+            {t('gallery.unsure_btn')}
           </button>
         )}
       </div>
