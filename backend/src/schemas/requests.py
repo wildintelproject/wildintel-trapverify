@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -22,6 +24,9 @@ class SetupRequest(BaseModel):
     min_score_by_species: dict[str, float] = {}
     # Seed of the pseudo-random order of detection events with the same score (e.g. no scores).
     random_seed: int = 42
+    # Order in which the detection events of each occasion are reviewed: from the most confident one
+    # ("score", the default) or from the earliest one ("time"; needed for time-to-detection analyses).
+    review_order: Literal["score", "time"] = "score"
     include_burst_context: bool = False
     classified_by: str = "expert_review"
     extended_confirmation: bool = False

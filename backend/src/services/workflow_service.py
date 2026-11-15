@@ -113,6 +113,7 @@ def run_setup(req: SetupRequest) -> dict:
         min_score_by_species=req.min_score_by_species,
         seed=req.random_seed,
         occasion_hours=req.occasion_hours or None,
+        review_order=req.review_order,
     )
 
     if candidates.empty:
@@ -147,6 +148,7 @@ def run_setup(req: SetupRequest) -> dict:
         min_score_by_species=req.min_score_by_species,
         seed=req.random_seed,
         occasion_hours=req.occasion_hours or None,
+        review_order=req.review_order,
     ).to_csv(sd / "min_score_exclusions.csv", index=False)
 
     session_service.APP_DIR.mkdir(parents=True, exist_ok=True)

@@ -179,7 +179,12 @@
     "err_dates_order": "Das Startdatum muss vor dem Enddatum liegen.",
     "err_start_too_early": "Das Startdatum ({{date}}) liegt vor dem ersten Eintrag im CamtrapDP ({{min}}).",
     "err_end_too_late": "Das Enddatum ({{date}}) liegt nach dem letzten Eintrag im CamtrapDP ({{max}}).",
-    "err_unknown": "Unbekannter Fehler"
+    "err_unknown": "Unbekannter Fehler",
+    "label_review_order": "Reihenfolge der Detektionsereignisse",
+    "review_order_score": "Nach Score: zuerst das sicherste (wenige Fotos zu prüfen)",
+    "review_order_time": "Nach Zeit: zuerst das früheste (für Time-to-Detection-Analysen)",
+    "hint_review_order": "Jeder Zeitraum wird in dieser Reihenfolge ab seinem ersten Ereignis geprüft. Nach Score ist das erste bestätigte Ereignis meist am schnellsten gefunden, aber nicht unbedingt die früheste Detektion. Nach Zeit ist das erste bestätigte Ereignis die erste echte Detektion, die Time-to-Detection-Modelle (z. B. occuTTD) brauchen; es müssen eventuell mehr Fotos geprüft werden. Die Detektionshistorien sind in beiden Fällen gleich. Die Time-to-Detection-Dateien (ttd_*.csv) werden immer geschrieben, sind aber nur bei Prüfung nach Zeit exakt.",
+    "hint_review_order_cutoff": "Fotos unter der Mindestkonfidenz werden vor der Prüfung entfernt; das früheste gezeigte Ereignis ist daher evtl. nicht das früheste, das stattfand. Mit 0 bleiben alle Fotos erhalten."
   },
   "index": {
     "title": "Erkennungsüberprüfung",
@@ -273,7 +278,8 @@
     "updating": "Aktualisierung…",
     "toast_updated": "Entscheidungen aktualisiert. Ergebnisse neu generiert.",
     "context_frame": "Kontext",
-    "image_permission_denied": "Zugriff verweigert. Überprüfen Sie die Zugriffsberechtigungen."
+    "image_permission_denied": "Zugriff verweigert. Überprüfen Sie die Zugriffsberechtigungen.",
+    "round_hint_time": "In Runde {{n}} wird jeder Beprobungszeitraum durch sein frühestes noch nicht geprüftes Detektionsereignis vertreten (Reihenfolge: nach Zeit)."
   },
   "help": {
     "title": "Hilfe — CamTrap Verify",

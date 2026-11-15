@@ -179,7 +179,12 @@
     "err_dates_order": "Start date must be before end date.",
     "err_start_too_early": "Start date ({{date}}) is before the first record in the CamtrapDP ({{min}}).",
     "err_end_too_late": "End date ({{date}}) is after the last record in the CamtrapDP ({{max}}).",
-    "err_unknown": "Unknown error"
+    "err_unknown": "Unknown error",
+    "label_review_order": "Order of the detection events",
+    "review_order_score": "By score: most confident first (fewest photos to inspect)",
+    "review_order_time": "By time: earliest first (for time-to-detection analyses)",
+    "hint_review_order": "Each occasion is reviewed from its first event in this order. By score the first confirmed event is usually the quickest to find, but not necessarily the earliest detection. By time the first confirmed event is the first true detection, which time-to-detection models (e.g. occuTTD) need; more photos may have to be inspected. The detection histories are the same either way. The time-to-detection files (ttd_*.csv) are always written, but are exact only for review by time.",
+    "hint_review_order_cutoff": "Photos below the minimum confidence are removed before the review, so the earliest event shown may not be the earliest one that happened. Use 0 to keep every photo if the first detection matters."
   },
   "index": {
     "title": "Detection verification",
@@ -273,7 +278,8 @@
     "updating": "Updating…",
     "toast_updated": "Decisions updated. Results regenerated.",
     "context_frame": "Context",
-    "image_permission_denied": "Permission denied. Check the access permissions."
+    "image_permission_denied": "Permission denied. Check the access permissions.",
+    "round_hint_time": "In round {{n}}, each sampling occasion is represented by its earliest detection event not yet reviewed (review order: by time)."
   },
   "help": {
     "title": "Help — CamTrap Verify",

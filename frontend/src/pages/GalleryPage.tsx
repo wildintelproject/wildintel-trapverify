@@ -55,7 +55,7 @@ export default function GalleryPage() {
 
   const [events, setEvents] = useState<DetectionEvent[]>([])
   const [spStats, setSpStats] = useState<{ species_name: string; n_total_combos: number; n_confirmed_combos: number; n_resolved: number } | null>(null)
-  const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; occasion_hours: number; min_score: number; min_score_by_species?: Record<string, number> } | null>(null)
+  const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; occasion_hours: number; min_score: number; min_score_by_species?: Record<string, number>; review_order?: 'score' | 'time' } | null>(null)
   const [iteration, setIteration] = useState(1)
   const [totalIterations, setTotalIterations] = useState(1)
   const [decisions, setDecisions] = useState<Record<string, Decision>>({})
@@ -138,7 +138,7 @@ export default function GalleryPage() {
       if (recording) {
         api.getTaxa().then((r) => setTaxa(Array.from(new Set([...r.taxa, ...r.extra])))).catch(() => {})
       }
-      if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, occasion_hours: state.config.occasion_hours ?? 0, min_score: state.config.min_score, min_score_by_species: state.config.min_score_by_species })
+      if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, occasion_hours: state.config.occasion_hours ?? 0, min_score: state.config.min_score, min_score_by_species: state.config.min_score_by_species, review_order: state.config.review_order })
 
       if (sp && sp.n_resolved >= sp.n_total_combos) {
         setCompleted(true)
@@ -790,7 +790,7 @@ export default function GalleryPage() {
                 <span>
                   {completed
                     ? (locked ? t('gallery.review_hint_locked') : t('gallery.review_hint_unlocked'))
-                    : t('gallery.round_hint', { n: iteration })}
+                    : t(reviewParams?.review_order === 'time' ? 'gallery.round_hint_time' : 'gallery.round_hint', { n: iteration })}
                 </span>
               </div>
             </>
