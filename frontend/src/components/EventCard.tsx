@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, Pagination } from 'swiper/modules'
 import { useTranslation } from 'react-i18next'
@@ -52,6 +52,18 @@ export default function EventCard({
   const imgError = i18n.language.startsWith('es') ? '/img-error-es.svg' : '/img-error-en.svg'
   const [activeIndex, setActiveIndex] = useState(() => bestFrameIndex(event.frames))
 
+  // Warm the browser cache with the neighbouring frames once the pointer is over the card, so the
+  // arrows switch frames instantly. Not before, so a page of cards does not download every neighbour.
+  const [warm, setWarm] = useState(false)
+  useEffect(() => {
+    const n = event.frames.length
+    if (!warm || n < 2) return
+    for (const i of [activeIndex + 1, activeIndex - 1]) {
+      const f = event.frames[(i + n) % n]
+      if (f) new Image().src = frameSrc(f, showBoxes)
+    }
+  }, [warm, activeIndex, event.frames, showBoxes])
+
   const borderClass = decision === 'confirmed'
     ? 'border-2 border-emerald-500'
     : decision === 'rejected'
@@ -63,7 +75,10 @@ export default function EventCard({
     : 'border border-zinc-700'
 
   return (
-    <div className={`rounded-lg overflow-hidden bg-zinc-900 text-zinc-100 ${borderClass}`}>
+    <div
+      className={`rounded-lg overflow-hidden bg-zinc-900 text-zinc-100 ${borderClass}`}
+      onMouseEnter={() => setWarm(true)}
+    >
       <div className="relative" style={{ aspectRatio: '16/10', background: '#000' }}>
         <Swiper
           modules={[Navigation, Pagination]}

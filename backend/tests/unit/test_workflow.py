@@ -2000,3 +2000,81 @@ def test_older_config_without_occasion_hours_still_builds_day_inputs(candidates,
     out = tmp_path / "occ"
     build_occupancy_inputs(candidates, decisions_dir, session_config, out)
     assert list(pd.read_csv(out / "camera_operation.csv").columns) == ["siteID", "occ1", "occ2"]
+
+
+# ─── frame order and the time shown (ported from the community fork) ─────────
+
+def test_capture_seq_prefers_file_name_and_falls_back_to_file_path():
+    from camtrap_workflow import capture_seq
+    df = pd.DataFrame({
+        "fileName": ["CAM__20251102_10.JPEG", "", None, "no_number.jpg", "file"],
+        "filePath": ["https://x/media/1/file/", "img/a_7.jpg", "img/b_8.JPEG", "img/c_9.jpg", "https://x/media/5/file/"],
+    })
+    seq = capture_seq(df)
+    assert list(seq.iloc[:4]) == [10, 7, 8, 9]                 # name first; empty/None/no-number names fall back to the path
+    assert pd.isna(seq.iloc[4])                                # neither has a number
+
+
+def test_capture_seq_works_when_file_name_is_not_a_column():
+    """fileName is optional in CamtrapDP: only filePath may be there."""
+    from camtrap_workflow import capture_seq
+    seq = capture_seq(pd.DataFrame({"filePath": ["a/x_12.jpg", "a/y.jpg", "https://t/media/3/file/"]}))
+    assert seq.iloc[0] == 12 and seq.iloc[1:].isna().all()
+
+
+def test_sort_frames_is_stable_for_frames_without_a_number():
+    from camtrap_workflow import _sort_frames
+    df = pd.DataFrame({"k": [1, 1, 1], "ts": [5, 5, 5], "fileName": ["b", "a", "c"], "filePath": ["b", "a", "c"], "id": ["x", "y", "z"]})
+    assert list(_sort_frames(df, ["k", "ts"])["id"]) == ["x", "y", "z"]
+
+
+def _same_second_tables(with_file_name):
+    dep = pd.DataFrame({"deploymentID": ["DEP1"], "locationID": ["SITE_A"]})
+    med = pd.DataFrame({
+        "mediaID": ["m3", "m1", "m2"], "deploymentID": ["DEP1"] * 3, "timestamp": ["2025-11-02 10:00:00"] * 3,
+        "filePath": [f"https://trap.example/storage/resource/media/{i}/file/" for i in (3, 1, 2)],
+    })
+    if with_file_name:
+        med["fileName"] = ["CAM__20251102_10.JPEG", "CAM__20251102_8.JPEG", "CAM__20251102_9.JPEG"]
+    obs = pd.DataFrame({
+        "observationID": ["o3", "o1", "o2"], "deploymentID": ["DEP1"] * 3, "mediaID": ["m3", "m1", "m2"],
+        "observationLevel": ["media"] * 3, "observationType": ["animal"] * 3,
+        "scientificName": ["Vulpes vulpes"] * 3, "classificationProbability": [0.9, 0.5, 0.7],
+    })
+    return dep, med, obs
+
+
+def test_same_timestamp_frames_ordered_by_file_name_when_file_path_is_a_url():
+    """Trapper-style filePath carries no file name: the capture number must come from fileName."""
+    dep, med, obs = _same_second_tables(True)
+    c = build_candidates(dep, med, obs, target_species=["Vulpes vulpes"], study_start=date(2025, 11, 1),
+                         study_end=date(2025, 11, 3), occasion_days=5, total_iterations=100, gap_seconds=60)
+    assert list(c.sort_values("burst_seq")["mediaID"]) == ["m1", "m2", "m3"]          # captures 8, 9, 10
+
+
+def test_url_file_path_without_file_name_loses_nothing():
+    """No file name and no number anywhere: there is nothing to order by, but no frame is lost."""
+    dep, med, obs = _same_second_tables(False)
+    c = build_candidates(dep, med, obs, target_species=["Vulpes vulpes"], study_start=date(2025, 11, 1),
+                         study_end=date(2025, 11, 3), occasion_days=5, total_iterations=100, gap_seconds=60)
+    assert sorted(c["mediaID"]) == ["m1", "m2", "m3"]                                  # nothing lost, no crash
+
+
+def test_gallery_events_keep_capture_order_and_show_seconds():
+    from camtrap_workflow import get_events
+    dep, med, obs = _same_second_tables(True)
+    med["timestamp"] = ["2025-11-02 10:00:07", "2025-11-02 10:00:07", "2025-11-02 10:00:07"]
+    c = build_candidates(dep, med, obs, target_species=["Vulpes vulpes"], study_start=date(2025, 11, 1),
+                         study_end=date(2025, 11, 3), occasion_days=5, total_iterations=100, gap_seconds=60)
+    c = c.sample(frac=1, random_state=0).reset_index(drop=True)        # a manifest whose rows are out of order
+    ev = get_events(c, Path("/nonexistent"), set(), "Vulpes_vulpes", 1, "", Path("."), False)
+    assert [f["mediaId"] for f in ev[0]["frames"]] == ["m1", "m2", "m3"]
+    assert ev[0]["frames"][0]["ts"] == "2025-11-02 10:00:07"            # to the second
+
+
+def test_gallery_shows_seconds_for_sessions_saved_with_minutes_only(candidates):
+    from camtrap_workflow import get_events
+    old = candidates.copy()
+    old["timestamp_display"] = old["ts"].dt.strftime("%Y-%m-%d %H:%M")  # what older manifests stored
+    ev = get_events(old, Path("/nonexistent"), set(), "Vulpes_vulpes", 1, "", Path("."), False)
+    assert all(len(f["ts"]) == 19 for e in ev for f in e["frames"])      # 'YYYY-MM-DD HH:MM:SS'
