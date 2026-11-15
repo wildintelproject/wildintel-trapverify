@@ -26,6 +26,7 @@ dependencies = [
     "numpy>=2.0",
     "pandas>=3.0.3",
     "pandas-stubs~=3.0.3",
+    "pillow>=11",
     "platformdirs>=4.10.0",
     "pydantic-settings>=2.0",
     "python-multipart>=0.0.32",

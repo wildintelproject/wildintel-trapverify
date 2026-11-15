@@ -205,6 +205,8 @@
     "occasion_label": "Ocasión de muestreo {{n}}",
     "confirmed_btn": "✓ Confirmada",
     "rejected_btn": "✗ No confirmada",
+    "show_boxes": "Mostrar cajas",
+    "show_boxes_hint": "Dibuja una caja alrededor del animal que se verifica, cuando los datos incluyen cajas delimitadoras. La caja de la especie que revisas es ámbar; otras cajas de la misma especie en la foto son más claras.",
     "actual_species_placeholder": "Especie real (opcional)…",
     "actual_species_hint": "¿Qué es realmente? Elige un taxón del conjunto de datos o escribe cualquier nombre. No cambia el rechazo.",
     "uncertain_btn": "? Dudoso",

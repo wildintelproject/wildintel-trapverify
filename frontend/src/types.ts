@@ -5,6 +5,8 @@ export interface Frame {
   ts: string
   prob: number | null
   isContext?: boolean
+  /** Number of bounding boxes the server can draw for this frame's observation. */
+  boxes?: number
 }
 
 export interface DetectionEvent {

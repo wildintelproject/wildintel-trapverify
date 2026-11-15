@@ -24,6 +24,7 @@
 
 - **One card per cell** — each site × occasion combination is shown as a single card; the expert makes one decision per card per round.
 - **Frame navigation** — arrows step through the individual frames of a detection event; the progress badge shows "Frame N / M".
+- **Bounding boxes** — when the data include CamtrapDP boxes (`bboxX`, `bboxY`, `bboxWidth`, `bboxHeight`), the box of the animal being verified is drawn on the cards and in the large view (toggle *Show boxes*), so photos with several animals or species are unambiguous.
 - **Detection event counter** — the badge "Detection event N / M" shows which ranked detection event is currently displayed and how many are available.
 - **Burst context mode** — when enabled, all frames of the physical burst are shown (not only those labelled as the target species), so the expert can see the animal entering and leaving the scene. Context frames are visually dimmed and do not affect the decision.
 - **Lightbox** — click any image to open it full-screen with:

@@ -183,4 +183,15 @@ describe('EventCard', () => {
     rerender(<EventCard {...props} decision="confirmed" recordCorrection onCorrect={onCorrect} />)
     expect(screen.queryByRole('combobox')).toBeNull()
   })
+
+  it('asks the server to draw the box of the observation only when boxes are on', () => {
+    const event = makeEvent({
+      frames: [{ obsId: 'obs-1', mediaId: 'media-1', img: '/api/image/media-1', ts: '2026-01-01 10:00', prob: 0.9, boxes: 1 }],
+    })
+    const props = { event, decision: null, needsDecision: false, onDecide: vi.fn(), onOpenLightbox: vi.fn(), eventIdx: 0 }
+    const { container, rerender } = render(<EventCard {...props} />)
+    expect(container.querySelector('img')).toHaveAttribute('src', '/api/image/media-1')
+    rerender(<EventCard {...props} showBoxes />)
+    expect(container.querySelector('img')).toHaveAttribute('src', '/api/image/media-1?boxes=true&obs=obs-1')
+  })
 })

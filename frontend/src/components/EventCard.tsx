@@ -6,6 +6,7 @@ import 'swiper/css'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 import type { DetectionEvent } from '../types'
+import { frameSrc } from '../utils/frameImage'
 import { isPermissionDenied } from '../utils/imageError'
 
 function bestFrameIndex(frames: DetectionEvent['frames']): number {
@@ -27,6 +28,7 @@ interface Props {
   eventIdx: number
   readOnly?: boolean
   allowUncertain?: boolean
+  showBoxes?: boolean
   recordCorrection?: boolean
   correction?: string
   onCorrect?: (key: string, value: string) => void
@@ -41,6 +43,7 @@ export default function EventCard({
   eventIdx,
   readOnly = false,
   allowUncertain = true,
+  showBoxes = false,
   recordCorrection = false,
   correction = '',
   onCorrect,
@@ -74,7 +77,7 @@ export default function EventCard({
           {event.frames.map((frame, i) => (
             <SwiperSlide key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
               <img
-                src={frame.img}
+                src={frameSrc(frame, showBoxes)}
                 alt=""
                 style={{
                   width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer',

@@ -457,6 +457,17 @@ This **never changes the verification**: a rejection is still a rejection, the n
 
 The values are saved in `rejection_corrections.csv` in the session folder. From them the Results page and `occupancy_inputs/false_positive_sources.csv` show, per species, the main sources of false positives: the actual species, the number of rejected events and their share of all the rejected events of that species. A row *not recorded* collects the rejected events with no actual species typed, so the shares add up to 100 % and you can see how complete the record is.
 
+### Bounding boxes
+
+When the data say where the animal is in the photo, the review **draws a box around the animal being verified**, on the cards and in the large view. This matters when a photo contains several animals or labels: the box shows which one you are asked about.
+
+- The **amber** box with a dark outline is the box of the species you are reviewing (the one the classifier is most confident about). If the photo has other boxes of the **same species** (several animals), they are drawn thinner and lighter. Boxes of **other species** in the same photo are not drawn: the same photo shows a different box in the review of each species.
+- The box is part of the picture that is shown, so it stays in place when you zoom, rotate, invert or enlarge the photo.
+- Use the **Show boxes** checkbox at the top of the gallery to hide or show them (it appears only when the data have boxes, and the choice is remembered). The files on disk are never changed.
+- If a photo has **no box**, nothing is drawn. Photos that the app loads from a remote server (for example some Trapper links) are shown without boxes.
+
+Where the boxes come from: the CamtrapDP columns `bboxX`, `bboxY`, `bboxWidth` and `bboxHeight` of `observations.csv`, which give the top-left corner and the size of the box as **fractions of the image width and height (0 to 1)**. They are read from a CamtrapDP folder and from a *Custom CSV* that has columns with those same names. The DeepFaune CSV format has no boxes, so photos imported from it are shown without them. Boxes that are missing, not numbers, empty or outside the image are ignored.
+
 ### Review time
 
 The app records **when** each decision is made, in `review_log.csv` in the session folder (one row per detection event: its decision, `confirmed`, `rejected` or `uncertain`, and a UTC timestamp), so the effort can be reported in hours and not only in photos or events. The timestamp is taken when you click; if you change a decision before saving the round, the time of the last change is kept.
@@ -619,4 +630,4 @@ Verification removes **false positives**: detections the classifier made wrongly
 
 ### Photos with several animals or labels
 
-A photo can have labels for more than one species at once (for example when an object detector marks several animals). It appears in the review of each of those species, and the **whole photo** is shown: the box around the animal being verified is not drawn, so with several animals in the photo you have to judge by the species you are reviewing, which is shown at the top of the page.
+A photo can have labels for more than one species at once (for example when an object detector marks several animals). It appears in the review of each of those species. If the data include **bounding boxes**, the box of the animal being verified is drawn on the photo, so you know which one is meant (see [Bounding boxes](#bounding-boxes)). If they do not, the **whole photo** is shown without a box, and with several animals you have to judge by the species you are reviewing, which is shown at the top of the page.

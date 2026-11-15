@@ -12,8 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/image/{media_id}")
-def serve_image(media_id: str) -> FileResponse:
-    """Serve a camera-trap image from the local filesystem by mediaID."""
+def serve_image(media_id: str, obs: str | None = None, boxes: bool = False) -> Response:
+    """Serve a camera-trap image from the local filesystem by mediaID.
+
+    With ``boxes=true`` and ``obs=<observationID>``, the bounding boxes of that
+    observation's species in the photo are drawn on the image (only when the
+    candidate has valid boxes; otherwise the original file is served).
+    """
     candidates = session_service.get_candidates()
     if candidates is None:
         raise HTTPException(404, "No data loaded")
@@ -43,6 +48,19 @@ def serve_image(media_id: str) -> FileResponse:
     except PermissionError:
         logger.warning("Permission denied reading image file: %s", file_path)
         raise HTTPException(403, "Permiso denegado. Revisa los permisos de acceso de la aplicación.")
+    if boxes and obs:
+        from camtrap_workflow import count_boxes
+        from image_boxes import render_with_boxes
+        import json
+
+        cand = candidates[candidates["observationID"] == obs]
+        raw = cand.iloc[0].get("bboxes") if not cand.empty else None
+        if count_boxes(raw):
+            try:
+                data, media_type = render_with_boxes(file_path, json.loads(raw))
+                return Response(content=data, media_type=media_type, headers={"Cache-Control": "no-store"})
+            except Exception:                       # unreadable or unsupported image: fall back to the file
+                logger.warning("Could not draw boxes on %s; serving the original", file_path, exc_info=True)
     return FileResponse(
         str(file_path), stat_result=stat_result,
         headers={"Cache-Control": "no-store"},
