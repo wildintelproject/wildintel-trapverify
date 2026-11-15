@@ -703,6 +703,10 @@ The score is used only to **order** the detection events within each site and sa
 - **Double verification.** A session has one reviewer. To check agreement between two people, each reviews the same data in their own session; the decision files (`decisions/`) can then be compared.
 - **Species easily confused.** Records of species that look alike (for example red and fallow deer at night) are the likeliest source of reviewer error. Record the actual species of rejected events if you want to quantify the main false-positive sources (see [Recording the actual species of rejected events](#recording-the-actual-species-of-rejected-events)).
 
+### Archives that repeat observation IDs
+
+CamtrapDP requires every `observationID` to be unique, but some exports break that (a Trapper export where the detector and the classifier number their rows separately repeats the same ID for different photos and species). The app reads such archives safely: repeated IDs are made unique internally (the `mediaID` is appended) so a decision only ever affects its own cell, and the verified CamtrapDP is written with your original IDs. Nothing changes for archives whose IDs are already unique. A session created before this fix from such an archive should be redone, because its decisions refer to the ambiguous IDs.
+
 ### Missed detections are not corrected
 
 Verification removes **false positives**: detections the classifier made wrongly. It does **not** find **false negatives**: animals that were in a photo but that the classifier missed or labelled as another species, because the tool only shows photos the classifier proposed for the species. These missed detections can matter for rare species and in difficult conditions such as night-time photos or dense vegetation, where they lower the true detection probability. Recording the actual species of a rejected event keeps that information but does **not** turn the event into a detection of the other species.

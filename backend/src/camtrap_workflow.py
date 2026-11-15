@@ -199,7 +199,51 @@ def load_camtrapdp(camtrap_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
         med["fileName"] = med["filePath"].apply(
             lambda x: Path(str(x)).name if pd.notna(x) else ""
         )
-    return dep, med, obs
+    return dep, med, dedupe_observation_ids(obs)
+
+
+# Column that keeps the original ``observationID`` when it had to be made unique.
+ORIG_OBSERVATION_ID = "_observationID_original"
+
+
+def dedupe_observation_ids(obs: pd.DataFrame) -> pd.DataFrame:
+    """Make ``observationID`` unique, as CamtrapDP requires but some exports break.
+
+    Decisions, *uncertain* marks, tags and the verified export all look observations up by
+    ``observationID``. Some exports reuse the same ID for different observations (e.g. a Trapper
+    export where detector and classifier rows, of different photos and species, share numbers):
+    a decision on one event then also landed on the cells of the others. Repeated IDs get the
+    ``mediaID`` appended (``"165960#8896728"``), plus a counter if that is still not unique. The
+    rule is deterministic, so a reopened session finds the same IDs. The original value is kept in
+    :data:`ORIG_OBSERVATION_ID` and put back by :func:`restore_observation_ids` before a CamtrapDP
+    is written. Archives with unique IDs are returned unchanged.
+    """
+    if "observationID" not in obs.columns:
+        return obs
+    ids = obs["observationID"]
+    dup = ids.duplicated(keep=False) & ids.notna()
+    if not dup.any():
+        return obs
+    obs = obs.copy()
+    media = obs["mediaID"].fillna("") if "mediaID" in obs.columns else pd.Series("", index=obs.index)
+    new = ids.where(~dup, ids + "#" + media)
+    still = new.duplicated(keep=False) & new.notna()
+    if still.any():
+        n = new[still].groupby(new[still]).cumcount().add(1).astype(str)
+        new.loc[still] = new[still] + "#" + n
+    obs[ORIG_OBSERVATION_ID] = ids
+    obs["observationID"] = new
+    return obs
+
+
+def restore_observation_ids(obs: pd.DataFrame) -> pd.DataFrame:
+    """Undo :func:`dedupe_observation_ids` before writing ``observations.csv``."""
+    if ORIG_OBSERVATION_ID not in obs.columns:
+        return obs
+    obs = obs.copy()
+    keep = obs[ORIG_OBSERVATION_ID].notna()
+    obs.loc[keep, "observationID"] = obs.loc[keep, ORIG_OBSERVATION_ID]
+    return obs.drop(columns=[ORIG_OBSERVATION_ID])
 
 
 VALIDATION_ROW_LIMIT = 50_000
@@ -1459,6 +1503,10 @@ def save_decisions(
     path = decisions_dir / f"decisions_{species_safe}_iter{iteration}.csv"
     cols = ["observationID", "site_occasion_key", "mediaID",
             "scientificName", "siteID", "occasion"]
+    # Only this species' rows: an observationID repeated in another species' cells must never
+    # confirm those cells.
+    if "species_safe" in candidates.columns:
+        candidates = candidates[candidates["species_safe"] == species_safe]
     if not confirmed_ids:
         df = candidates.iloc[0:0][cols]
     else:
@@ -1494,6 +1542,8 @@ def save_uncertain(
     decisions_dir.mkdir(parents=True, exist_ok=True)
     cols = ["observationID", "site_occasion_key", "mediaID",
             "scientificName", "siteID", "occasion"]
+    if "species_safe" in candidates.columns:                 # see save_decisions
+        candidates = candidates[candidates["species_safe"] == species_safe]
     df = candidates[candidates["observationID"].isin(uncertain_ids)][cols] \
         if uncertain_ids else candidates.iloc[0:0][cols]
     df.to_csv(decisions_dir / f"uncertain_{species_safe}_iter{iteration}.csv", index=False)
@@ -2154,6 +2204,7 @@ def export_verified_camtrapdp(
         old = obs.loc[new.index, "observationTags"].fillna("").astype(str).str.strip()
         obs.loc[new.index, "observationTags"] = (old + "|" + new).str.strip("|")
 
+    obs = restore_observation_ids(obs)
     obs.to_csv(out_dir / "observations.csv", index=False)
 
     dp_src = find_datapackage(camtrap_dir)
