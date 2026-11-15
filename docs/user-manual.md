@@ -498,6 +498,7 @@ While the lightbox is open:
 | `↑` `↓` | Previous / next card at the same location |
 | `←` `→` | Navigate between frames in the detection event |
 | `Esc` | Close the lightbox |
+| `1` – `9` | Confirm the 1st–9th other target species of the session from this photo (press again to undo; see [Another species in the photo](#another-species-in-the-photo)) |
 
 After a decision, the lightbox automatically advances to the next undecided detection event.
 
