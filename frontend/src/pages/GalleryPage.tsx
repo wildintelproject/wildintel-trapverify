@@ -50,10 +50,10 @@ export default function GalleryPage() {
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null)
   const decisionsRef = useRef(decisions)
+  const completedRef = useRef(false)
   decisionsRef.current = decisions
   completedRef.current = completed
   const decideInLbRef = useRef<(d: Decision) => void>(() => {})
-  const completedRef = useRef(false)
   const lbControllerRef = useRef<ControllerRef>(null)
 
   function iterationColor(iter: number, total: number): string {
