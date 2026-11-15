@@ -14,6 +14,7 @@ from camtrap_workflow import (
     build_false_positive_sources,
     build_species_effort,
     confirmed_keys_set,
+    load_review_log,
     rounds_completed,
 )
 from services import session_service
@@ -154,6 +155,8 @@ def compute_results() -> dict:
     exclusions = pd.read_csv(p["exclusions"]) if p["exclusions"].exists() else None
     effort_df = build_species_effort(
         candidates, decisions_dir, p["occupancy_out"], iter_by_sp, exclusions=exclusions,
+        review_log=load_review_log(p["review_log"]),
+        idle_seconds=int((session_service.get_config() or {}).get("review_idle_seconds", 120)),
     )
     effort_by_species = json.loads(effort_df.to_json(orient="records"))
     fp_df = build_false_positive_sources(effort_df, decisions_dir, p["corrections"], p["occupancy_out"])
@@ -176,6 +179,7 @@ def compute_results() -> dict:
         "seq_unverified":  int(s_counts.get("unverified", 0)),
         "by_species_seqs": by_species_seqs,
         "effort_by_species": effort_by_species,
+        "review_idle_seconds": int((session_service.get_config() or {}).get("review_idle_seconds", 120)),
         "record_rejection_species": bool((session_service.get_config() or {}).get("record_rejection_species", False)),
         "false_positive_sources": false_positive_sources,
         "min_score":       float((session_service.get_config() or {}).get("min_score", 0) or 0),

@@ -31,6 +31,11 @@ interface EffortRow {
   rejected_score_max: number | null
   confirmed_score_median: number | null
   uncertain_events: number | null
+  review_active_seconds: number | null
+  review_decisions_timed: number | null
+  review_seconds_per_decision: number | null
+  review_est_full_seconds: number | null
+  review_est_saved_seconds: number | null
   excluded_photos: number | null
   excluded_events: number | null
   excluded_cells: number | null
@@ -59,6 +64,7 @@ interface Results {
   effort_by_species: EffortRow[]
   min_score: number
   record_rejection_species: boolean
+  review_idle_seconds: number
   false_positive_sources: FalsePositiveRow[]
   datapackage_generated: boolean
   datapackage_fabricated_fields: string[]
@@ -197,6 +203,11 @@ export default function ResultsPage() {
     )
   }
 
+  const fmtDur = (sec: number | null) => {
+    if (sec === null || sec === undefined) return t('results.na')
+    const m = Math.round(sec / 60)
+    return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`
+  }
   const fmt = (v: number | null) => (v === null || v === undefined ? '–' : String(v))
 
   function EffortTable({ rows, part }: { rows: EffortRow[]; part: 'counts' | 'detail' | 'excluded' }) {
@@ -443,6 +454,57 @@ export default function ResultsPage() {
           {results.min_score <= 0 && <div className="mb-10" />}
         </>
       )}
+
+      {/* Review time */}
+      {results.effort_by_species?.length > 0 && (() => {
+        const rows = results.effort_by_species
+        const timed = rows.some((r) => r.review_active_seconds !== null && r.review_active_seconds !== undefined)
+        const th = 'text-right py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300'
+        const td = 'py-2 px-2 text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap'
+        return (
+          <>
+            <h5 className="text-base font-semibold mb-1">{t('results.time_title')}</h5>
+            <p className="text-zinc-500 dark:text-zinc-400 mb-3 text-sm">
+              {t('results.time_hint', { s: results.review_idle_seconds })}
+            </p>
+            <div className={`${cardClass} mb-10`}>
+              {!timed ? (
+                <p className="p-3 text-sm text-zinc-500">{t('results.time_none')}</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-700">
+                        <th className="text-left py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_species')}</th>
+                        <th className={th}>{t('results.time_col_decisions')}</th>
+                        <th className={th}>{t('results.time_col_active')}</th>
+                        <th className={th}>{t('results.time_col_rate')}</th>
+                        <th className={th}>{t('results.time_col_full')}</th>
+                        <th className={th}>{t('results.time_col_saved')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r) => {
+                        const isTotal = r.species === 'TOTAL'
+                        return (
+                          <tr key={r.species} className={`border-b border-zinc-100 dark:border-zinc-800 ${isTotal ? 'font-semibold' : ''}`}>
+                            <td className="py-2 px-2 font-mono text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{isTotal ? t('results.effort_total') : r.species}</td>
+                            <td className={td}>{r.review_decisions_timed ?? t('results.na')}</td>
+                            <td className={td}>{fmtDur(r.review_active_seconds)}</td>
+                            <td className={td}>{r.review_seconds_per_decision === null || r.review_seconds_per_decision === undefined ? t('results.na') : `${r.review_seconds_per_decision} s`}</td>
+                            <td className={td}>{fmtDur(r.review_est_full_seconds)}</td>
+                            <td className={td}>{fmtDur(r.review_est_saved_seconds)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )
+      })()}
 
       {/* False-positive sources */}
       {results.record_rejection_species && (

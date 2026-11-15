@@ -1771,3 +1771,71 @@ def test_corrections_do_not_change_histories(candidates, decisions_dir, session_
     assert names == sorted(f.name for f in b.glob("*.csv"))
     for n in names:
         assert (a / n).read_text() == (b / n).read_text(), n
+
+
+# ─── review time (decision timestamps) ────────────────────────────────────────
+
+def _log(rows):
+    """rows: (species, 'HH:MM:SS') -> review log frame."""
+    return pd.DataFrame({
+        "observationID": [f"x{i}" for i in range(len(rows))],
+        "site_occasion_key": "k", "species_safe": [s.replace(" ", "_") for s, _ in rows],
+        "scientificName": [s for s, _ in rows], "iteration": "1", "decision": "rejected",
+        "decided_at": [f"2026-01-01T{t}.000Z" for _, t in rows],
+    })
+
+def test_review_time_excludes_idle_gaps():
+    from camtrap_workflow import review_time_by_species
+    log = _log([("Cervus elaphus", "10:00:00"), ("Cervus elaphus", "10:00:30"),
+                ("Dama dama", "10:01:00"), ("Dama dama", "10:10:00"),     # 9 min pause: idle
+                ("Cervus elaphus", "10:10:20")])
+    rt = review_time_by_species(log, idle_seconds=120)
+    assert rt["seconds"] == 80 and rt["credited"] == 3 and rt["timed"] == 5
+    assert rt["by_species"]["Cervus elaphus"] == {"seconds": 50.0, "credited": 2, "timed": 3}
+    assert rt["by_species"]["Dama dama"] == {"seconds": 30.0, "credited": 1, "timed": 2}
+
+def test_review_time_threshold_is_inclusive_and_configurable():
+    from camtrap_workflow import review_time_by_species
+    log = _log([("A a", "10:00:00"), ("A a", "10:02:00")])                # gap exactly 120 s
+    assert review_time_by_species(log, 120)["seconds"] == 120
+    assert review_time_by_species(log, 119)["seconds"] == 0
+    assert review_time_by_species(_log([("A a", "10:00:00"), ("A a", "10:09:00")]), 600)["seconds"] == 540
+
+def test_review_time_orders_by_time_and_handles_no_log():
+    from camtrap_workflow import review_time_by_species
+    shuffled = _log([("A a", "10:00:40"), ("A a", "10:00:00"), ("A a", "10:00:10")])
+    assert review_time_by_species(shuffled)["seconds"] == 40
+    empty = review_time_by_species(_log([]))
+    assert empty["timed"] == 0 and empty["seconds"] == 0 and empty["by_species"] == {}
+
+def test_save_review_log_labels_replaces_round_and_keeps_old_times(candidates, tmp_path):
+    from camtrap_workflow import load_review_log, save_review_log
+    f = tmp_path / "review_log.csv"
+    t0 = 1_767_261_600_000                                              # 2026-01-01T10:00:00Z
+    save_review_log(f, candidates, "Vulpes_vulpes", 1, ["o001"], ["o004"],
+                    {"o001": t0, "o003": t0 + 30_000, "o004": t0 + 45_000})
+    df = load_review_log(f).set_index("observationID")
+    assert df.loc["o001", "decision"] == "confirmed" and df.loc["o004", "decision"] == "uncertain"
+    assert df.loc["o003", "decision"] == "rejected" and df.loc["o001", "decided_at"] == "2026-01-01T10:00:00.000Z"
+    # re-save the round touching only o003: o001/o004 are not in the new times, so keep what they had
+    save_review_log(f, candidates, "Vulpes_vulpes", 1, ["o001"], ["o004"], {"o003": t0 + 90_000})
+    df = load_review_log(f).set_index("observationID")
+    assert df.loc["o001", "decided_at"] == "2026-01-01T10:00:00.000Z"
+    assert df.loc["o003", "decided_at"] == "2026-01-01T10:01:30.000Z" and len(df) == 3
+
+def test_effort_report_review_time_columns(candidates, tmp_path):
+    from camtrap_workflow import build_species_effort
+    log = _log([("Vulpes vulpes", "10:00:00"), ("Vulpes vulpes", "10:00:30"),
+                ("Vulpes vulpes", "10:01:00"), ("Vulpes vulpes", "11:00:00")])   # last one after a break
+    df = build_species_effort(candidates, tmp_path / "none", tmp_path / "o", review_log=log, idle_seconds=120)
+    tot = df.iloc[-1]
+    assert tot["review_active_seconds"] == 60 and tot["review_decisions_timed"] == 4
+    assert tot["review_seconds_per_decision"] == 30.0                   # 60 s over 2 credited decisions
+    assert tot["review_est_full_seconds"] == 30 * 4                     # 4 candidate events
+    assert tot["review_est_saved_seconds"] == 120 - 60
+    assert df.iloc[0]["review_active_seconds"] == 60
+
+def test_effort_report_review_time_none_for_old_sessions(candidates, tmp_path):
+    from camtrap_workflow import build_species_effort
+    df = build_species_effort(candidates, tmp_path / "none", tmp_path / "o")
+    assert df["review_active_seconds"].isna().all() and df["review_est_saved_seconds"].isna().all()

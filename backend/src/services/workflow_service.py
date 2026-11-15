@@ -20,6 +20,7 @@ from camtrap_workflow import (
     build_false_positive_sources,
     build_species_effort,
     compute_min_score_exclusions,
+    load_review_log,
     rounds_completed,
     clear_media_caches,
     export_verified_camtrapdp,
@@ -53,6 +54,8 @@ def rebuild_outputs() -> None:
     effort = build_species_effort(
         candidates, p["decisions"], p["occupancy_out"], rounds_completed(p["decisions"]),
         exclusions=exclusions,
+        review_log=load_review_log(p["review_log"]),
+        idle_seconds=int(config.get("review_idle_seconds", 120)),
     )
     build_false_positive_sources(effort, p["decisions"], p["corrections"], p["occupancy_out"])
     fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))

@@ -54,6 +54,8 @@ export default function GalleryPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null)
   const decisionsRef = useRef(decisions)
   const completedRef = useRef(false)
+  // When the reviewer last set each event's decision in this page (epoch ms), for the review-time log.
+  const decidedAtRef = useRef<Record<string, number>>({})
   decisionsRef.current = decisions
   completedRef.current = completed
   const decideInLbRef = useRef<(d: Decision) => void>(() => {})
@@ -120,6 +122,7 @@ export default function GalleryPage() {
         if (ev) corr[ev.key] = text
       })
       setCorrections(corr)
+      decidedAtRef.current = {}
       setNeedsDecision(new Set())
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar eventos')
@@ -203,6 +206,7 @@ export default function GalleryPage() {
     const ev = events[lbEvIdx]
     if (!ev) return
     setDecisions((prev) => ({ ...prev, [ev.key]: d }))
+    decidedAtRef.current[ev.key] = Date.now()
     if (d !== 'rejected') dropCorrection(ev.key)
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(ev.key); return s })
     if (!completed) {
@@ -251,13 +255,15 @@ export default function GalleryPage() {
 
   function decide(key: string, _repObsId: string, d: Decision) {
     setDecisions((prev) => ({ ...prev, [key]: d }))
+    decidedAtRef.current[key] = Date.now()
     if (d !== 'rejected') dropCorrection(key)
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(key); return s })
   }
 
   function confirmAll() {
     const all: Record<string, Decision> = {}
-    events.forEach((ev) => { all[ev.key] = 'confirmed' })
+    const now = Date.now()
+    events.forEach((ev) => { all[ev.key] = 'confirmed'; decidedAtRef.current[ev.key] = now })
     setDecisions(all)
     setCorrections({})
     setNeedsDecision(new Set())
@@ -286,7 +292,12 @@ export default function GalleryPage() {
         const text = (corrections[e.key] ?? '').trim()
         if (decisions[e.key] === 'rejected' && text) correctionIds[e.repObsId] = text
       })
-      const result = await api.saveDecisions(species, iteration, confirmedIds, uncertainIds, correctionIds)
+      const decisionTimes: Record<string, number> = {}
+      events.forEach((e) => {
+        const at = decidedAtRef.current[e.key]
+        if (decisions[e.key] && at) decisionTimes[e.repObsId] = at
+      })
+      const result = await api.saveDecisions(species, iteration, confirmedIds, uncertainIds, correctionIds, decisionTimes)
       if (result.done) {
         showToast(t('gallery.toast_done'), 'success')
         setTimeout(() => navigate('/species'), 1500)

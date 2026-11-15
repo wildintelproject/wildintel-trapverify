@@ -18,6 +18,8 @@ class SetupRequest(BaseModel):
     extended_confirmation: bool = False
     # Optional "actual species" field when rejecting; off by default. Never affects presence logic.
     record_rejection_species: bool = False
+    # Pauses longer than this (seconds) between two decisions are idle time, not review time.
+    review_idle_seconds: int = 120
 
 
 class DecisionsRequest(BaseModel):
@@ -29,6 +31,8 @@ class DecisionsRequest(BaseModel):
     # observationID -> actual species typed for a rejected event (only used when the
     # session has record_rejection_species on). Never affects presence logic.
     corrections: dict[str, str] = {}
+    # observationID -> epoch milliseconds when the reviewer made the decision in the browser.
+    decision_times: dict[str, int] = {}
 
 
 class RejectRequest(BaseModel):
