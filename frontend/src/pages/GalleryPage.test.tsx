@@ -111,7 +111,7 @@ describe('GalleryPage', () => {
   it('saves the progress with the button, by the event\'s representative observation', async () => {
     api.getSpecies.mockResolvedValue([stats({ current_iteration: 3 })])
     renderGallery()
-    await userEvent.click(await screen.findByRole('button', { name: 'Confirm all' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Confirm all in this location/ }))
     await userEvent.click(screen.getByRole('button', { name: /Save progress/ }))
     await waitFor(() => expect(api.saveProgress).toHaveBeenCalled())
     const [sp, body] = api.saveProgress.mock.calls[0]
@@ -182,6 +182,45 @@ describe('GalleryPage', () => {
       expect(await screen.findByRole('button', { name: 'Previous card' })).toBeInTheDocument()
       expect(screen.queryByTestId('lb-panel')).toBeNull()
       Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true })
+    })
+  })
+
+  describe('one location at a time', () => {
+    const two = () => [{ ...event('a', 2), siteId: 'S1' }, { ...event('b', 2), siteId: 'S1' }, { ...event('c', 2), siteId: 'S2' }]
+    const setup = () => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      api.getEvents.mockResolvedValue(two())
+      return renderGallery()
+    }
+
+    it('shows only the cards of the current location', async () => {
+      const { container } = setup()
+      await screen.findByText('Location 1 of 2', { exact: false })
+      expect(container.querySelectorAll('[data-key]')).toHaveLength(2)
+      await userEvent.click(screen.getAllByRole('button', { name: /Next location/ })[0])
+      await waitFor(() => expect(container.querySelectorAll('[data-key]')).toHaveLength(1))
+      expect(container.querySelector('[data-key="c"]')).not.toBeNull()
+    })
+
+    it('lists the locations with their progress', async () => {
+      setup()
+      const select = await screen.findByRole('combobox')
+      expect(select).toHaveTextContent('S1 · 0/2')
+      expect(select).toHaveTextContent('S2 · 0/1')
+    })
+
+    it('confirms only the location being shown and still finishes the round with every decision', async () => {
+      api.saveDecisions.mockResolvedValue({ success: true, done: true, next_iteration: null, remaining: 0 })
+      setup()
+      await userEvent.click(await screen.findByRole('button', { name: /Confirm all in this location/ }))
+      // S2 still undecided: finishing is refused and jumps to it
+      await userEvent.click(screen.getByRole('button', { name: 'Finish round' }))
+      expect(api.saveDecisions).not.toHaveBeenCalled()
+      await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('1'))
+      await userEvent.click(screen.getByRole('button', { name: /Confirm all in this location/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Finish round' }))
+      await waitFor(() => expect(api.saveDecisions).toHaveBeenCalled())
+      expect(api.saveDecisions.mock.calls[0][2].sort()).toEqual(['obs-a', 'obs-b', 'obs-c'])
     })
   })
 })
