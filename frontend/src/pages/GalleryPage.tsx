@@ -548,6 +548,8 @@ export default function GalleryPage() {
       )}
 
       <style>{`.yarl__slide_image {
+        width: 100%; height: 100%; object-fit: contain;
+        max-width: 100% !important; max-height: 100% !important;
         filter: brightness(${lbBrightness}%) contrast(${lbContrast}%)${lbInverted ? ' invert(1)' : ''} !important;
         ${lbRotation !== 0 ? `transform: rotate(${lbRotation}deg) !important; ${lbRotation % 180 !== 0 ? 'max-width: 80vh !important; max-height: 80vw !important;' : ''}` : ''}
       }
@@ -566,7 +568,13 @@ export default function GalleryPage() {
         index={lbIndex}
         slides={lbSlides}
         plugins={[Zoom, Captions]}
-        carousel={{ finite: true }}
+        carousel={{ finite: true, preload: 2 }}
+        // No slide / fade transitions: the frames of an event are compared one after another,
+        // so they must switch instantly.
+        animation={{ fade: 0, swipe: 0, navigation: 0 }}
+        // Photos are scaled up to fill the screen (see the .yarl__slide_image rule); the padding
+        // leaves room for the title above and the decision buttons below.
+        styles={{ slide: { padding: '48px 56px 96px' } }}
         controller={{ ref: lbControllerRef }}
         on={{ view: ({ index }) => { setLbIndex(index); resetLbFilters() } }}
         zoom={{ maxZoomPixelRatio: 8, scrollToZoom: true }}

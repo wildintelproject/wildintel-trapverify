@@ -1,3 +1,4 @@
+import { pathCrumbs } from '../utils/breadcrumbs'
 import { useEffect, useRef, useState } from 'react'
 
 interface DirEntry { name: string; path: string }
@@ -61,12 +62,7 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath, showFi
     browse(manualPath)
   }
 
-  const parts = data
-    ? data.current.split('/').filter(Boolean).map((part, i, arr) => ({
-        label: part || '/',
-        path: '/' + arr.slice(0, i + 1).join('/'),
-      }))
-    : []
+  const parts = data ? pathCrumbs(data.current) : []
 
   return (
     <div

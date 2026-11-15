@@ -1,5 +1,5 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from '../i18n'
 import EventCard from './EventCard'
@@ -193,5 +193,42 @@ describe('EventCard', () => {
     expect(container.querySelector('img')).toHaveAttribute('src', '/api/image/media-1')
     rerender(<EventCard {...props} showBoxes />)
     expect(container.querySelector('img')).toHaveAttribute('src', '/api/image/media-1?boxes=true&obs=obs-1')
+  })
+
+  describe('preloading the neighbouring frames', () => {
+    afterEach(() => { vi.unstubAllGlobals() })
+
+    const threeFrames = makeEvent({
+      frames: ['a', 'b', 'c'].map((id, k) => ({
+        obsId: `obs-${id}`, mediaId: `media-${id}`, img: `/api/image/media-${id}`, ts: `2026-01-01 10:00:0${k}`, prob: 0.9, boxes: 1,
+      })),
+    })
+
+    function renderCard(showBoxes = false) {
+      const loaded: string[] = []
+      class FakeImage { set src(v: string) { loaded.push(v) } }
+      vi.stubGlobal('Image', FakeImage)
+      const { container } = render(
+        <EventCard event={threeFrames} decision={null} needsDecision={false} onDecide={vi.fn()}
+          onOpenLightbox={vi.fn()} eventIdx={0} showBoxes={showBoxes} />,
+      )
+      return { loaded, card: container.firstChild as HTMLElement }
+    }
+
+    it('downloads nothing until the pointer is over the card', () => {
+      expect(renderCard().loaded).toEqual([])
+    })
+
+    it('preloads the previous and next frames once the pointer enters', () => {
+      const { loaded, card } = renderCard()
+      fireEvent.mouseEnter(card)
+      expect(loaded.sort()).toEqual(['/api/image/media-b', '/api/image/media-c'])    // frame 0 -> next (b) and wraps to previous (c)
+    })
+
+    it('preloads the same URLs the card will show, boxes included', () => {
+      const { loaded, card } = renderCard(true)
+      fireEvent.mouseEnter(card)
+      expect(loaded.every((u) => u.includes('boxes=true&obs='))).toBe(true)
+    })
   })
 })

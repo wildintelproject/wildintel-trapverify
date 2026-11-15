@@ -749,6 +749,43 @@ def generic_csv_to_camtrapdp(
     return out_dir
 
 
+# ─── Frame order ──────────────────────────────────────────────────────────────
+
+_CAPTURE_SEQ = r"_(\d+)\.[^./\\]+$"
+
+
+def capture_seq(df: pd.DataFrame) -> pd.Series:
+    """Capture number from the trailing ``_<n>`` of the file name (``..._127.JPEG`` -> 127).
+
+    It orders frames that share a timestamp (many cameras and exports keep whole
+    seconds only). ``fileName`` is tried first because ``filePath`` may be a web
+    address that does not contain the name (e.g. Trapper's ``.../media/4897674/file/``);
+    ``filePath`` is the fallback. Frames without a number get NaN and sort last.
+    """
+    seq = pd.Series(float("nan"), index=df.index)
+    for col in ("fileName", "filePath"):
+        if col in df:
+            n = pd.to_numeric(df[col].astype(str).str.extract(_CAPTURE_SEQ)[0], errors="coerce")
+            seq = seq.fillna(n)
+    return seq
+
+
+def _sort_frames(df: pd.DataFrame, by: list[str]) -> pd.DataFrame:
+    """Sort by ``by`` and then by capture number, keeping the order of rows that still tie."""
+    return (df.assign(_seq=capture_seq(df))
+              .sort_values(by + ["_seq"], kind="stable", na_position="last")
+              .drop(columns="_seq"))
+
+
+def _frame_time(row) -> str:
+    """Time shown for a frame, to the second (from ``ts``; the stored text is the fallback)."""
+    ts = row.get("ts")
+    if ts is not None and pd.notna(ts):
+        return pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+    shown = row.get("timestamp_display")
+    return shown if pd.notna(shown) else ""
+
+
 # ─── Sampling occasion length ─────────────────────────────────────────────────
 
 def occasion_length_hours(occasion_days: int, occasion_hours: Optional[int] = None) -> int:
@@ -981,13 +1018,7 @@ def build_candidates(
     # the same burst can tie; a trailing numeric suffix in the file name
     # (e.g. "..._1.JPEG" -> 1) recovers true capture order. Matches the
     # reference R tool; unparseable/absent suffixes sort last.
-    joined["capture_seq"] = pd.to_numeric(
-        joined["filePath"].astype(str).str.extract(r"_(\d+)\.[^/]*$")[0],
-        errors="coerce",
-    )
-    joined = joined.sort_values(
-        ["site_occasion_key", "ts", "capture_seq"], na_position="last"
-    )
+    joined = _sort_frames(joined, ["site_occasion_key", "ts"])
 
     # Assign burst IDs (consecutive frames within gap_seconds form one burst)
     records = []
@@ -1032,7 +1063,7 @@ def build_candidates(
     )
 
     candidates = joined[joined["rank"] <= total_iterations].copy()
-    candidates["timestamp_display"] = candidates["ts"].dt.strftime("%Y-%m-%d %H:%M")
+    candidates["timestamp_display"] = candidates["ts"].dt.strftime("%Y-%m-%d %H:%M:%S")
     candidates["is_context"] = False
 
     if include_burst_context and not candidates.empty:
@@ -1077,15 +1108,15 @@ def build_candidates(
                     "occasion":                  int(burst["occasion"].iloc[0]),
                     "species_safe":              burst["species_safe"].iloc[0],
                     "ts":                        ts_val,
-                    "timestamp_display":         ts_val.strftime("%Y-%m-%d %H:%M") if pd.notna(ts_val) else "",
+                    "timestamp_display":         ts_val.strftime("%Y-%m-%d %H:%M:%S") if pd.notna(ts_val) else "",
                     "is_context":                True,
                 })
 
         if context_rows:
             ctx_df = pd.DataFrame(context_rows)
             candidates = pd.concat([candidates, ctx_df], ignore_index=True)
-            candidates = candidates.sort_values(
-                ["site_occasion_key", "burst_id", "ts"]
+            candidates = _sort_frames(
+                candidates, ["site_occasion_key", "burst_id", "ts"]
             ).reset_index(drop=True)
 
     return candidates[[
@@ -1509,10 +1540,10 @@ def get_events(
     total_seqs_by_key = all_sp.groupby("site_occasion_key")["rank"].max().to_dict()
 
     events = []
-    for key, group in sp_cands.sort_values(["burst_id", "ts"]).groupby(
+    for key, group in _sort_frames(sp_cands, ["burst_id", "ts"]).groupby(
         "site_occasion_key", sort=False
     ):
-        group = group.sort_values(["burst_id", "ts"])
+        group = _sort_frames(group, ["burst_id", "ts"])
 
         # Context frames (is_context=True) are not used for repObsId / maxProb
         is_ctx = group.get("is_context", pd.Series(False, index=group.index)).fillna(False)
@@ -1538,7 +1569,7 @@ def get_events(
                 "obsId":     row["observationID"],
                 "mediaId":   str(row["mediaID"]),
                 "img":       img_url,
-                "ts":        row["timestamp_display"] if pd.notna(row.get("timestamp_display")) else "",
+                "ts":        _frame_time(row),
                 "prob":      round(float(row_prob), 3) if pd.notna(row_prob) else None,
                 "isContext": row_is_ctx,
                 # Boxes can only be drawn on images the app serves itself, not on remote ones.
@@ -1596,10 +1627,10 @@ def get_review_events(
     total_seqs_by_key = species_cands.groupby("site_occasion_key")["rank"].max().to_dict()
 
     events = []
-    for key, group in rank1.sort_values(["burst_id", "ts"]).groupby(
+    for key, group in _sort_frames(rank1, ["burst_id", "ts"]).groupby(
         "site_occasion_key", sort=False
     ):
-        group = group.sort_values(["burst_id", "ts"])
+        group = _sort_frames(group, ["burst_id", "ts"])
 
         is_ctx = group.get("is_context", pd.Series(False, index=group.index)).fillna(False)
         decision_rows = group[~is_ctx]
@@ -1624,7 +1655,7 @@ def get_review_events(
                 "obsId":     row["observationID"],
                 "mediaId":   str(row["mediaID"]),
                 "img":       img_url,
-                "ts":        row["timestamp_display"] if pd.notna(row.get("timestamp_display")) else "",
+                "ts":        _frame_time(row),
                 "prob":      round(float(row_prob), 3) if pd.notna(row_prob) else None,
                 "isContext": row_is_ctx,
                 # Boxes can only be drawn on images the app serves itself, not on remote ones.
