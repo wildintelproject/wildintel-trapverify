@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import type { OccupancyRow } from '../types'
 import { formatP, formatPsi } from '../utils/occupancy'
+import { anyCutoff } from '../utils/minScore'
 
 interface SpeciesRow {
   species: string
@@ -39,6 +40,7 @@ interface EffortRow {
   excluded_photos: number | null
   excluded_events: number | null
   excluded_cells: number | null
+  min_score?: number | null
 }
 
 interface FalsePositiveRow {
@@ -63,6 +65,7 @@ interface Results {
   by_species_seqs: SpeciesRow[]
   effort_by_species: EffortRow[]
   min_score: number
+  min_score_by_species?: Record<string, number>
   record_rejection_species: boolean
   review_idle_seconds: number
   occasion_hours: number
@@ -233,6 +236,7 @@ export default function ResultsPage() {
                 </>
               ) : part === 'excluded' ? (
                 <>
+                  <th className={th}>{t('results.excluded_col_cutoff')}</th>
                   <th className={th}>{t('results.excluded_col_photos')}</th>
                   <th className={th}>{t('results.excluded_col_events')}</th>
                   <th className={th}>{t('results.excluded_col_cells')}</th>
@@ -268,6 +272,7 @@ export default function ResultsPage() {
                     </>
                   ) : part === 'excluded' ? (
                     <>
+                      <td className={td}>{r.min_score == null ? '–' : r.min_score.toFixed(2)}</td>
                       <td className={td}>{fmt(r.excluded_photos)}</td>
                       <td className={td}>{fmt(r.excluded_events)}</td>
                       <td className={td}>{fmt(r.excluded_cells)}</td>
@@ -441,18 +446,19 @@ export default function ResultsPage() {
           <div className={`${cardClass} mb-4`}>
             <EffortTable rows={results.effort_by_species} part="detail" />
           </div>
-          {results.min_score > 0 && (
+          {anyCutoff(results.min_score, results.min_score_by_species) && (
             <>
               <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" role="note">
                 {t('results.cutoff_notice', { score: results.min_score })}
+                {Object.keys(results.min_score_by_species ?? {}).length > 0 && ` ${t('results.cutoff_notice_species')}`}
               </div>
               <div className={`${cardClass} mb-10`}>
-                <div className={cardHeader}>{t('results.excluded_title', { score: results.min_score })}</div>
+                <div className={cardHeader}>{t('results.excluded_title')}</div>
                 <EffortTable rows={results.effort_by_species} part="excluded" />
               </div>
             </>
           )}
-          {results.min_score <= 0 && <div className="mb-10" />}
+          {!anyCutoff(results.min_score, results.min_score_by_species) && <div className="mb-10" />}
         </>
       )}
 

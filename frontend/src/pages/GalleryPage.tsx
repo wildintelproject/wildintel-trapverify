@@ -9,6 +9,7 @@ import 'yet-another-react-lightbox/plugins/captions.css'
 import { api } from '../api'
 import EventCard, { type Decision } from '../components/EventCard'
 import { frameSrc } from '../utils/frameImage'
+import { effectiveMinScore } from '../utils/minScore'
 import type { DetectionEvent } from '../types'
 
 interface EventSlide extends SlideImage {
@@ -32,7 +33,7 @@ export default function GalleryPage() {
 
   const [events, setEvents] = useState<DetectionEvent[]>([])
   const [spStats, setSpStats] = useState<{ species_name: string; n_total_combos: number; n_confirmed_combos: number; n_resolved: number } | null>(null)
-  const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; occasion_hours: number; min_score: number } | null>(null)
+  const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; occasion_hours: number; min_score: number; min_score_by_species?: Record<string, number> } | null>(null)
   const [iteration, setIteration] = useState(1)
   const [totalIterations, setTotalIterations] = useState(1)
   const [decisions, setDecisions] = useState<Record<string, Decision>>({})
@@ -99,7 +100,7 @@ export default function GalleryPage() {
       if (recording) {
         api.getTaxa().then((r) => setTaxa(Array.from(new Set([...r.taxa, ...r.extra])))).catch(() => {})
       }
-      if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, occasion_hours: state.config.occasion_hours ?? 0, min_score: state.config.min_score })
+      if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, occasion_hours: state.config.occasion_hours ?? 0, min_score: state.config.min_score, min_score_by_species: state.config.min_score_by_species })
 
       if (sp && sp.n_resolved >= sp.n_total_combos) {
         setCompleted(true)
@@ -420,7 +421,7 @@ export default function GalleryPage() {
                 gap: reviewParams.gap_seconds,
                 days: reviewParams.occasion_days,
                 count: reviewParams.occasion_hours > 0 ? reviewParams.occasion_hours : undefined,
-                minScore: reviewParams.min_score,
+                minScore: effectiveMinScore(reviewParams.min_score, reviewParams.min_score_by_species, spStats?.species_name),
                 species: spStats?.species_name ?? species?.replace(/_/g, ' '),
               }),
             }}

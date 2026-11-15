@@ -107,9 +107,17 @@ def run_setup(req: SetupRequest) -> dict:
         gap_seconds=req.gap_seconds,
         include_burst_context=req.include_burst_context,
         min_score=req.min_score,
+        min_score_by_species=req.min_score_by_species,
         seed=req.random_seed,
         occasion_hours=req.occasion_hours or None,
     )
+
+    if candidates.empty:
+        raise HTTPException(
+            400,
+            "No queda ninguna detección candidata con estos parámetros (especies, periodo de estudio y "
+            "puntuación mínima). Revisa el periodo y baja la puntuación mínima, general o de la especie.",
+        )
 
     base_out = Path(req.output_dir) if req.output_dir else session_service.DEFAULT_OUTPUT_DIR
     sd = base_out / datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -131,6 +139,7 @@ def run_setup(req: SetupRequest) -> dict:
         total_iterations=req.total_iterations,
         gap_seconds=req.gap_seconds,
         min_score=req.min_score,
+        min_score_by_species=req.min_score_by_species,
         seed=req.random_seed,
         occasion_hours=req.occasion_hours or None,
     ).to_csv(sd / "min_score_exclusions.csv", index=False)

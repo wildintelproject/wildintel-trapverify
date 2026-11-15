@@ -2078,3 +2078,113 @@ def test_gallery_shows_seconds_for_sessions_saved_with_minutes_only(candidates):
     old["timestamp_display"] = old["ts"].dt.strftime("%Y-%m-%d %H:%M")  # what older manifests stored
     ev = get_events(old, Path("/nonexistent"), set(), "Vulpes_vulpes", 1, "", Path("."), False)
     assert all(len(f["ts"]) == 19 for e in ev for f in e["frames"])      # 'YYYY-MM-DD HH:MM:SS'
+
+
+# ─── minimum score per species (ported from the community fork) ──────────────
+
+def _two_species(scores_x, scores_y):
+    """Species 'Xa xa' and 'Yb yb' at one site, one frame per hour (so one event each)."""
+    dep = pd.DataFrame({"deploymentID": ["D"], "locationID": ["S"], "deploymentStart": ["2025-11-01"], "deploymentEnd": ["2025-11-05"]})
+    rows_m, rows_o = [], []
+    for sp, scores, hour0 in (("Xa xa", scores_x, 0), ("Yb yb", scores_y, 12)):
+        for i, sc in enumerate(scores):
+            mid = f"{sp[:2]}{i}"
+            rows_m.append({"mediaID": mid, "deploymentID": "D", "timestamp": f"2025-11-02 {hour0 + i:02d}:00:00", "filePath": f"{mid}.jpg"})
+            rows_o.append({"observationID": f"o_{mid}", "deploymentID": "D", "mediaID": mid, "observationLevel": "media",
+                           "observationType": "animal", "scientificName": sp, "classificationProbability": sc,
+                           "classificationMethod": "machine", "classifiedBy": "x", "classificationTimestamp": None})
+    return dep, pd.DataFrame(rows_m), pd.DataFrame(rows_o)
+
+
+def _kept(scores_x, scores_y, min_score, by_species=None):
+    dep, med, obs = _two_species(scores_x, scores_y)
+    c = build_candidates(dep, med, obs, target_species=["Xa xa", "Yb yb"], study_start=date(2025, 11, 1),
+                         study_end=date(2025, 11, 5), occasion_days=5, total_iterations=100, gap_seconds=60,
+                         min_score=min_score, min_score_by_species=by_species)
+    return {sp: sorted(g["mediaID"]) for sp, g in c.groupby("scientificName")}
+
+
+def test_species_min_scores_uses_own_value_else_general():
+    from camtrap_workflow import species_min_scores
+    assert species_min_scores(["A a", "B b"], 0.5, {"B b": 0.8}) == {"A a": 0.5, "B b": 0.8}
+    assert species_min_scores(["A a"], 0.5, None) == {"A a": 0.5}
+    assert species_min_scores(["A a"], 0.5, {"Other o": 0.9}) == {"A a": 0.5}
+
+
+def test_without_overrides_the_general_cutoff_applies_to_every_species():
+    kept = _kept([0.55, 0.9], [0.55, 0.9], 0.6)
+    assert kept == {"Xa xa": ["Xa1"], "Yb yb": ["Yb1"]}
+
+
+def test_a_species_can_have_a_lower_cutoff_than_the_general_one():
+    kept = _kept([0.55, 0.9], [0.55, 0.9], 0.6, {"Xa xa": 0.5})
+    assert kept == {"Xa xa": ["Xa0", "Xa1"], "Yb yb": ["Yb1"]}
+
+
+def test_a_species_can_have_a_higher_cutoff_than_the_general_one():
+    kept = _kept([0.55, 0.9], [0.65, 0.9], 0.6, {"Yb yb": 0.8})
+    assert kept == {"Xa xa": ["Xa1"], "Yb yb": ["Yb1"]}                           # 0.65 < 0.8 dropped; Xa keeps the general 0.6
+
+
+def test_a_score_equal_to_the_species_cutoff_is_kept():
+    kept = _kept([0.7, 0.69], [0.7, 0.69], 0.0, {"Xa xa": 0.7})
+    assert kept["Xa xa"] == ["Xa0"]                                               # 0.7 kept, 0.69 dropped
+    assert kept["Yb yb"] == ["Yb0", "Yb1"]                                        # general 0: no cut-off
+
+
+def test_zero_for_one_species_switches_the_cutoff_off_for_it_only():
+    kept = _kept([0.1, 0.9], [0.1, 0.9], 0.6, {"Xa xa": 0})
+    assert kept == {"Xa xa": ["Xa0", "Xa1"], "Yb yb": ["Yb1"]}
+
+
+def test_zero_override_keeps_negative_scores_like_a_zero_general_cutoff():
+    """Scores that are raw logits can be negative: a cut-off of 0 means 'off', not 'drop below 0'."""
+    kept = _kept([-2.0, 1.5], [-2.0, 1.5], 0.6, {"Xa xa": 0})
+    assert kept["Xa xa"] == ["Xa0", "Xa1"]
+
+
+def test_overrides_alone_activate_the_cutoff_when_the_general_one_is_zero():
+    kept = _kept([0.3, 0.9], [0.3, 0.9], 0.0, {"Yb yb": 0.5})
+    assert kept == {"Xa xa": ["Xa0", "Xa1"], "Yb yb": ["Yb1"]}
+
+
+def test_a_frame_without_a_score_is_never_dropped_by_a_species_cutoff():
+    kept = _kept([None, 0.9], [0.2, 0.9], 0.0, {"Xa xa": 0.5})
+    assert kept["Xa xa"] == ["Xa0", "Xa1"]
+
+
+def _exclusions_for(scores_x, scores_y, min_score, by_species=None):
+    from camtrap_workflow import compute_min_score_exclusions
+    dep, med, obs = _two_species(scores_x, scores_y)
+    kw = dict(target_species=["Xa xa", "Yb yb"], study_start=date(2025, 11, 1), study_end=date(2025, 11, 5),
+              occasion_days=5, total_iterations=100, gap_seconds=60)
+    kept = build_candidates(dep, med, obs, min_score=min_score, min_score_by_species=by_species, **kw)
+    return compute_min_score_exclusions(kept, dep, med, obs, min_score=min_score, min_score_by_species=by_species, **kw).set_index("species")
+
+
+def test_exclusion_counts_use_each_species_own_cutoff():
+    ex = _exclusions_for([0.55, 0.9], [0.55, 0.9], 0.6, {"Yb yb": 0.95})
+    assert ex.loc["Xa xa", "excluded_photos"] == 1 and ex.loc["Xa xa", "min_score"] == 0.6
+    assert ex.loc["Yb yb", "excluded_photos"] == 2 and ex.loc["Yb yb", "min_score"] == 0.95
+    assert ex.loc["Yb yb", "excluded_cells"] == 1                                 # nothing of Yb is left to review
+
+
+def test_exclusions_are_zero_for_the_species_with_the_cutoff_off():
+    ex = _exclusions_for([0.1, 0.9], [0.1, 0.9], 0.6, {"Xa xa": 0})
+    assert ex.loc["Xa xa", ["excluded_photos", "min_score"]].tolist() == [0, 0.0]
+    assert ex.loc["Yb yb", "excluded_photos"] == 1
+
+
+def test_exclusions_without_any_cutoff_are_all_zero():
+    ex = _exclusions_for([0.1, 0.9], [0.1, 0.9], 0.0)
+    assert (ex[["excluded_photos", "excluded_events", "excluded_cells", "min_score"]] == 0).all().all()
+
+
+def test_effort_report_shows_the_cutoff_of_each_species(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import build_species_effort
+    ex = pd.DataFrame({"species": ["Vulpes vulpes"], "min_score": [0.7], "excluded_photos": [1],
+                       "excluded_events": [1], "excluded_cells": [0]})
+    df = build_species_effort(candidates, decisions_dir, tmp_path / "o", exclusions=ex)
+    assert df.iloc[0]["min_score"] == 0.7 and pd.isna(df.iloc[-1]["min_score"])  # the TOTAL row has no single cut-off
+    old = build_species_effort(candidates, decisions_dir, tmp_path / "o2", exclusions=ex.drop(columns="min_score"))
+    assert old["min_score"].isna().all() and old.iloc[0]["excluded_photos"] == 1  # sessions made before the column existed

@@ -1624,3 +1624,82 @@ def test_images_folder_one_level_too_deep_is_checked_through_the_data_folder(cli
     too_deep = camtrap_dir / "img"                                  # the user picked img/ as the Images directory
     res = client.get("/api/fs/check-images", params={"camtrap_dir": str(camtrap_dir), "image_base_dir": str(too_deep)}).json()
     assert res["total"] == 5 and res["missing"] == 0
+
+
+# ─── minimum score per species ────────────────────────────────────────────────
+# Fixture scores for Vulpes vulpes: m001=0.9 m002=0.8 m005=0.6 m003=0.7 m004=0.85
+
+def _setup_cutoffs(client, camtrap_dir, tmp_path, general, by_species):
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"), "target_species": ["Vulpes vulpes"],
+        "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5, "total_iterations": 100_000,
+        "gap_seconds": 60, "min_score": general, "min_score_by_species": by_species})
+    assert r.status_code == 200
+    return r.json()
+
+
+def test_species_cutoff_replaces_the_general_one_in_the_report(client, camtrap_dir, tmp_path):
+    _setup_cutoffs(client, camtrap_dir, tmp_path, 0.5, {"Vulpes vulpes": 0.7})
+    data = client.get("/api/results").json()
+    assert data["min_score"] == 0.5 and data["min_score_by_species"] == {"Vulpes vulpes": 0.7}
+    row = next(r for r in data["effort_by_species"] if r["species"] == "Vulpes vulpes")
+    assert row["min_score"] == 0.7
+    assert row["excluded_photos"] == 1                   # m005 (0.6) is below 0.7; m003 (0.7) equals it and is kept
+
+
+def test_general_only_sessions_report_no_species_cutoffs(client, setup_session):
+    data = client.get("/api/results").json()
+    assert data["min_score_by_species"] == {}
+    row = next(r for r in data["effort_by_species"] if r["species"] == "Vulpes vulpes")
+    assert row["min_score"] == 0.5 and row["excluded_photos"] == 0
+
+
+def test_species_cutoff_is_stored_in_the_session_config(client, camtrap_dir, tmp_path):
+    info = _setup_cutoffs(client, camtrap_dir, tmp_path, 0.5, {"Vulpes vulpes": 0.8})
+    import json
+    from pathlib import Path
+    cfg = json.loads((Path(info["session_dir"]) / "config.json").read_text())
+    assert cfg["min_score_by_species"] == {"Vulpes vulpes": 0.8}
+    assert info["n_candidates"] == 3                      # 0.9, 0.8 (kept: equal) and 0.85; 0.7 and 0.6 are below 0.8
+
+
+def test_a_cutoff_that_leaves_nothing_to_review_is_a_clear_error_not_a_crash(client, camtrap_dir, tmp_path):
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"), "target_species": ["Vulpes vulpes"],
+        "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5, "total_iterations": 100_000,
+        "gap_seconds": 60, "min_score": 0.5, "min_score_by_species": {"Vulpes vulpes": 0.95}})
+    assert r.status_code == 400 and "puntuación mínima" in r.json()["detail"]
+
+
+def test_one_species_losing_all_its_photos_does_not_break_the_session(client, camtrap_dir, tmp_path):
+    """Two target species; the cut-off of one removes everything of it, the other still has candidates."""
+    import pandas as pd
+    obs = pd.read_csv(camtrap_dir / "observations.csv")
+    extra = obs.iloc[:2].copy()
+    extra["observationID"] = ["z1", "z2"]
+    extra["scientificName"] = "Sus scrofa"
+    extra["classificationProbability"] = [0.55, 0.6]
+    pd.concat([obs, extra]).to_csv(camtrap_dir / "observations.csv", index=False)
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"),
+        "target_species": ["Vulpes vulpes", "Sus scrofa"], "study_start": "2025-11-01", "study_end": "2025-11-10",
+        "occasion_days": 5, "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.5,
+        "min_score_by_species": {"Sus scrofa": 0.9}})
+    assert r.status_code == 200
+    data = client.get("/api/results").json()
+    assert data["min_score_by_species"] == {"Sus scrofa": 0.9}
+    rows = {x["species"]: x for x in data["effort_by_species"]}
+    sus = rows["Sus scrofa"]                               # still reported, not silently dropped
+    assert sus["candidate_events"] == 0 and sus["excluded_photos"] == 2 and sus["min_score"] == 0.9
+    assert rows["Vulpes vulpes"]["candidate_events"] == 4 and rows["TOTAL"]["excluded_photos"] == 2
+    assert [x["species"] for x in data["effort_by_species"]] == ["Sus scrofa", "Vulpes vulpes", "TOTAL"]   # alphabetical, TOTAL last
+    assert [s["species_safe"] for s in client.get("/api/species").json()] == ["Vulpes_vulpes"]   # nothing of Sus to review
+    assert client.get("/api/results/occupancy").status_code == 200
+
+
+def test_sessions_saved_before_the_option_existed_still_report(client, setup_session):
+    """A config.json without min_score_by_species (an older session) must not break Results."""
+    from services import session_service
+    cfg = session_service.get_config()
+    cfg.pop("min_score_by_species", None)
+    assert client.get("/api/results").json()["min_score_by_species"] == {}

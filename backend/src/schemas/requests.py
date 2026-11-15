@@ -16,6 +16,8 @@ class SetupRequest(BaseModel):
     total_iterations: int = 100000
     gap_seconds: int = 60
     min_score: float = 0.5
+    # Per-species cut-offs that replace min_score (scientificName -> threshold; <= 0 means none).
+    min_score_by_species: dict[str, float] = {}
     # Seed of the pseudo-random order of detection events with the same score (e.g. no scores).
     random_seed: int = 42
     include_burst_context: bool = False

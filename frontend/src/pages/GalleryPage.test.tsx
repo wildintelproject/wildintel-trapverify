@@ -69,4 +69,23 @@ describe('GalleryPage', () => {
     renderGallery()
     expect(await screen.findByText(/Detection event 2\/3/)).toBeInTheDocument()
   })
+
+  it('shows the cut-off of the species being reviewed, not the general one', async () => {
+    api.getSpecies.mockResolvedValue([stats({ current_iteration: 1, n_resolved: 0, n_confirmed_combos: 0 })])
+    api.getState.mockResolvedValue({ ready: true, config: {
+      total_iterations: 10, gap_seconds: 60, occasion_days: 5, min_score: 0.5, min_score_by_species: { 'Vulpes vulpes': 0.8 },
+    } })
+    const { container } = renderGallery()
+    await waitFor(() => expect(container.textContent).toContain('detection confidence of 0.8'))
+    expect(container.textContent).not.toContain('detection confidence of 0.5')
+  })
+
+  it('shows the general cut-off for a species without its own', async () => {
+    api.getSpecies.mockResolvedValue([stats({ current_iteration: 1, n_resolved: 0, n_confirmed_combos: 0 })])
+    api.getState.mockResolvedValue({ ready: true, config: {
+      total_iterations: 10, gap_seconds: 60, occasion_days: 5, min_score: 0.5, min_score_by_species: { 'Sus scrofa': 0.9 },
+    } })
+    const { container } = renderGallery()
+    await waitFor(() => expect(container.textContent).toContain('detection confidence of 0.5'))
+  })
 })
