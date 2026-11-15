@@ -7,9 +7,10 @@ decisions, and generating the verified CamtrapDP and occupancy-model inputs.
 """
 import json
 import logging
+import math
 import os
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -748,6 +749,38 @@ def generic_csv_to_camtrapdp(
     return out_dir
 
 
+# ─── Sampling occasion length ─────────────────────────────────────────────────
+
+def occasion_length_hours(occasion_days: int, occasion_hours: Optional[int] = None) -> int:
+    """Length of a sampling occasion in hours.
+
+    ``occasion_hours`` when it is set (occasions shorter than a day, e.g. 1 hour
+    for activity patterns); otherwise ``occasion_days`` x 24. Sessions made
+    before ``occasion_hours`` existed only have ``occasion_days``.
+    """
+    return int(occasion_hours) if occasion_hours else int(occasion_days) * 24
+
+
+def config_occasion_hours(config: dict) -> int:
+    """Occasion length in hours of a session ``config`` (older ones: days only)."""
+    return occasion_length_hours(int(config.get("occasion_days") or 1), config.get("occasion_hours"))
+
+
+def occasion_windows_dt(study_start: date, study_end: date, hours: int) -> list[tuple[datetime, datetime]]:
+    """Consecutive ``[lo, hi)`` windows of ``hours`` from ``study_start`` 00:00 to the end of ``study_end``.
+
+    The last window is clipped to the end of the study period, so it may be shorter.
+    """
+    lo = datetime.combine(study_start, datetime.min.time())
+    end = datetime.combine(study_end, datetime.min.time()) + timedelta(days=1)
+    step = timedelta(hours=hours)
+    out: list[tuple[datetime, datetime]] = []
+    while lo < end:
+        out.append((lo, min(lo + step, end)))
+        lo += step
+    return out
+
+
 # ─── Bounding boxes ───────────────────────────────────────────────────────────
 
 BOX_COLS = ["bboxX", "bboxY", "bboxWidth", "bboxHeight"]
@@ -811,6 +844,7 @@ def build_candidates(
     include_burst_context: bool = False,
     min_score: float = 0.0,
     seed: int = 42,
+    occasion_hours: Optional[int] = None,
 ) -> pd.DataFrame:
     """Build the verification candidate manifest from CamtrapDP tables.
 
@@ -850,6 +884,8 @@ def build_candidates(
             same score within a cell (for example when no frame has a score). The
             same seed gives the same order; the order does not depend on the
             chronology or on the row order. Defaults to 42.
+        occasion_hours: Width of each sampling occasion in hours instead of days
+            (e.g. 1 for activity patterns). ``None`` or 0 uses ``occasion_days``.
 
     Returns:
         DataFrame with one row per candidate frame, including columns
@@ -924,22 +960,11 @@ def build_candidates(
     if joined.empty:
         return pd.DataFrame()
 
-    # Build occasion breaks
-    breaks = []
-    d = study_start
-    while d <= study_end + timedelta(days=1):
-        breaks.append(d)
-        d += timedelta(days=occasion_days)
-    n_occ = len(breaks) - 1
-
-    def assign_occ(ts: pd.Timestamp) -> int:
-        dt = ts.date()
-        for i in range(len(breaks) - 1):
-            if breaks[i] <= dt < breaks[i + 1]:
-                return i + 1
-        return n_occ if dt == breaks[-1] else -1
-
-    joined["occasion"] = joined["ts"].apply(assign_occ)
+    # Occasion = consecutive fixed-length windows from study_start 00:00 (the last one
+    # clipped to the end of study_end). Same windows as the occupancy inputs, so every
+    # candidate cell has a matching column there, including a trailing shorter window.
+    occ_len = pd.Timedelta(hours=occasion_length_hours(occasion_days, occasion_hours))
+    joined["occasion"] = ((joined["ts"] - pd.Timestamp(study_start)) // occ_len + 1).astype(int)
     joined = joined[joined["occasion"] >= 1].copy()
 
     joined["species_safe"] = joined["scientificName"].apply(sanitize)
@@ -1751,6 +1776,23 @@ def _occasion_windows(
     return windows
 
 
+def _deployment_interval(start, end) -> tuple[Optional[datetime], Optional[datetime]]:
+    """Operating interval of a deployment as datetimes, or ``(None, None)`` if it cannot be read.
+
+    A date without a time covers the whole day: the interval starts at 00:00 of the
+    start date and ends at the end of the end date.
+    """
+    try:
+        s, e = str(start).strip(), str(end).strip()
+        start_dt = pd.Timestamp(normalise_ts(s)).to_pydatetime()
+        end_dt = pd.Timestamp(normalise_ts(e)).to_pydatetime()
+    except Exception:
+        return None, None
+    if len(e) <= 10:
+        end_dt += timedelta(days=1)
+    return start_dt, end_dt
+
+
 # ─── Occupancy inputs ─────────────────────────────────────────────────────────
 
 def build_occupancy_inputs(
@@ -1763,7 +1805,8 @@ def build_occupancy_inputs(
 
     Outputs written to ``out_dir``:
 
-    * ``camera_operation.csv`` — days active per site × occasion, computed from
+    * ``camera_operation.csv`` — days active per site × occasion (**hours** active
+      when the session uses ``occasion_hours``), computed from
       ``deploymentStart``/``deploymentEnd`` in ``deployments.csv`` when available;
       falls back to the full occasion length otherwise.
     * ``dethist_naive_<sp>.csv`` — 1/0/NA detection history trusting the classifier.
@@ -1777,7 +1820,8 @@ def build_occupancy_inputs(
         decisions_dir: Directory containing decision CSVs.
         config: Session configuration dict (requires keys ``study_start``,
             ``study_end``, ``occasion_days``, ``target_species``,
-            ``camtrap_dir``).
+            ``camtrap_dir``; optional ``occasion_hours`` for occasions shorter
+            than a day).
         out_dir: Destination directory (created if absent).
     """
     import numpy as np
@@ -1788,9 +1832,12 @@ def build_occupancy_inputs(
     study_end      = date.fromisoformat(config["study_end"])
     occasion_days  = int(config["occasion_days"])
     target_species = config["target_species"]
+    # Occasions in hours (occasion_hours): windows to the hour and camera operation in hours.
+    hours_mode     = bool(config.get("occasion_hours"))
 
     windows   = _occasion_windows(study_start, study_end, occasion_days)
-    n_occ     = len(windows)
+    windows_dt = occasion_windows_dt(study_start, study_end, config_occasion_hours(config)) if hours_mode else []
+    n_occ     = len(windows_dt) if hours_mode else len(windows)
     occ_cols  = [f"occ{j + 1}" for j in range(n_occ)]
 
     # Universo de sitios: todo despliegue CLASIFICADO (presente en deployments.csv),
@@ -1809,6 +1856,7 @@ def build_occupancy_inputs(
     op = np.zeros((n_sites, n_occ), dtype=int)
 
     activity: dict[str, list[tuple[date, date]]] = {}
+    activity_dt: dict[str, list[tuple[datetime, datetime]]] = {}
     if dep_path is not None:
         if "deploymentStart" in dep.columns and "deploymentEnd" in dep.columns:
             for _, row in dep.iterrows():
@@ -1819,8 +1867,26 @@ def build_occupancy_inputs(
                     activity.setdefault(s, []).append((s_d, e_d))
                 except Exception:
                     pass
+                if hours_mode:
+                    start_dt, end_dt = _deployment_interval(row["deploymentStart"], row["deploymentEnd"])
+                    if start_dt is not None:
+                        activity_dt.setdefault(s, []).append((start_dt, end_dt))
 
-    for i, site in enumerate(sites):
+    if hours_mode:
+        # Hours of operation per window, from deploymentStart/End. A date without a time
+        # means the whole day: the start at 00:00 and the end at the end of that day.
+        for i, site in enumerate(sites):
+            periods_dt = activity_dt.get(site, [])
+            for j, (lo, hi) in enumerate(windows_dt):
+                full = (hi - lo).total_seconds() / 3600
+                if not periods_dt:
+                    op[i, j] = math.ceil(full)
+                else:
+                    active = sum(
+                        max(0.0, (min(hi, pe) - max(lo, ps)).total_seconds()) for ps, pe in periods_dt
+                    ) / 3600
+                    op[i, j] = math.ceil(min(active, full))      # any operation in the window counts
+    for i, site in enumerate(sites) if not hours_mode else ():
         periods = activity.get(site, [])
         for j, (lo, hi) in enumerate(windows):
             full = (hi - lo).days + 1
@@ -2008,6 +2074,7 @@ def compute_min_score_exclusions(
     gap_seconds: int,
     min_score: float,
     seed: int = 42,
+    occasion_hours: Optional[int] = None,
 ) -> pd.DataFrame:
     """Count what the ``min_score`` cut-off removed from the review, per species.
 
@@ -2044,6 +2111,7 @@ def compute_min_score_exclusions(
         target_species=target_species, study_start=study_start, study_end=study_end,
         occasion_days=occasion_days, total_iterations=total_iterations,
         gap_seconds=gap_seconds, include_burst_context=False, min_score=0.0, seed=seed,
+        occasion_hours=occasion_hours,
     )
     if full.empty:
         return zero

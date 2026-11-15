@@ -17,6 +17,7 @@ const DEFAULT: WorkflowConfig = {
   study_start: '',
   study_end: '',
   occasion_days: 5,
+  occasion_hours: 0,
   total_iterations: 100000,
   gap_seconds: 60,
   min_score: 0.5,
@@ -1060,10 +1061,27 @@ export default function SetupPage({ onSetup, ready }: Props) {
             dangerouslySetInnerHTML={{ __html: t('setup.step3_desc') }} />
 
           <div className="mb-6">
-            <label className={labelClass}>{t('setup.label_occasion_days')}</label>
-            <input type="number" className={inputClass} min={1} value={form.occasion_days}
-              onChange={(e) => set('occasion_days', Number(e.target.value))} />
-            <p className={hintClass}>{t('setup.hint_occasion_days')}</p>
+            <label className={labelClass}>{t('setup.label_occasion_length')}</label>
+            <div className="flex gap-2">
+              <input type="number" className={inputClass} min={1}
+                value={form.occasion_hours > 0 ? form.occasion_hours : form.occasion_days}
+                onChange={(e) => {
+                  const n = Math.max(1, Math.trunc(Number(e.target.value)) || 1)
+                  set(form.occasion_hours > 0 ? 'occasion_hours' : 'occasion_days', n)
+                }} />
+              <select className={inputClass} style={{ width: 'auto' }} aria-label={t('setup.label_occasion_length')}
+                value={form.occasion_hours > 0 ? 'hours' : 'days'}
+                onChange={(e) => set('occasion_hours', e.target.value === 'hours' ? 1 : 0)}>
+                <option value="days">{t('setup.unit_days')}</option>
+                <option value="hours">{t('setup.unit_hours')}</option>
+              </select>
+            </div>
+            <p className={hintClass}>{form.occasion_hours > 0 ? t('setup.hint_occasion_hours') : t('setup.hint_occasion_days')}</p>
+            {form.occasion_hours > 0 && (
+              <p className="mt-2 text-xs rounded border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" role="note">
+                {t('setup.warn_occasion_hours')}
+              </p>
+            )}
           </div>
 
           <div className="mb-6">

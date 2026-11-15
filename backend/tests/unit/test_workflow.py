@@ -1897,3 +1897,106 @@ def test_only_equal_scores_are_shuffled():
     order = _review_order([0.9, 0.5, 0.5, 0.5, 0.5, 0.1])
     assert order[0] == "m00" and order[-1] == "m05"                    # distinct scores keep their place
     assert sorted(order[1:5]) == ["m01", "m02", "m03", "m04"]
+
+
+# ─── occasions shorter than a day (occasion_hours) ────────────────────────────
+
+def test_occasion_length_hours_prefers_hours_and_falls_back_to_days():
+    from camtrap_workflow import config_occasion_hours, occasion_length_hours
+    assert occasion_length_hours(5) == 120 and occasion_length_hours(5, 0) == 120
+    assert occasion_length_hours(5, 1) == 1 and occasion_length_hours(5, 6) == 6
+    assert config_occasion_hours({"occasion_days": 5}) == 120                       # older session: no occasion_hours
+    assert config_occasion_hours({"occasion_days": 5, "occasion_hours": 0}) == 120
+    assert config_occasion_hours({"occasion_days": 5, "occasion_hours": 3}) == 3
+
+
+def test_occasion_windows_dt_cover_the_study_and_clip_the_last_one():
+    from datetime import datetime
+    from camtrap_workflow import occasion_windows_dt
+    w = occasion_windows_dt(date(2025, 11, 2), date(2025, 11, 3), 1)
+    assert len(w) == 48 and w[0][0] == datetime(2025, 11, 2) and w[-1][1] == datetime(2025, 11, 4)
+    w5 = occasion_windows_dt(date(2025, 11, 2), date(2025, 11, 2), 5)               # 24 h in windows of 5 h
+    assert [(hi - lo).total_seconds() / 3600 for lo, hi in w5] == [5, 5, 5, 5, 4]
+
+
+def _fixture_candidates(camtrap_dir, start, end, **kw):
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    return build_candidates(dep, med, obs, target_species=["Vulpes vulpes"], study_start=start, study_end=end,
+                            total_iterations=100_000, gap_seconds=60, **kw)
+
+
+def test_one_hour_occasions_group_by_clock_hour(camtrap_dir):
+    # m001/m002 SITE_A 2025-11-02 10:00:00/10:00:30, m005 SITE_A 12:00, m004 SITE_B 2025-11-03 09:00
+    c = _fixture_candidates(camtrap_dir, date(2025, 11, 2), date(2025, 11, 3), occasion_days=1, occasion_hours=1)
+    occ = dict(zip(c["mediaID"], c["occasion"]))
+    assert occ["m001"] == occ["m002"] == 11                                         # 10:xx -> hour 10 -> occasion 11
+    assert occ["m005"] == 13                                                        # 12:00
+    assert occ["m004"] == 24 + 9 + 1                                                # next day 09:xx
+    assert "m003" not in occ                                                        # 2025-11-07 is outside the study
+
+
+def test_days_still_give_the_same_occasions_as_before(camtrap_dir):
+    c = _fixture_candidates(camtrap_dir, date(2025, 11, 1), date(2025, 11, 10), occasion_days=5)
+    occ = dict(zip(c["mediaID"], c["occasion"]))
+    assert occ == {"m001": 1, "m002": 1, "m005": 1, "m004": 1, "m003": 2}
+    c2 = _fixture_candidates(camtrap_dir, date(2025, 11, 1), date(2025, 11, 10), occasion_days=5, occasion_hours=None)
+    assert dict(zip(c2["mediaID"], c2["occasion"])) == occ
+
+
+def test_last_shorter_occasion_keeps_its_detections(tmp_path):
+    """Study of 12 days in occasions of 5: the third occasion is only 11-12 Nov. Its photos used to be
+    merged into occasion 2 (11 Nov) or dropped (12 Nov)."""
+    dep = pd.DataFrame({"deploymentID": ["D"], "locationID": ["S"], "deploymentStart": ["2025-11-01"], "deploymentEnd": ["2025-11-12"]})
+    med = pd.DataFrame({"mediaID": ["a", "b", "c"], "deploymentID": "D", "filePath": ["a.jpg", "b.jpg", "c.jpg"],
+                        "timestamp": ["2025-11-02 10:00:00", "2025-11-11 10:00:00", "2025-11-12 10:00:00"]})
+    obs = pd.DataFrame({"observationID": ["o1", "o2", "o3"], "deploymentID": "D", "mediaID": ["a", "b", "c"],
+                        "observationLevel": "media", "observationType": "animal", "scientificName": "X x",
+                        "classificationProbability": "0.9", "classificationMethod": "machine",
+                        "classifiedBy": "x", "classificationTimestamp": None})
+    c = build_candidates(dep, med, obs, target_species=["X x"], study_start=date(2025, 11, 1),
+                         study_end=date(2025, 11, 12), occasion_days=5, total_iterations=100, gap_seconds=60)
+    assert dict(zip(c["mediaID"], c["occasion"])) == {"a": 1, "b": 3, "c": 3}
+
+
+def _hourly_config(camtrap_dir, **extra):
+    return {"camtrap_dir": str(camtrap_dir), "study_start": "2025-11-02", "study_end": "2025-11-03",
+            "occasion_days": 1, "occasion_hours": 1, "target_species": ["Vulpes vulpes"], **extra}
+
+
+def test_occupancy_inputs_with_one_hour_occasions(camtrap_dir, tmp_path):
+    c = _fixture_candidates(camtrap_dir, date(2025, 11, 2), date(2025, 11, 3), occasion_days=1, occasion_hours=1)
+    from camtrap_workflow import save_decisions
+    d = tmp_path / "dec"
+    save_decisions(d, c, "Vulpes_vulpes", 1, ["o001"])                               # confirm SITE_A hour 10
+    out = tmp_path / "occ"
+    build_occupancy_inputs(c, d, _hourly_config(camtrap_dir), out)
+    naive = pd.read_csv(out / "dethist_naive_Vulpes_vulpes.csv", dtype=str, keep_default_na=False).set_index("siteID")
+    verified = pd.read_csv(out / "dethist_verified_Vulpes_vulpes.csv", dtype=str, keep_default_na=False).set_index("siteID")
+    assert list(naive.columns) == [f"occ{i}" for i in range(1, 49)]                 # 48 one-hour occasions
+    assert naive.loc["SITE_A", "occ11"] == "1" and naive.loc["SITE_A", "occ13"] == "1" and naive.loc["SITE_A", "occ12"] == "0"
+    assert naive.loc["SITE_B", "occ34"] == "1"
+    assert verified.loc["SITE_A", "occ11"] == "1" and verified.loc["SITE_B", "occ34"] == "0"
+    op = pd.read_csv(out / "camera_operation.csv").set_index("siteID")
+    assert (op.to_numpy() == 1).all()                                               # cameras on the whole time: 1 h per hour
+
+
+def test_camera_operation_in_hours_gives_na_after_the_camera_stops(camtrap_dir, tmp_path):
+    dep = pd.read_csv(camtrap_dir / "deployments.csv")
+    dep.loc[dep["deploymentID"] == "DEP1", "deploymentEnd"] = "2025-11-02 10:30:00"  # SITE_A stops mid hour 10
+    dep.to_csv(camtrap_dir / "deployments.csv", index=False)
+    c = _fixture_candidates(camtrap_dir, date(2025, 11, 2), date(2025, 11, 3), occasion_days=1, occasion_hours=1)
+    out = tmp_path / "occ"
+    build_occupancy_inputs(c, tmp_path / "none", _hourly_config(camtrap_dir), out)
+    op = pd.read_csv(out / "camera_operation.csv").set_index("siteID")
+    assert op.loc["SITE_A", "occ11"] == 1 and op.loc["SITE_A", "occ10"] == 1       # on until 10:30: hour 10 counts
+    assert (op.loc["SITE_A", [f"occ{i}" for i in range(12, 49)]] == 0).all()       # off afterwards
+    naive = pd.read_csv(out / "dethist_naive_Vulpes_vulpes.csv", dtype=str, keep_default_na=False).set_index("siteID")
+    assert naive.loc["SITE_A", "occ13"] == "" and naive.loc["SITE_A", "occ12"] == ""   # NA while off, not 0 or 1
+    assert naive.loc["SITE_B", "occ34"] == "1"
+
+
+def test_older_config_without_occasion_hours_still_builds_day_inputs(candidates, decisions_dir, session_config, tmp_path):
+    assert "occasion_hours" not in session_config
+    out = tmp_path / "occ"
+    build_occupancy_inputs(candidates, decisions_dir, session_config, out)
+    assert list(pd.read_csv(out / "camera_operation.csv").columns) == ["siteID", "occ1", "occ2"]

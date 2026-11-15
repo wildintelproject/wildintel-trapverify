@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SetupRequest(BaseModel):
@@ -10,6 +10,9 @@ class SetupRequest(BaseModel):
     study_start: str
     study_end: str
     occasion_days: int = 5
+    # Sampling occasion length in hours, for occasions shorter than a day (e.g. 1 for activity
+    # patterns). 0 (the default) means use occasion_days. Older sessions only have occasion_days.
+    occasion_hours: int = Field(0, ge=0)
     total_iterations: int = 100000
     gap_seconds: int = 60
     min_score: float = 0.5
