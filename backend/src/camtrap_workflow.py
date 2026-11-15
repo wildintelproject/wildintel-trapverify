@@ -1070,6 +1070,49 @@ def save_decisions(
     return df
 
 
+def save_uncertain(
+    decisions_dir: Path,
+    candidates: pd.DataFrame,
+    species_safe: str,
+    iteration: int,
+    uncertain_ids: list[str],
+) -> pd.DataFrame:
+    """Persist the events marked *uncertain* in a round to ``uncertain_{species}_iter{N}.csv``.
+
+    An uncertain event is a rejection as far as occupancy is concerned: nothing
+    here feeds ``decisions_*.csv``, detection histories or cell status. The file
+    only records the flag so uncertain decisions can be counted and restored. It
+    is always (over)written, even when empty, so a changed round leaves no stale flags.
+
+    Args:
+        decisions_dir: Directory where decision CSVs are stored.
+        candidates: Full candidate manifest (used to look up metadata by ID).
+        species_safe: Sanitized species name used in the filename.
+        iteration: Round number used in the filename.
+        uncertain_ids: ``observationID`` values of the events marked uncertain.
+
+    Returns:
+        DataFrame of the rows that was written to disk.
+    """
+    decisions_dir.mkdir(parents=True, exist_ok=True)
+    cols = ["observationID", "site_occasion_key", "mediaID",
+            "scientificName", "siteID", "occasion"]
+    df = candidates[candidates["observationID"].isin(uncertain_ids)][cols] \
+        if uncertain_ids else candidates.iloc[0:0][cols]
+    df.to_csv(decisions_dir / f"uncertain_{species_safe}_iter{iteration}.csv", index=False)
+    return df
+
+
+def load_all_uncertain(decisions_dir: Path) -> pd.DataFrame:
+    """Concatenate all ``uncertain_*.csv`` files (empty frame with the columns if none)."""
+    cols = ["observationID", "site_occasion_key", "mediaID",
+            "scientificName", "siteID", "occasion"]
+    files = list(decisions_dir.glob("uncertain_*.csv")) if decisions_dir.exists() else []
+    if not files:
+        return pd.DataFrame(columns=cols)
+    return pd.concat([pd.read_csv(f, dtype=str) for f in files], ignore_index=True)
+
+
 # ─── Species stats for index page ─────────────────────────────────────────────
 
 def species_stats(
@@ -1793,6 +1836,9 @@ def build_species_effort(
       the confirmed one, over detection cells.
     * ``rejected_score_{min,median,max}``: score of every rejected event.
     * ``confirmed_score_{min,median,max}``: score of the confirmed event.
+    * ``uncertain_events``: events the reviewer marked *uncertain* (not counting any
+      later confirmed). They behave exactly as rejections in the histories.
+      ``non_detection_cells_with_uncertain``: non-detection cells holding at least one.
     * ``excluded_photos`` / ``excluded_events`` / ``excluded_cells``: what the
       ``min_score`` cut-off removed before review (see
       :func:`compute_min_score_exclusions`); empty when ``exclusions`` is not given.
@@ -1814,6 +1860,9 @@ def build_species_effort(
     out_dir.mkdir(parents=True, exist_ok=True)
     dec = load_all_decisions(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
     conf_ids = set(dec["observationID"].dropna()) if not dec.empty else set()
+
+    unc = load_all_uncertain(decisions_dir)
+    unc_ids = set(unc["observationID"].dropna()) - conf_ids
 
     cand = candidates.copy()
     if "is_context" in cand.columns:
@@ -1838,6 +1887,8 @@ def build_species_effort(
             "pct_events_inspected": round(100 * acc["insp"] / acc["events"], 1) if acc["events"] else None,
             "candidate_photos": acc["photos"],
             "photos_inspected": acc["insp"],
+            "uncertain_events": acc["unc"],
+            "non_detection_cells_with_uncertain": acc["unc_cells"],
             "photos_in_inspected_events": acc["photos_insp"],
             "events_inspected_in_detection_cells": acc["insp_det"],
             "events_inspected_in_non_detection_cells": acc["insp_non"],
@@ -1849,6 +1900,7 @@ def build_species_effort(
 
     def new_acc() -> dict:
         return {"det": 0, "non": 0, "unv": 0, "events": 0, "insp": 0, "photos": 0,
+                "unc": 0, "unc_cells": 0,
                 "photos_insp": 0, "insp_det": 0, "insp_non": 0,
                 "before": [], "rej_scores": [], "conf_scores": []}
 
@@ -1861,6 +1913,8 @@ def build_species_effort(
             ev = cell.groupby("burst_id").agg(rank=("rank", "first"), score=("_score", "max"))
             acc["events"] += len(ev)
             acc["photos"] += len(cell)
+            n_unc = cell.loc[cell["observationID"].isin(unc_ids), "burst_id"].nunique()
+            acc["unc"] += n_unc
             conf_rank = cell.loc[cell["observationID"].isin(conf_ids), "rank"]
             if not conf_rank.empty:
                 cr = int(conf_rank.min())
@@ -1877,6 +1931,7 @@ def build_species_effort(
                     acc["unv"] += 1
                 else:
                     acc["non"] += 1
+                    acc["unc_cells"] += 1 if n_unc else 0
                 acc["insp_non"] += len(seen)
                 acc["rej_scores"] += seen["score"].dropna().tolist()
             acc["insp"] += len(seen)

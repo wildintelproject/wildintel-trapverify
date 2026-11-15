@@ -683,7 +683,7 @@ def test_get_events_unknown_species_returns_empty(client, setup_session):
 def test_get_decisions_empty(client, setup_session):
     resp = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1})
     assert resp.status_code == 200
-    assert resp.json() == {"confirmed": []}
+    assert resp.json() == {"confirmed": [], "uncertain": []}
 
 def test_post_decisions_save_and_retrieve(client, setup_session):
     # Get events to find a valid observationID
@@ -1291,3 +1291,28 @@ def test_results_exclusions_zero_without_cutoff(client, camtrap_dir, tmp_path):
     assert data["min_score"] == 0
     tot = next(r for r in data["effort_by_species"] if r["species"] == "TOTAL")
     assert (tot["excluded_photos"], tot["excluded_events"], tot["excluded_cells"]) == (0, 0, 0)
+
+
+# ─── uncertain decisions ──────────────────────────────────────────────────────
+
+def test_post_decisions_without_uncertain_still_works(client, setup_session):
+    """Older clients (and existing sessions) never send the field."""
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    r = client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1,
+                                            "confirmed": [ev[0]["repObsId"]]})
+    assert r.status_code == 200
+    got = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1}).json()
+    assert got["uncertain"] == []
+
+def test_uncertain_roundtrip_counts_as_rejection_and_is_reported(client, setup_session):
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    unc, conf = [e["repObsId"] for e in ev[1:]], [ev[0]["repObsId"]]
+    r = client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1,
+                                            "confirmed": conf, "uncertain": unc + conf})
+    assert r.status_code == 200
+    got = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1}).json()
+    assert got["confirmed"] == conf and sorted(got["uncertain"]) == sorted(unc)  # confirm wins
+    data = client.get("/api/results").json()
+    tot = next(x for x in data["effort_by_species"] if x["species"] == "TOTAL")
+    assert tot["uncertain_events"] == len(unc)
+    assert data["confirmed"] == 1                                               # uncertain != confirmed

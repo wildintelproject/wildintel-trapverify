@@ -430,9 +430,18 @@ While the lightbox is open:
 |---|---|
 | `Y` | Confirm the current detection event |
 | `N` | Reject the current detection event |
+| `U` | Mark the current detection event as **Uncertain** (counts as rejected) |
 | `←` `→` | Navigate between frames in the detection event |
 
 After a decision, the lightbox automatically advances to the next undecided detection event.
+
+### Uncertain cases
+
+Sometimes the assigned label is possible but you cannot be sure, for example an animal that is only partly visible or moving quickly through a dark frame. The tool gives no third answer to occupancy, so the recommended rule is: **if you cannot confirm the species with reasonable confidence, do not confirm it**.
+
+Use **Uncertain** (button on the card, or `U` in the lightbox) for these cases. For the analysis an uncertain detection event behaves **exactly like a rejection**: it never confirms a sampling occasion, the next-best detection event of that occasion is shown in the following round, and the detection histories are identical to those obtained by rejecting it. The reason is that a possible error is then absorbed by the detection probability *p* of the occupancy model, which is safer than counting a doubtful record as a detection.
+
+The difference is that uncertain events are **recorded and counted**: the Results page and `effort_report.csv` give, per species, the number of `uncertain_events` and the non-detection cells that contain at least one (`non_detection_cells_with_uncertain`). A large share of uncertain events for a species is a sign that it is hard to verify from the photos, or that the occupancy estimate for it deserves extra care. Uncertain decisions are stored in `uncertain_<species>_iter<N>.csv` next to the decision files, are restored when you reopen a round, and do not change any other output. An event that is later confirmed is no longer counted as uncertain.
 
 ### Saving Decisions
 
