@@ -28,6 +28,7 @@
    - [Saving Decisions](#saving-decisions)
    - [Completed Species](#completed-species)
 8. [Results](#8-results)
+9. [Scope and Limitations](#9-scope-and-limitations)
 
 ---
 
@@ -567,3 +568,55 @@ Each session is saved in a timestamped subfolder inside the output directory (e.
 | `occupancy_fit.csv` | Occupancy fit per species: naive and verified ψ and *p*, each with its 95 % confidence limits (see [How the occupancy estimates are computed](#how-the-occupancy-estimates-are-computed)). |
 | `review_effort.csv` | Total review effort: number of detection events and images inspected. |
 | `effort_report.csv` | Effort per species and in total, in detection events and cells: cells with and without detection, events inspected in each, rejections before the first confirmation, and the scores of rejected and confirmed events. *Inspecting* an event means viewing its top-scoring photo, so `photos_inspected` equals `events_inspected`; `candidate_events` is the baseline of a full event-level review. |
+
+---
+
+## 9. Scope and Limitations
+
+CamTrap Verify has one job: to help an expert confirm, with as few photos as possible, where a species was really detected, so that the result can be used in an occupancy analysis. It is not a classifier, and it does not remove every source of error. This section says what it assumes and what it does not do.
+
+### It needs a classifier or labelled photos
+
+The tool starts from labels that already exist: the output of an AI classifier, or labels from a citizen-science platform. It does not create them. Where no good classifier exists for the animals or the region, or where photos are hard to classify automatically (for example dense, cluttered vegetation such as tropical forest understorey), there will be fewer correct candidates to find and the benefit will be smaller. The tool works with any source that provides a label and, ideally, a score for each photo, and it can import DeepFaune results, a custom CSV, a CamtrapDP folder or a Trapper project (see [Step 1 — Source](#step-1--source)).
+
+### It works on still images, not on video files
+
+CamTrap Verify reads photos only; it does not open video files, and classifiers that work directly on video are not supported. If you have video, one possible workflow is to **extract still frames from each clip, classify the frames, and then run the tool on them**. We have not tested this on video data, so treat the following as guidance:
+
+- Give each frame a timestamp (the start of the clip plus the frame's position in it). Frames that are less than the *Gap between detection events* apart are grouped into one detection event, so the frames of one clip normally become one event.
+- Two different clips that are closer in time than that gap will be merged into one event. Lower the gap if that happens.
+- Extracting many frames per second makes every event contain many photos. The number of *photos* reported then says little; use the number of *events* and cells, which do not depend on the frame rate.
+
+Whether the tool will later read video directly depends on how common reliable video classifiers become; there is no plan at the moment.
+
+### Analyses other than occupancy
+
+The outputs are designed for **occupancy models**: a detection history per species and a camera-operation matrix (see [Output Files](#output-files)). Be careful with other uses:
+
+- **Only one detection event is verified per cell.** The review stops at the first event you confirm, so the verified data do not contain every detection. They cannot be used to count events or animals, or to describe daily activity patterns, because most detections are never looked at.
+- **Abundance** methods that need every independent event (for example random-encounter models) or that need individuals to be told apart (spatial capture–recapture) are not supported.
+- **Time to first detection** needs the *earliest* detection in each period. The tool presents the highest-scoring event first, not the earliest, so a missed first detection is possible, and for this kind of analysis its effect is larger than for presence/absence, because the first detection itself is the measurement.
+
+### What the score needs to be
+
+The score is used only to **order** the detection events within each site and sampling occasion (highest first) and, optionally, for the minimum detection score. It does **not** need to be a calibrated probability: any value where higher means more likely works, including raw model outputs such as logits. Points to keep in mind:
+
+- If your scores are not between 0 and 1 (for example raw logits, which can be negative), set the **Minimum detection score** to 0 to turn the cut-off off; with the default 0.5 every photo below it would be dropped. If the folder has a `datapackage.json`, a (non-blocking) warning that `classificationProbability` is outside 0–1 is also shown when the folder is checked.
+- A photo with **no score** is treated as having a score of 0. If some photos have no score, those with a negative score are shown after them.
+- If **no photos have a score**, the detection events are presented in time order, earliest first. The review is still valid, but the first round is no longer the most likely detection, so more photos will usually need to be inspected.
+- A cut-off hides the photos below it for good, and the savings and results then apply only to the photos above it (see [When to use a minimum score](#when-to-use-a-minimum-score)).
+
+### Guidance for reviewers
+
+- **Uncertain cases.** If you cannot confirm the species with reasonable confidence, do not confirm it. Mark it **Uncertain** (counted as a rejection, but recorded), as explained in [Uncertain cases](#uncertain-cases).
+- **Who reviewed.** The app does not record reviewers. When you report the verification, state how many people reviewed, their expertise with the species in the study area, and whether any photos were checked by a second person. The *Classified by* setting writes a name or team label into the verified data.
+- **Double verification.** A session has one reviewer. To check agreement between two people, each reviews the same data in their own session; the decision files (`decisions/`) can then be compared.
+- **Species easily confused.** Records of species that look alike (for example red and fallow deer at night) are the likeliest source of reviewer error. Record the actual species of rejected events if you want to quantify the main false-positive sources (see [Recording the actual species of rejected events](#recording-the-actual-species-of-rejected-events)).
+
+### Missed detections are not corrected
+
+Verification removes **false positives**: detections the classifier made wrongly. It does **not** find **false negatives**: animals that were in a photo but that the classifier missed or labelled as another species, because the tool only shows photos the classifier proposed for the species. These missed detections can matter for rare species and in difficult conditions such as night-time photos or dense vegetation, where they lower the true detection probability. Recording the actual species of a rejected event keeps that information but does **not** turn the event into a detection of the other species.
+
+### Photos with several animals or labels
+
+A photo can have labels for more than one species at once (for example when an object detector marks several animals). It appears in the review of each of those species, and the **whole photo** is shown: the box around the animal being verified is not drawn, so with several animals in the photo you have to judge by the species you are reviewing, which is shown at the top of the page.
