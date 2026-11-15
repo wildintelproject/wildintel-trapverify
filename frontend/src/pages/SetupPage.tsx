@@ -23,6 +23,7 @@ const DEFAULT: WorkflowConfig = {
   include_burst_context: false,
   classified_by: 'expert_review',
   extended_confirmation: false,
+  record_rejection_species: false,
 }
 
 const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
@@ -1125,6 +1126,34 @@ export default function SetupPage({ onSetup, ready }: Props) {
                   {t('setup.label_extended_confirmation')}
                 </span>
                 <span className={hintClass}>{t('setup.hint_extended_confirmation')}</span>
+              </span>
+            </button>
+          </div>
+
+          <div className="mb-4">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.record_rejection_species}
+              onClick={() => set('record_rejection_species', !form.record_rejection_species)}
+              className="flex items-start gap-3 w-full text-left group"
+            >
+              <span
+                className={`mt-0.5 relative flex-shrink-0 w-10 h-6 rounded-full transition-colors ${
+                  form.record_rejection_species ? 'bg-blue-600' : 'bg-zinc-600'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                    form.record_rejection_species ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
+                  {t('setup.label_record_rejection_species')}
+                </span>
+                <span className={hintClass}>{t('setup.hint_record_rejection_species')}</span>
               </span>
             </button>
           </div>

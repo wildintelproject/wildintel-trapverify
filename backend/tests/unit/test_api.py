@@ -683,7 +683,7 @@ def test_get_events_unknown_species_returns_empty(client, setup_session):
 def test_get_decisions_empty(client, setup_session):
     resp = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1})
     assert resp.status_code == 200
-    assert resp.json() == {"confirmed": [], "uncertain": []}
+    assert resp.json() == {"confirmed": [], "uncertain": [], "corrections": {}}
 
 def test_post_decisions_save_and_retrieve(client, setup_session):
     # Get events to find a valid observationID
@@ -1316,3 +1316,43 @@ def test_uncertain_roundtrip_counts_as_rejection_and_is_reported(client, setup_s
     tot = next(x for x in data["effort_by_species"] if x["species"] == "TOTAL")
     assert tot["uncertain_events"] == len(unc)
     assert data["confirmed"] == 1                                               # uncertain != confirmed
+
+
+# ─── rejection corrections ("actual species") ─────────────────────────────────
+
+def _setup_corr(client, camtrap_dir, tmp_path, on):
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"),
+        "target_species": ["Vulpes vulpes"], "study_start": "2025-11-01", "study_end": "2025-11-10",
+        "occasion_days": 5, "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.5,
+        "record_rejection_species": on})
+    assert r.status_code == 200
+    return r.json()
+
+def test_corrections_ignored_when_option_off(client, camtrap_dir, tmp_path):
+    info = _setup_corr(client, camtrap_dir, tmp_path, False)
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [],
+                                        "corrections": {ev[0]["repObsId"]: "Dama dama"}})
+    from pathlib import Path
+    assert not (Path(info["session_dir"]) / "rejection_corrections.csv").exists()
+    data = client.get("/api/results").json()
+    assert data["record_rejection_species"] is False and data["false_positive_sources"] == []
+
+def test_corrections_roundtrip_and_false_positive_table(client, camtrap_dir, tmp_path):
+    _setup_corr(client, camtrap_dir, tmp_path, True)
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    conf, rest = ev[0]["repObsId"], [e["repObsId"] for e in ev[1:]]
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [conf],
+                                        "corrections": {rest[0]: "Dama dama", conf: "Homo sapiens"}})
+    got = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1}).json()
+    assert got["corrections"] == {rest[0]: "Dama dama"}                 # the confirmed one is dropped
+    data = client.get("/api/results").json()
+    assert data["record_rejection_species"] is True
+    row = next(r for r in data["false_positive_sources"] if r["actual_species"] == "Dama dama")
+    assert row["species"] == "Vulpes vulpes" and row["rejected_events"] == 1
+
+def test_taxa_endpoint_lists_dataset_species_and_extras(client, setup_session):
+    data = client.get("/api/taxa").json()
+    assert "Vulpes vulpes" in data["taxa"]
+    assert "Homo sapiens" in data["extra"] and "No animal / empty" in data["extra"]

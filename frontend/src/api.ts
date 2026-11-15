@@ -49,13 +49,15 @@ export const api = {
       { confirmed_keys: confirmedKeys },
     ),
 
-  getDecisions: (species: string, iteration: number) =>
-    req<{ confirmed: string[]; uncertain: string[] }>(`/api/decisions?species=${species}&iteration=${iteration}`),
+  getTaxa: () => req<{ taxa: string[]; extra: string[] }>('/api/taxa'),
 
-  saveDecisions: (species: string, iteration: number, confirmed: string[], uncertain: string[] = []) =>
+  getDecisions: (species: string, iteration: number) =>
+    req<{ confirmed: string[]; uncertain: string[]; corrections: Record<string, string> }>(`/api/decisions?species=${species}&iteration=${iteration}`),
+
+  saveDecisions: (species: string, iteration: number, confirmed: string[], uncertain: string[] = [], corrections: Record<string, string> = {}) =>
     post<{ success: boolean; done: boolean; next_iteration: number | null; remaining: number }>(
       '/api/decisions',
-      { species, iteration, confirmed, uncertain },
+      { species, iteration, confirmed, uncertain, corrections },
     ),
 
   rejectBurst: (mediaId: string) =>

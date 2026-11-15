@@ -326,6 +326,7 @@ These control what is recorded in the output when an expert confirms a detection
 |---|---|---|
 | **Classified by** | `expert_review` | Value written to the `classifiedBy` field in the verified CamtrapDP for every confirmed observation. Change this to identify the reviewer (e.g. `ornithologist_A`). |
 | **Extended confirmation** | Off | When enabled, all observations in the confirmed burst — not just the highest-confidence frame — are marked as human-verified in the output. |
+| **Record the actual species when rejecting** | Off | Adds an optional field to rejected detection events to type what the animal really is. It never changes the verification. See [Recording the actual species](#recording-the-actual-species-of-rejected-events). |
 | **Show all event frames** | Off | When enabled, all frames from the same deployment captured between the first and last detection of the target species are shown in the carousel, even if they are not labelled as that species. This lets you see the full context of the animal's visit. Context frames appear dimmed and do not affect the decision. |
 
 Click **✓ Start verification** to process the data and begin the review.
@@ -442,6 +443,16 @@ Sometimes the assigned label is possible but you cannot be sure, for example an 
 Use **Uncertain** (button on the card, or `U` in the lightbox) for these cases. For the analysis an uncertain detection event behaves **exactly like a rejection**: it never confirms a sampling occasion, the next-best detection event of that occasion is shown in the following round, and the detection histories are identical to those obtained by rejecting it. The reason is that a possible error is then absorbed by the detection probability *p* of the occupancy model, which is safer than counting a doubtful record as a detection.
 
 The difference is that uncertain events are **recorded and counted**: the Results page and `effort_report.csv` give, per species, the number of `uncertain_events` and the non-detection cells that contain at least one (`non_detection_cells_with_uncertain`). A large share of uncertain events for a species is a sign that it is hard to verify from the photos, or that the occupancy estimate for it deserves extra care. Uncertain decisions are stored in `uncertain_<species>_iter<N>.csv` next to the decision files, are restored when you reopen a round, and do not change any other output. An event that is later confirmed is no longer counted as uncertain.
+
+### Recording the actual species of rejected events
+
+Rejecting a detection event only says that the label is wrong. When an event is rejected you may also want to note what it really was (for example, a fallow deer labelled as red deer, or a person labelled as a dog), because that tells you where the classifier makes its mistakes. Turn on **Record the actual species when rejecting** in the setup (it is off by default, so the review stays as fast as before).
+
+With the option on, a rejected card shows an optional field *Actual species*. Start typing to get suggestions from the taxa found in your dataset, plus *Homo sapiens* and *No animal / empty*, or type any name. The same field appears in the large view below the decision buttons. The field is optional and the keyboard shortcuts are unchanged: `N` rejects without opening anything.
+
+This **never changes the verification**: a rejection is still a rejection, the next detection event is still shown in the following round, and the detection histories are identical with the option on or off. In particular, a rejected event relabelled as another species is **not** counted as a detection of that species; recording it only keeps the information the reviewer already had.
+
+The values are saved in `rejection_corrections.csv` in the session folder. From them the Results page and `occupancy_inputs/false_positive_sources.csv` show, per species, the main sources of false positives: the actual species, the number of rejected events and their share of all the rejected events of that species. A row *not recorded* collects the rejected events with no actual species typed, so the shares add up to 100 % and you can see how complete the record is.
 
 ### Saving Decisions
 

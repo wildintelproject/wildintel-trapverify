@@ -171,4 +171,16 @@ describe('EventCard', () => {
     )
     expect(screen.queryByRole('button', { name: /^\?/ })).toBeNull()
   })
+
+  it('shows the optional actual-species field only for rejected events when recording is on', async () => {
+    const onCorrect = vi.fn()
+    const props = { event: makeEvent(), needsDecision: false, onDecide: vi.fn(), onOpenLightbox: vi.fn(), eventIdx: 0 }
+    const { rerender } = render(<EventCard {...props} decision="rejected" onCorrect={onCorrect} />)
+    expect(screen.queryByRole('combobox')).toBeNull()           // option off by default
+    rerender(<EventCard {...props} decision="rejected" recordCorrection onCorrect={onCorrect} />)
+    await userEvent.type(screen.getByRole('combobox'), 'D')
+    expect(onCorrect).toHaveBeenCalledWith('site1|1', 'D')
+    rerender(<EventCard {...props} decision="confirmed" recordCorrection onCorrect={onCorrect} />)
+    expect(screen.queryByRole('combobox')).toBeNull()
+  })
 })

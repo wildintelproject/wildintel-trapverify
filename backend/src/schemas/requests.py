@@ -16,6 +16,8 @@ class SetupRequest(BaseModel):
     include_burst_context: bool = False
     classified_by: str = "expert_review"
     extended_confirmation: bool = False
+    # Optional "actual species" field when rejecting; off by default. Never affects presence logic.
+    record_rejection_species: bool = False
 
 
 class DecisionsRequest(BaseModel):
@@ -24,6 +26,9 @@ class DecisionsRequest(BaseModel):
     confirmed: list[str]
     # Events marked "uncertain": counted as rejections, only recorded for reporting.
     uncertain: list[str] = []
+    # observationID -> actual species typed for a rejected event (only used when the
+    # session has record_rejection_species on). Never affects presence logic.
+    corrections: dict[str, str] = {}
 
 
 class RejectRequest(BaseModel):

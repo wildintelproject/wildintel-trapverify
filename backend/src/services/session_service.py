@@ -59,6 +59,7 @@ def paths() -> dict[str, Path]:
         "config":        sd / "config.json",
         "manifest":      sd / "candidate_manifest.csv",
         "exclusions":    sd / "min_score_exclusions.csv",
+        "corrections":   sd / "rejection_corrections.csv",
         "rejected":      sd / "rejected_media.json",
         "decisions":     sd / "decisions",
         "camtrap_out":   sd / "camtrap_dp_verified",
