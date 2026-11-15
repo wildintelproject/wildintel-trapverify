@@ -179,7 +179,12 @@
     "err_dates_order": "La fecha de inicio debe ser anterior a la de fin.",
     "err_start_too_early": "La fecha de inicio ({{date}}) es anterior al primer registro del CamtrapDP ({{min}}).",
     "err_end_too_late": "La fecha de fin ({{date}}) es posterior al último registro del CamtrapDP ({{max}}).",
-    "err_unknown": "Error desconocido"
+    "err_unknown": "Error desconocido",
+    "label_review_order": "Orden de los eventos de detección",
+    "review_order_score": "Por puntuación: primero el más confiable (menos fotos que revisar)",
+    "review_order_time": "Por tiempo: primero el más temprano (para análisis de tiempo hasta la detección)",
+    "hint_review_order": "Cada ocasión se revisa empezando por su primer evento en este orden. Por puntuación el primer evento confirmado suele ser el más rápido de encontrar, pero no necesariamente la detección más temprana. Por tiempo el primer evento confirmado es la primera detección real, que es lo que necesitan los modelos de tiempo hasta la detección (p. ej. occuTTD); puede haber que revisar más fotos. Los historiales de detección son los mismos. Los archivos de tiempo hasta la detección (ttd_*.csv) se escriben siempre, pero solo son exactos con la revisión por tiempo.",
+    "hint_review_order_cutoff": "Las fotos por debajo de la confianza mínima se quitan antes de la revisión, así que el evento más temprano mostrado puede no ser el más temprano que ocurrió. Usa 0 para conservar todas las fotos si importa la primera detección."
   },
   "index": {
     "title": "Verificación de detecciones",
@@ -273,7 +278,8 @@
     "updating": "Actualizando…",
     "toast_updated": "Decisiones actualizadas. Resultados regenerados.",
     "context_frame": "Contexto",
-    "image_permission_denied": "Permiso denegado. Revisa los permisos de acceso."
+    "image_permission_denied": "Permiso denegado. Revisa los permisos de acceso.",
+    "round_hint_time": "En la ronda {{n}}, cada ocasión de muestreo se representa por su evento de detección más temprano aún no revisado (orden de revisión: por tiempo)."
   },
   "help": {
     "title": "Ayuda — CamTrap Verify",

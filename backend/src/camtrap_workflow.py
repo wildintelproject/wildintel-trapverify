@@ -1134,6 +1134,7 @@ def build_candidates(
     seed: int = 42,
     occasion_hours: Optional[int] = None,
     min_score_by_species: Optional[dict[str, float]] = None,
+    review_order: str = "score",
 ) -> pd.DataFrame:
     """Build the verification candidate manifest from CamtrapDP tables.
 
@@ -1178,6 +1179,10 @@ def build_candidates(
         min_score_by_species: Optional ``scientificName`` -> cut-off that replaces
             ``min_score`` for that species (``<= 0`` for no cut-off). Species not
             listed use ``min_score``.
+        review_order: ``"score"`` (default) ranks the events of a cell from the most
+            confident one; ``"time"`` ranks them from the earliest one, so the first
+            confirmed event is the first true detection (needed for time-to-detection).
+            Detection histories are the same either way.
 
     Returns:
         DataFrame with one row per candidate frame, including columns
@@ -1294,9 +1299,13 @@ def build_candidates(
     burst_max["_tie"] = pd.util.hash_pandas_object(
         burst_max[["site_occasion_key", "burst_id"]].assign(_seed=seed), index=False
     )
-    burst_max = burst_max.sort_values(
-        ["site_occasion_key", "burst_max_prob", "_tie"], ascending=[True, False, True]
-    )
+    if review_order == "time":
+        # Earliest event first. Bursts of a cell are numbered in time order, so burst_id breaks any tie.
+        burst_max = burst_max.sort_values(["site_occasion_key", "burst_id"])
+    else:
+        burst_max = burst_max.sort_values(
+            ["site_occasion_key", "burst_max_prob", "_tie"], ascending=[True, False, True]
+        )
     burst_max["rank"] = burst_max.groupby("site_occasion_key").cumcount() + 1
 
     joined = joined.merge(burst_max[["site_occasion_key", "burst_id", "rank"]],
@@ -2199,6 +2208,78 @@ def _deployment_interval(start, end) -> tuple[Optional[datetime], Optional[datet
 
 # ─── Occupancy inputs ─────────────────────────────────────────────────────────
 
+def _ttd_to_df(y, sites: list[str], occ_cols: list[str]) -> pd.DataFrame:
+    """A sites x occasions matrix of hours (NaN = NA) as a table with a ``siteID`` column."""
+    df = pd.DataFrame(y, columns=occ_cols).round(3)
+    df.insert(0, "siteID", sites)
+    return df
+
+
+def _time_to_detection(
+    sp_cands: pd.DataFrame,
+    dec: pd.DataFrame,
+    sp: str,
+    sp_safe: str,
+    sites: list[str],
+    windows_dt: list[tuple[datetime, datetime]],
+    op,
+    naive_keys: set,
+    verif_keys: set,
+    rounds_done: int,
+):
+    """Time to first detection per site x occasion, in hours from the start of the occasion.
+
+    This is what ``unmarked::occuTTD`` expects: the **naive** matrix uses the earliest photo the
+    classifier assigned to the species in the cell, the **verified** one the earliest photo of the
+    confirmed event. A cell with no detection is *censored* at the length of its occasion (the last
+    occasion may be shorter). ``NaN`` (NA) where the camera was not operating, and, in the verified
+    matrix, where the cell is still pending (no confirmation and events left to review).
+
+    The verified time is the **first true detection only when the events were reviewed in time
+    order** (``review_order="time"``); in score order it is the time of the confirmed event, which
+    may be later than an earlier detection that was never looked at.
+    """
+    import numpy as np
+
+    n_sites, n_occ = op.shape
+    tN = np.full((n_sites, n_occ), np.nan)
+    tV = np.full((n_sites, n_occ), np.nan)
+    real = sp_cands
+    if "is_context" in real.columns:
+        real = real[~real["is_context"].fillna(False).astype(bool)]
+    first_naive = real.groupby("site_occasion_key")["ts"].min().to_dict()
+    max_rank = sp_cands.groupby("site_occasion_key")["rank"].max().to_dict()
+    # earliest photo of each confirmed event (a cell holds one confirmed event; take the earliest)
+    first_verified: dict[str, "pd.Timestamp"] = {}
+    if not dec.empty and verif_keys:
+        conf_ids = set(dec["observationID"].dropna())
+        conf_rows = real[real["observationID"].isin(conf_ids)][["site_occasion_key", "burst_id"]].drop_duplicates()
+        events = real.groupby(["site_occasion_key", "burst_id"])["ts"].min()
+        for key, burst in zip(conf_rows["site_occasion_key"], conf_rows["burst_id"]):
+            t = events.get((key, burst))
+            if t is not None and (key not in first_verified or t < first_verified[key]):
+                first_verified[key] = t
+
+    for i, site in enumerate(sites):
+        for j, (lo, hi) in enumerate(windows_dt):
+            if op[i, j] == 0:
+                continue
+            length = (hi - lo).total_seconds() / 3600
+            key = f"{site}_occ{j + 1}_{sp_safe}"
+
+            def hours(t) -> float:
+                return float(min(max((t - lo).total_seconds() / 3600, 0.0), length))
+
+            tN[i, j] = hours(first_naive[key]) if key in first_naive else length
+            if key in verif_keys:
+                tV[i, j] = hours(first_verified[key]) if key in first_verified else np.nan
+            elif key in naive_keys and max_rank.get(key, 0) > rounds_done:
+                tV[i, j] = np.nan                                   # pending: events left to review
+            else:
+                tV[i, j] = length                                   # all inspected and rejected, or no candidate
+    return tN, tV
+
+
 def build_occupancy_inputs(
     candidates: pd.DataFrame,
     decisions_dir: Path,
@@ -2353,6 +2434,15 @@ def build_occupancy_inputs(
         _to_df(yN).to_csv(out_dir / f"dethist_naive_{sp_safe}.csv", index=False)
         _to_df(yV).to_csv(out_dir / f"dethist_verified_{sp_safe}.csv", index=False)
 
+        # Time to detection (hours from the start of each occasion to its first detection)
+        tN, tV = _time_to_detection(
+            sp_cands, dec, sp, sp_safe, sites, occasion_windows_dt(
+                study_start, study_end, config_occasion_hours(config)), op, naive_keys, verif_keys,
+            rounds_completed(decisions_dir).get(sp_safe, 0),
+        )
+        _ttd_to_df(tN, sites, occ_cols).to_csv(out_dir / f"ttd_naive_{sp_safe}.csv", index=False)
+        _ttd_to_df(tV, sites, occ_cols).to_csv(out_dir / f"ttd_verified_{sp_safe}.csv", index=False)
+
         naive_det = int(np.nansum(yN == 1))
         verif_det = int(np.nansum(yV == 1))
         fp_cells  = int(np.nansum((yN == 1) & (yV == 0)))
@@ -2483,6 +2573,7 @@ def compute_min_score_exclusions(
     seed: int = 42,
     occasion_hours: Optional[int] = None,
     min_score_by_species: Optional[dict[str, float]] = None,
+    review_order: str = "score",
 ) -> pd.DataFrame:
     """Count what the ``min_score`` cut-off removed from the review, per species.
 
@@ -2524,7 +2615,7 @@ def compute_min_score_exclusions(
         target_species=target_species, study_start=study_start, study_end=study_end,
         occasion_days=occasion_days, total_iterations=total_iterations,
         gap_seconds=gap_seconds, include_burst_context=False, min_score=0.0, seed=seed,
-        occasion_hours=occasion_hours,
+        occasion_hours=occasion_hours, review_order=review_order,
     )
     if full.empty:
         return zero

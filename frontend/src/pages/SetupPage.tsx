@@ -32,6 +32,7 @@ const DEFAULT: WorkflowConfig = {
   record_rejection_species: false,
   review_idle_seconds: 120,
   random_seed: 42,
+  review_order: 'score',
 }
 
 const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
@@ -1230,6 +1231,19 @@ export default function SetupPage({ onSetup, ready }: Props) {
                   ))}
                 </div>
               </details>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_review_order')}</label>
+            <select className={inputClass} value={form.review_order ?? 'score'}
+              onChange={(e) => set('review_order', e.target.value as 'score' | 'time')}>
+              <option value="score">{t('setup.review_order_score')}</option>
+              <option value="time">{t('setup.review_order_time')}</option>
+            </select>
+            <p className={hintClass}>{t('setup.hint_review_order')}</p>
+            {form.review_order === 'time' && (form.min_score > 0 || Object.values(form.min_score_by_species ?? {}).some((v) => v > 0)) && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{t('setup.hint_review_order_cutoff')}</p>
             )}
           </div>
 

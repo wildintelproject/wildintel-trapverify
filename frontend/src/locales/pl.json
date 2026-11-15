@@ -179,7 +179,12 @@
     "err_dates_order": "Data rozpoczęcia musi być wcześniejsza niż data zakończenia.",
     "err_start_too_early": "Data rozpoczęcia ({{date}}) jest wcześniejsza niż pierwszy rekord w CamtrapDP ({{min}}).",
     "err_end_too_late": "Data zakończenia ({{date}}) jest późniejsza niż ostatni rekord w CamtrapDP ({{max}}).",
-    "err_unknown": "Nieznany błąd"
+    "err_unknown": "Nieznany błąd",
+    "label_review_order": "Kolejność zdarzeń detekcji",
+    "review_order_score": "Według wyniku: najpierw najpewniejsze (najmniej zdjęć do sprawdzenia)",
+    "review_order_time": "Według czasu: najpierw najwcześniejsze (do analiz czasu do detekcji)",
+    "hint_review_order": "Każdy okres jest przeglądany od pierwszego zdarzenia w tej kolejności. Według wyniku pierwsze potwierdzone zdarzenie jest zwykle najszybsze do znalezienia, ale niekoniecznie jest najwcześniejszą detekcją. Według czasu pierwsze potwierdzone zdarzenie to pierwsza prawdziwa detekcja, której potrzebują modele czasu do detekcji (np. occuTTD); może być konieczne sprawdzenie większej liczby zdjęć. Historie detekcji są takie same. Pliki czasu do detekcji (ttd_*.csv) są zawsze zapisywane, ale dokładne tylko przy przeglądzie według czasu.",
+    "hint_review_order_cutoff": "Zdjęcia poniżej minimalnej pewności są usuwane przed przeglądem, więc pokazane najwcześniejsze zdarzenie może nie być najwcześniejszym, które miało miejsce. Użyj 0, aby zachować wszystkie zdjęcia."
   },
   "index": {
     "title": "Weryfikacja wykryć",
@@ -277,7 +282,8 @@
     "updating": "Aktualizowanie…",
     "toast_updated": "Decyzje zaktualizowane. Wyniki przeliczone.",
     "context_frame": "Kontekst",
-    "image_permission_denied": "Odmowa dostępu. Sprawdź uprawnienia dostępu."
+    "image_permission_denied": "Odmowa dostępu. Sprawdź uprawnienia dostępu.",
+    "round_hint_time": "W rundzie {{n}} każdy okres próbkowania reprezentuje jego najwcześniejsze jeszcze nieprzejrzane zdarzenie detekcji (kolejność: według czasu)."
   },
   "help": {
     "title": "Pomoc — CamTrap Verify",

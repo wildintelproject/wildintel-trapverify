@@ -223,4 +223,17 @@ describe('GalleryPage', () => {
       expect(api.saveDecisions.mock.calls[0][2].sort()).toEqual(['obs-a', 'obs-b', 'obs-c'])
     })
   })
+
+  it('explains that each occasion is represented by its earliest event when reviewing by time', async () => {
+    api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+    api.getState.mockResolvedValue({ ready: true, config: { total_iterations: 10, gap_seconds: 60, occasion_days: 5, min_score: 0.5, review_order: 'time' } })
+    renderGallery()
+    expect(await screen.findByText(/earliest detection event not yet reviewed/)).toBeInTheDocument()
+  })
+
+  it('keeps the confidence wording when reviewing by score', async () => {
+    api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+    renderGallery()
+    expect(await screen.findByText(/highest detection confidence among those not yet reviewed/)).toBeInTheDocument()
+  })
 })

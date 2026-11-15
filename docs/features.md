@@ -41,6 +41,7 @@
 
 - **Round-based flow** — in round 1, only rank-1 detection events are presented. Confirming a detection event closes its cell. Rejecting it makes the rank-2 detection event appear in round 2.
 - **Automatic cell closure** — once a detection event is confirmed, the cell disappears from the gallery; no further review is needed for it.
+- **Review order by score or by time** — by default each occasion is reviewed from its most confident event; *by time* starts from the earliest, so the first confirmed event is the first true detection (needed for time-to-detection analyses). Detection histories are the same either way.
 - **Convergence** — the review depth is bounded by `total_iterations`; in practice most cells resolve in 1-2 rounds.
 - **Session persistence** — the active session (config + all decisions) is saved to disk and restored automatically when the server restarts.
 
@@ -67,6 +68,7 @@
     | `camera_operation.csv` | Active days per site × occasion |
     | `dethist_naive_{sp}.csv` | Detection history from the classifier (1 / 0 / NA) |
     | `dethist_verified_{sp}.csv` | Detection history after human verification |
+    | `ttd_naive_{sp}.csv`, `ttd_verified_{sp}.csv` | Hours from the start of each occasion to its first detection, censored at the occasion length (as `occuTTD` expects); NA where the camera was off or the occasion is pending |
     | `verification_summary.csv` | Per-species: combos, detections, false positives, ψ_obs |
     | `review_effort.csv` | Actual number of images inspected per cell |
     | `effort_report.csv` | Effort per species and total: events and cells inspected, by outcome, with rejected/confirmed scores, active review time and an estimate of the time saved |

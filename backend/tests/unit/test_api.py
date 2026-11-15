@@ -2091,6 +2091,120 @@ def test_cannot_reopen_after_the_species_was_edited(client, setup_session):
     assert client.post("/api/species/Vulpes_vulpes/reopen").status_code == 400
 
 
+# ─── Review order by time and time-to-detection outputs ───────────────────────
+
+def _earlier_low_score_event(camtrap_dir):
+    """SITE_A occ1: a low-score event (m005) at 08:00 on day 1, before the high-score one (10:00 on day 2)."""
+    f = camtrap_dir / "media.csv"
+    df = pd.read_csv(f, dtype=str)
+    df.loc[df["mediaID"] == "m001", "timestamp"] = "2025-11-02 10:00:00"
+    df.loc[df["mediaID"] == "m002", "timestamp"] = "2025-11-02 10:00:30"
+    df.loc[df["mediaID"] == "m005", "timestamp"] = "2025-11-01 08:00:00"
+    df.to_csv(f, index=False)
+
+
+def _setup_order(client, camtrap_dir, tmp_path, order, **extra):
+    body = {"camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / f"out_{order}"), "target_species": ["Vulpes vulpes"],
+            "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5, "total_iterations": 100_000,
+            "gap_seconds": 60, "min_score": 0.5, "review_order": order, **extra}
+    r = client.post("/api/setup", json=body)
+    assert r.status_code == 200, r.text
+    return Path(r.json()["session_dir"])
+
+
+def _ttd(sd, kind):
+    return pd.read_csv(sd / "occupancy_inputs" / f"ttd_{kind}_Vulpes_vulpes.csv", dtype=str).fillna("").set_index("siteID")
+
+
+def test_review_order_defaults_to_score_and_is_kept_in_the_config(client, camtrap_dir, tmp_path):
+    _setup_order(client, camtrap_dir, tmp_path, "score")
+    assert client.get("/api/state").json()["config"]["review_order"] == "score"
+    assert client.post("/api/setup", json={"camtrap_dir": str(camtrap_dir), "target_species": ["Vulpes vulpes"], "study_start": "2025-11-01",
+                                           "study_end": "2025-11-10", "review_order": "random"}).status_code == 422
+
+
+def test_by_score_shows_the_most_confident_event_first(client, camtrap_dir, tmp_path):
+    _earlier_low_score_event(camtrap_dir)
+    _setup_order(client, camtrap_dir, tmp_path, "score")
+    first = {e["key"]: e for e in _round1_events(client)}["SITE_A_occ1_Vulpes_vulpes"]
+    assert {f["mediaId"] for f in first["frames"]} == {"m001", "m002"}                      # 0.9 beats the earlier 0.6
+
+
+def test_by_time_shows_the_earliest_event_first(client, camtrap_dir, tmp_path):
+    _earlier_low_score_event(camtrap_dir)
+    _setup_order(client, camtrap_dir, tmp_path, "time")
+    first = {e["key"]: e for e in _round1_events(client)}["SITE_A_occ1_Vulpes_vulpes"]
+    assert {f["mediaId"] for f in first["frames"]} == {"m005"}
+    ev2 = {e["key"]: e for e in client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 2}).json()}
+    assert {f["mediaId"] for f in ev2["SITE_A_occ1_Vulpes_vulpes"]["frames"]} == {"m001", "m002"}
+
+
+def test_detection_histories_are_the_same_in_either_order(client, camtrap_dir, tmp_path):
+    _earlier_low_score_event(camtrap_dir)
+    results = {}
+    for order in ("score", "time"):
+        sd = _setup_order(client, camtrap_dir, tmp_path, order)
+        true_media = {"m001", "m002", "m003"}                      # the "truth": review every round to the end
+        for it in range(1, 4):
+            ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": it}).json()
+            if not ev:
+                break
+            conf = [e["repObsId"] for e in ev if {f["mediaId"] for f in e["frames"]} & true_media]
+            client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": it, "confirmed": conf})
+        results[order] = {k: (sd / "occupancy_inputs" / f"dethist_{k}_Vulpes_vulpes.csv").read_text() for k in ("naive", "verified")}
+    assert results["score"] == results["time"]
+
+
+def test_ttd_files_for_day_occasions_with_censoring_and_na(client, camtrap_dir, tmp_path):
+    _earlier_low_score_event(camtrap_dir)
+    dep = camtrap_dir / "deployments.csv"
+    d = pd.read_csv(dep, dtype=str)
+    d.loc[d["deploymentID"] == "DEP2", "deploymentEnd"] = "2025-11-05"             # SITE_B off in occasion 2
+    d.to_csv(dep, index=False)
+    sd = _setup_order(client, camtrap_dir, tmp_path, "time")
+    naive = _ttd(sd, "naive")
+    assert naive.loc["SITE_A", "occ1"] == "8.0"                                    # m005, 08:00 on day 1
+    assert naive.loc["SITE_A", "occ2"] == "38.0"                                   # m003, 14:00 on day 7 -> 38 h after 6 Nov 00:00
+    assert naive.loc["SITE_B", "occ1"] == "57.0"                                   # m004
+    assert naive.loc["SITE_B", "occ2"] == ""                                       # camera off: NA
+    verified = _ttd(sd, "verified")
+    assert (verified == "").all().all()                                            # nothing decided yet: every cell with events is pending, SITE_B occ2 is off
+    assert verified.loc["SITE_B", "occ2"] == ""
+    # round 1 (by time): reject SITE_A occ1's earliest event, confirm the rest
+    ev = _round1_events(client)
+    conf = [e["repObsId"] for e in ev if e["key"] != "SITE_A_occ1_Vulpes_vulpes"]
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": conf})
+    ev2 = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 2}).json()
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": [e["repObsId"] for e in ev2]})
+    verified = _ttd(sd, "verified")
+    assert verified.loc["SITE_A", "occ1"] == "34.0"                                # the confirmed event: 02 Nov 10:00
+    assert verified.loc["SITE_A", "occ2"] == "38.0"
+    assert verified.loc["SITE_B", "occ1"] == "57.0"
+    assert verified.loc["SITE_B", "occ2"] == ""                                    # camera off stays NA
+
+
+def test_ttd_verified_is_censored_for_a_cell_whose_events_were_all_rejected(client, camtrap_dir, tmp_path):
+    sd = _setup_order(client, camtrap_dir, tmp_path, "time")
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": []})
+    ev2 = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 2}).json()
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    v = _ttd(sd, "verified")
+    assert v.loc["SITE_B", "occ1"] == "120.0"                                      # rejected: censored at the 5-day occasion
+    assert v.loc["SITE_B", "occ2"] == "120.0"                                      # no candidate at all: censored too
+    assert v.loc["SITE_A", "occ2"] == "120.0"
+    assert ev2                                                                     # (round 2 existed for SITE_A occ1)
+
+
+def test_ttd_for_occasions_in_hours(client, camtrap_dir, tmp_path):
+    _earlier_low_score_event(camtrap_dir)
+    sd = _setup_order(client, camtrap_dir, tmp_path, "time", occasion_hours=7)
+    naive = _ttd(sd, "naive")
+    # 07:00-wide windows from 1 Nov 00:00: 1 Nov 08:00 -> window 2 (7-14 h), 1 h in
+    assert naive.loc["SITE_A", "occ2"] == "1.0"
+    assert naive.loc["SITE_A", "occ1"] == "7.0"                                    # no detection: censored at 7 h
+    last = naive.columns[-1]
+    assert naive.loc["SITE_B", last] == "2.0"                                      # 240 h = 34 x 7 + 2: the last occasion is 2 h long
+
 # ─── observationTags in the verified CamtrapDP ────────────────────────────────
 
 def _verified_observations(sd):
