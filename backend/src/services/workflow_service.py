@@ -126,7 +126,7 @@ def run_setup(req: SetupRequest) -> dict:
     logger.info("Starting setup: camtrap_dir=%s species=%s", req.camtrap_dir, req.target_species)
     clear_media_caches()
     camtrap_dir = Path(req.camtrap_dir)
-    dep, med, obs = load_camtrapdp(camtrap_dir)
+    dep, med, obs = load_camtrapdp(camtrap_dir, minimal=True)
 
     if req.flat_search and req.image_base_dir:
         ambiguous = find_flat_search_ambiguities(med, req.image_base_dir)
