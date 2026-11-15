@@ -268,6 +268,18 @@
     "decisions_title": "Entscheidungen",
     "decisions_body": "Bestätigen bedeutet, dass die Art bei diesem Anlass und an diesem Standort vorhanden ist. Ablehnen bedeutet, dass die Detektion falsch ist. Ein Anlass schließt sich, sobald ein Detektionsereignis bestätigt wird."
   },
+  "session_name": {
+    "label": "Name der Sitzung",
+    "placeholder": "z. B. Doñana Frühjahr 2023, kombiniert",
+    "hint": "Wird unter „Letzte Sitzungen“ und auf der Artenseite angezeigt, damit Sie Sitzungen unterscheiden können (z. B. zwei Sitzungen mit denselben Arten). Sie können ihn später mit ✎ ändern.",
+    "rename": "Sitzung umbenennen",
+    "rename_one": "{{name}} umbenennen",
+    "open": "{{name}} öffnen",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "session": "Sitzung:",
+    "none": "ohne Namen"
+  },
   "results": {
     "effort_title": "Verifikationsaufwand pro Art",
     "effort_hint": "Aufwand in Detektionsereignissen und Zellen, nach Ergebnis getrennt. Ein Ereignis zu prüfen heißt, sein Foto mit der höchsten Bewertung anzusehen. Basis: vollständige Prüfung aller Kandidatenereignisse.",

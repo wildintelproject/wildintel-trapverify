@@ -315,6 +315,7 @@ These control how the data is segmented into reviewable units.
 | **Minimum detection score** | 0.5 | Detections scoring **below** this threshold are excluded from the candidate set (a score equal to the threshold is kept, and a photo with no score is never excluded). See [When to use a minimum score](#when-to-use-a-minimum-score). |
 | **Minimum detection confidence per species** | none | Optional. Under the general score, a collapsible list gives each selected species a box for its own cut-off, which replaces the general one for that species. An empty box uses the general score and `0` turns the cut-off off for that species. See [When to use a minimum score](#when-to-use-a-minimum-score). |
 | **Random seed for tied detection events** | 42 | Detection events with the same score in a cell (all of them when the photos have no score) are shown in a pseudo-random order, not by date. The seed makes that order reproducible: the same data and seed always give the same order. It is stored in `config.json`; record it when you report your results. |
+| **Session name** | empty | Optional name to tell sessions apart (for example two sessions with the same species). It is shown in **Recent sessions** and at the top of the species index, and it can be changed later with **✎**. See [Naming a session](#naming-a-session). |
 
 #### When to use a minimum score
 
@@ -345,6 +346,15 @@ These control what is recorded in the output when an expert confirms a detection
 Click **✓ Start verification** to process the data and begin the review.
 
 ---
+
+### Naming a session
+
+A session can have a **name** so you can tell it apart from others, for example two sessions with the same species but different study periods. Type it in the *Session name* field of the setup parameters (optional, up to 120 characters), or add or change it at any time:
+
+- On the welcome screen, under **Recent sessions**, press **✎** next to a session, type the name and press Enter (Escape cancels).
+- On the species index, press **✎** next to the name at the top.
+
+An empty name removes it. In **Recent sessions** the name is shown in bold with the species below it; a session without a name shows its species as before. The name is stored in the session's `config.json` as `session_name`, so it stays with the session. Sessions made before names existed have none and work as before.
 
 ## 6. Species Index
 

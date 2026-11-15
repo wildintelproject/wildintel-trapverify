@@ -1,3 +1,4 @@
+import SessionNameEditor from '../components/SessionNameEditor'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -18,6 +19,7 @@ export default function IndexPage() {
     start: string; end: string
     occasion_days: number; occasion_hours: number; gap_seconds: number; min_score: number
   } | null>(null)
+  const [sessionName, setSessionName] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -25,14 +27,17 @@ export default function IndexPage() {
     Promise.all([api.getSpecies(), api.getState()])
       .then(([sp, state]) => {
         setSpecies(sp)
-        if (state.config) setSessionInfo({
-          start: state.config.study_start,
-          end: state.config.study_end,
-          occasion_days: state.config.occasion_days,
-          occasion_hours: state.config.occasion_hours ?? 0,
-          gap_seconds: state.config.gap_seconds,
-          min_score: state.config.min_score,
-        })
+        if (state.config) {
+          setSessionName(state.config.session_name ?? '')
+          setSessionInfo({
+            start: state.config.study_start,
+            end: state.config.study_end,
+            occasion_days: state.config.occasion_days,
+            occasion_hours: state.config.occasion_hours ?? 0,
+            gap_seconds: state.config.gap_seconds,
+            min_score: state.config.min_score,
+          })
+        }
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
@@ -59,6 +64,11 @@ export default function IndexPage() {
 
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-4">
+      <div className="flex items-center gap-2 mb-1 text-sm">
+        <span className="text-zinc-500 dark:text-zinc-400 flex-shrink-0">{t('session_name.session')}</span>
+        <SessionNameEditor sessionDir="" name={sessionName} fallback={t('session_name.none')}
+          onRenamed={setSessionName} className="text-zinc-800 dark:text-zinc-200 font-medium" />
+      </div>
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-baseline gap-3">
           <h2 className="text-2xl font-semibold mb-0">{t('index.title')}</h2>

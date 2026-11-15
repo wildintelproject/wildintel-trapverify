@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from schemas.requests import LoadSessionRequest, SetupRequest
+from schemas.requests import LoadSessionRequest, RenameSessionRequest, SetupRequest
 from services import session_service, workflow_service
 
 router = APIRouter(prefix="/api", tags=["session"])
@@ -25,6 +25,12 @@ def get_state() -> dict:
         "default_output_dir": str(session_service.DEFAULT_OUTPUT_DIR),
         "session_dir": str(session_service.session_dir()),
     }
+
+
+@router.put("/session/name")
+def rename_session(req: RenameSessionRequest) -> dict:
+    """Name (or rename) a session; an empty name clears it."""
+    return session_service.rename_session(req.session_dir, req.name)
 
 
 @router.get("/session/recent")

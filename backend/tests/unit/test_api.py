@@ -1703,3 +1703,88 @@ def test_sessions_saved_before_the_option_existed_still_report(client, setup_ses
     cfg = session_service.get_config()
     cfg.pop("min_score_by_species", None)
     assert client.get("/api/results").json()["min_score_by_species"] == {}
+
+
+# ─── session names (ported from the community fork) ───────────────────────────
+
+def _setup_named(client, camtrap_dir, tmp_path, name, out="out"):
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / out), "target_species": ["Vulpes vulpes"],
+        "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5, "total_iterations": 100_000,
+        "gap_seconds": 60, "min_score": 0.5, "session_name": name})
+    assert r.status_code == 200
+    return r.json()["session_dir"]
+
+
+def test_setup_stores_a_cleaned_session_name_and_lists_it(client, camtrap_dir, tmp_path):
+    sd = _setup_named(client, camtrap_dir, tmp_path, "  Doñana   spring 2023 ")
+    assert client.get("/api/state").json()["config"]["session_name"] == "Doñana spring 2023"
+    recent = client.get("/api/session/recent").json()
+    assert recent[0]["session_dir"] == sd and recent[0]["session_name"] == "Doñana spring 2023"
+
+
+def test_sessions_without_a_name_have_an_empty_one(client, setup_session):
+    assert client.get("/api/session/recent").json()[0]["session_name"] == ""
+
+
+def test_rename_the_active_session(client, setup_session):
+    r = client.put("/api/session/name", json={"name": "Spring"})
+    assert r.status_code == 200 and r.json()["session_name"] == "Spring"
+    assert client.get("/api/state").json()["config"]["session_name"] == "Spring"
+    assert client.get("/api/session/recent").json()[0]["session_name"] == "Spring"
+
+
+def test_rename_writes_config_json_whole_and_leaves_no_temp_file(client, setup_session):
+    import json
+    from pathlib import Path
+    sd = Path(setup_session["session_dir"])
+    client.put("/api/session/name", json={"name": "A name"})
+    assert json.loads((sd / "config.json").read_text())["session_name"] == "A name"
+    assert not list(sd.glob("*.tmp"))
+
+
+def test_an_empty_name_clears_it(client, camtrap_dir, tmp_path):
+    _setup_named(client, camtrap_dir, tmp_path, "Old name")
+    assert client.put("/api/session/name", json={"name": "   "}).json()["session_name"] == ""
+    assert client.get("/api/session/recent").json()[0]["session_name"] == ""
+
+
+def test_rename_a_recent_session_that_is_not_the_active_one(client, camtrap_dir, tmp_path):
+    first = _setup_named(client, camtrap_dir, tmp_path, "", out="o1")
+    import time
+    time.sleep(1.1)                                           # session folders are named by the second
+    second = _setup_named(client, camtrap_dir, tmp_path, "Second", out="o2")
+    assert first != second
+    r = client.put("/api/session/name", json={"session_dir": first, "name": "First one"})
+    assert r.status_code == 200
+    names = {s["session_dir"]: s["session_name"] for s in client.get("/api/session/recent").json()}
+    assert names == {first: "First one", second: "Second"}
+    assert client.get("/api/state").json()["config"]["session_name"] == "Second"      # the active one is untouched
+
+
+def test_rename_refuses_a_folder_that_is_not_a_known_session(client, setup_session, tmp_path):
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    (other / "config.json").write_text('{"keep": "me"}')
+    r = client.put("/api/session/name", json={"session_dir": str(other), "name": "Hacked"})
+    assert r.status_code == 400
+    assert (other / "config.json").read_text() == '{"keep": "me"}'                    # nothing written
+
+
+def test_rename_without_any_session_is_a_clear_error(client):
+    assert client.put("/api/session/name", json={"name": "x"}).status_code == 400
+
+
+def test_a_name_longer_than_120_characters_is_rejected(client, setup_session):
+    assert client.put("/api/session/name", json={"name": "x" * 121}).status_code == 422
+    assert client.put("/api/session/name", json={"name": "x" * 120}).status_code == 200
+
+
+def test_sessions_saved_before_names_existed_still_list(client, setup_session):
+    import json
+    from pathlib import Path
+    cfg = Path(setup_session["session_dir"]) / "config.json"
+    data = json.loads(cfg.read_text())
+    data.pop("session_name", None)
+    cfg.write_text(json.dumps(data))
+    assert client.get("/api/session/recent").json()[0]["session_name"] == ""

@@ -268,6 +268,18 @@
     "decisions_title": "Decisiones",
     "decisions_body": "Confirmar significa que la especie está presente en esa ocasión y localización. Rechazar significa que la detección es incorrecta. Una ocasión se cierra en cuanto se confirma un evento de detección."
   },
+  "session_name": {
+    "label": "Nombre de la sesión",
+    "placeholder": "p. ej. Doñana primavera 2023, combinado",
+    "hint": "Se muestra en Sesiones recientes y en la página de especies, para distinguir unas sesiones de otras (p. ej. dos sesiones con las mismas especies). Puedes cambiarlo después con ✎.",
+    "rename": "Cambiar el nombre de la sesión",
+    "rename_one": "Cambiar el nombre de {{name}}",
+    "open": "Abrir {{name}}",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "session": "Sesión:",
+    "none": "sin nombre"
+  },
   "results": {
     "effort_title": "Esfuerzo de verificación por especie",
     "effort_hint": "Esfuerzo en eventos de detección y celdas, separado por resultado. Inspeccionar un evento es ver su foto con mayor puntuación. Línea base: revisión completa de todos los eventos candidatos.",
