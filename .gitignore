@@ -8,4 +8,5 @@ dist/
 backend/src/_version.py
 /.claude/
 /backend/site/
+/site/
 /.idea/
