@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from camtrap_workflow import (
     ORIG_OBSERVATION_ID, build_candidates, confirmed_keys_set, dedupe_observation_ids,
-    export_verified_camtrapdp, load_camtrapdp, save_decisions, save_uncertain,
+    export_verified_camtrapdp, load_camtrapdp, save_decisions, save_unsure,
 )
 
 
@@ -53,10 +53,10 @@ def test_a_decision_only_confirms_its_own_cell(camtrap_dir, tmp_path):
     assert not any(k.endswith("Sus_scrofa") for k in keys)             # the boar cell stays unreviewed
 
 
-def test_uncertain_flags_only_land_on_their_own_species(camtrap_dir, tmp_path):
+def test_unsure_flags_only_land_on_their_own_species(camtrap_dir, tmp_path):
     _reuse_id(camtrap_dir)
     cands = _candidates(camtrap_dir)
-    df = save_uncertain(tmp_path / "decisions", cands, "Vulpes_vulpes", 1, ["o001#m001"])
+    df = save_unsure(tmp_path / "decisions", cands, "Vulpes_vulpes", 1, ["o001#m001"])
     assert set(df["scientificName"]) == {"Vulpes vulpes"}
 
 

@@ -32,7 +32,7 @@ interface EffortRow {
   rejected_score_median: number | null
   rejected_score_max: number | null
   confirmed_score_median: number | null
-  uncertain_events: number | null
+  unsure_events: number | null
   review_active_seconds: number | null
   review_decisions_timed: number | null
   review_seconds_per_decision: number | null
@@ -238,7 +238,7 @@ export default function ResultsPage() {
                   <th className={th}>{t('results.effort_col_before')}</th>
                   <th className={th}>{t('results.effort_col_rej_score')}</th>
                   <th className={th}>{t('results.effort_col_conf_score')}</th>
-                  <th className={th} title={t('results.effort_col_uncertain_hint')}>{t('results.effort_col_uncertain')}</th>
+                  <th className={th} title={t('results.effort_col_unsure_hint')}>{t('results.effort_col_unsure')}</th>
                 </>
               )}
             </tr>
@@ -274,7 +274,7 @@ export default function ResultsPage() {
                       <td className={td}>{fmt(r.rejections_before_confirm_mean)} / {fmt(r.rejections_before_confirm_max)}</td>
                       <td className={td}>{fmt(r.rejected_score_min)} / {fmt(r.rejected_score_median)} / {fmt(r.rejected_score_max)}</td>
                       <td className={td}>{fmt(r.confirmed_score_median)}</td>
-                      <td className={td}>{fmt(r.uncertain_events)}</td>
+                      <td className={td}>{fmt(r.unsure_events)}</td>
                     </>
                   )}
                 </tr>

@@ -29,7 +29,7 @@ function progressBody(
   times: Record<string, number>,
   iteration: number,
 ) {
-  const dec: Record<string, 'confirmed' | 'rejected' | 'uncertain'> = {}
+  const dec: Record<string, 'confirmed' | 'rejected' | 'unsure'> = {}
   const corr: Record<string, string> = {}
   const tm: Record<string, number> = {}
   events.forEach((e) => {
@@ -159,9 +159,9 @@ export default function GalleryPage() {
         const ev = evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
         if (ev) pre[ev.key] = 'confirmed'
       })
-      ;(saved.uncertain ?? []).forEach((id) => {
+      ;(saved.unsure ?? []).forEach((id) => {
         const ev = evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
-        if (ev && !pre[ev.key]) pre[ev.key] = 'uncertain'
+        if (ev && !pre[ev.key]) pre[ev.key] = 'unsure'
       })
       setDecisions(pre)
       const corr: Record<string, string> = {}
@@ -278,7 +278,7 @@ export default function GalleryPage() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'y' || e.key === 'Y') decideInLbRef.current('confirmed')
       if (e.key === 'n' || e.key === 'N') decideInLbRef.current('rejected')
-      if ((e.key === 'u' || e.key === 'U') && !completedRef.current) decideInLbRef.current('uncertain')
+      if ((e.key === 'u' || e.key === 'U') && !completedRef.current) decideInLbRef.current('unsure')
       if (e.key === 'Backspace') { e.preventDefault(); lbBackRef.current() }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
@@ -465,8 +465,8 @@ export default function GalleryPage() {
       const confirmedIds = events
         .filter((e) => decisions[e.key] === 'confirmed')
         .map((e) => e.repObsId)
-      const uncertainIds = events
-        .filter((e) => decisions[e.key] === 'uncertain')
+      const unsureIds = events
+        .filter((e) => decisions[e.key] === 'unsure')
         .map((e) => e.repObsId)
       const correctionIds: Record<string, string> = {}
       events.forEach((e) => {
@@ -478,7 +478,7 @@ export default function GalleryPage() {
         const at = decidedAtRef.current[e.key]
         if (decisions[e.key] && at) decisionTimes[e.repObsId] = at
       })
-      const result = await api.saveDecisions(species, iteration, confirmedIds, uncertainIds, correctionIds, decisionTimes)
+      const result = await api.saveDecisions(species, iteration, confirmedIds, unsureIds, correctionIds, decisionTimes)
       finishedRef.current = true                           // the server dropped the progress with the round
       if (result.done) {
         showToast(t('gallery.toast_done'), 'success')
@@ -611,15 +611,15 @@ export default function GalleryPage() {
       {!completed && (
         <button
           className={`${btnClass} text-base rounded font-medium transition-colors disabled:opacity-50 ${
-            lbDecision === 'uncertain'
+            lbDecision === 'unsure'
               ? 'bg-amber-600 text-white hover:bg-amber-700'
               : 'border border-amber-600 bg-black/40 text-amber-400 hover:bg-amber-600 hover:text-white'
           }`}
-          onClick={() => decideInLb('uncertain')}
+          onClick={() => decideInLb('unsure')}
           disabled={lbReadOnly}
-          title={t('gallery.uncertain_hint')}
+          title={t('gallery.unsure_hint')}
         >
-          {t('gallery.uncertain_btn')} <span className="opacity-60">(U)</span>
+          {t('gallery.unsure_btn')} <span className="opacity-60">(U)</span>
         </button>
       )}
     </div>
@@ -899,7 +899,7 @@ export default function GalleryPage() {
                     decision={decisions[ev.key] ?? null}
                     needsDecision={needsDecision.has(ev.key)}
                     onDecide={decide}
-                    allowUncertain={!completed}
+                    allowUnsure={!completed}
                     showBoxes={showBoxes}
                     recordCorrection={recordRejection && !completed}
                     correction={corrections[ev.key] ?? ''}

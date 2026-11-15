@@ -226,7 +226,7 @@ ORIG_OBSERVATION_ID = "_observationID_original"
 def dedupe_observation_ids(obs: pd.DataFrame) -> pd.DataFrame:
     """Make ``observationID`` unique, as CamtrapDP requires but some exports break.
 
-    Decisions, *uncertain* marks, tags and the verified export all look observations up by
+    Decisions, *unsure* marks, tags and the verified export all look observations up by
     ``observationID``. Some exports reuse the same ID for different observations (e.g. a Trapper
     export where detector and classifier rows, of different photos and species, share numbers):
     a decision on one event then also landed on the cells of the others. Repeated IDs get the
@@ -1537,18 +1537,18 @@ def save_decisions(
     return df
 
 
-def save_uncertain(
+def save_unsure(
     decisions_dir: Path,
     candidates: pd.DataFrame,
     species_safe: str,
     iteration: int,
-    uncertain_ids: list[str],
+    unsure_ids: list[str],
 ) -> pd.DataFrame:
-    """Persist the events marked *uncertain* in a round to ``uncertain_{species}_iter{N}.csv``.
+    """Persist the events marked *unsure* in a round to ``unsure_{species}_iter{N}.csv``.
 
-    An uncertain event is a rejection as far as occupancy is concerned: nothing
+    An unsure event is a rejection as far as occupancy is concerned: nothing
     here feeds ``decisions_*.csv``, detection histories or cell status. The file
-    only records the flag so uncertain decisions can be counted and restored. It
+    only records the flag so unsure decisions can be counted and restored. It
     is always (over)written, even when empty, so a changed round leaves no stale flags.
 
     Args:
@@ -1556,7 +1556,7 @@ def save_uncertain(
         candidates: Full candidate manifest (used to look up metadata by ID).
         species_safe: Sanitized species name used in the filename.
         iteration: Round number used in the filename.
-        uncertain_ids: ``observationID`` values of the events marked uncertain.
+        unsure_ids: ``observationID`` values of the events marked unsure.
 
     Returns:
         DataFrame of the rows that was written to disk.
@@ -1566,17 +1566,17 @@ def save_uncertain(
             "scientificName", "siteID", "occasion"]
     if "species_safe" in candidates.columns:                 # see save_decisions
         candidates = candidates[candidates["species_safe"] == species_safe]
-    df = candidates[candidates["observationID"].isin(uncertain_ids)][cols] \
-        if uncertain_ids else candidates.iloc[0:0][cols]
-    df.to_csv(decisions_dir / f"uncertain_{species_safe}_iter{iteration}.csv", index=False)
+    df = candidates[candidates["observationID"].isin(unsure_ids)][cols] \
+        if unsure_ids else candidates.iloc[0:0][cols]
+    df.to_csv(decisions_dir / f"unsure_{species_safe}_iter{iteration}.csv", index=False)
     return df
 
 
-def load_all_uncertain(decisions_dir: Path) -> pd.DataFrame:
-    """Concatenate all ``uncertain_*.csv`` files (empty frame with the columns if none)."""
+def load_all_unsure(decisions_dir: Path) -> pd.DataFrame:
+    """Concatenate all ``unsure_*.csv`` files (empty frame with the columns if none)."""
     cols = ["observationID", "site_occasion_key", "mediaID",
             "scientificName", "siteID", "occasion"]
-    files = list(decisions_dir.glob("uncertain_*.csv")) if decisions_dir.exists() else []
+    files = list(decisions_dir.glob("unsure_*.csv")) if decisions_dir.exists() else []
     if not files:
         return pd.DataFrame(columns=cols)
     return pd.concat([pd.read_csv(f, dtype=str) for f in files], ignore_index=True)
@@ -1644,7 +1644,7 @@ def build_false_positive_sources(
     their share of **all** the rejected events of that species, plus a
     ``(not recorded)`` row for rejected events with no correction, so the shares
     add up to 100 % and the coverage of the recording is visible. A rejected
-    event is any inspected event that was not confirmed (uncertain events
+    event is any inspected event that was not confirmed (unsure events
     included, since they behave as rejections).
 
     Args:
@@ -1692,13 +1692,13 @@ def save_review_log(
     species_safe: str,
     iteration: int,
     confirmed: list[str],
-    uncertain: list[str],
+    unsure: list[str],
     times_ms: dict[str, int],
 ) -> pd.DataFrame:
     """Record when each decision of a round was made, in ``review_log.csv``.
 
     ``times_ms`` maps ``observationID`` -> epoch milliseconds taken in the browser
-    when the reviewer clicked. The decision is ``confirmed`` or ``uncertain`` when
+    when the reviewer clicked. The decision is ``confirmed`` or ``unsure`` when
     the ID is in those lists and ``rejected`` otherwise. Rows of this species and
     round are replaced; an event that has no new time (it was restored from an
     earlier save and not touched) keeps its previous timestamp. Purely
@@ -1713,7 +1713,7 @@ def save_review_log(
         same = (old["species_safe"] == species_safe) & (old["iteration"].astype(int) == iteration)
         prev = dict(zip(old.loc[same, "observationID"], old.loc[same, "decided_at"]))
         old = old[~same]
-    conf, unc = set(confirmed), set(uncertain)
+    conf, unc = set(confirmed), set(unsure)
     meta = candidates[candidates["observationID"].isin(set(times_ms) | set(prev))] \
         .drop_duplicates("observationID")
     rows = []
@@ -1727,7 +1727,7 @@ def save_review_log(
             "observationID": oid, "site_occasion_key": r["site_occasion_key"],
             "species_safe": species_safe, "scientificName": r["scientificName"],
             "iteration": iteration,
-            "decision": "confirmed" if oid in conf else "uncertain" if oid in unc else "rejected",
+            "decision": "confirmed" if oid in conf else "unsure" if oid in unc else "rejected",
             "decided_at": at,
         })
     out = pd.concat([old, pd.DataFrame(rows, columns=REVIEW_LOG_COLS)], ignore_index=True)
@@ -2051,7 +2051,7 @@ TAG_FILTERED = "camtrapverify:filtered"    # removed by "Classifiers and referen
 TAG_REFERENCE = "camtrapverify:reference"  # the reference (e.g. Zooniverse) confirmed it
 TAG_CONFIRMED = "camtrapverify:confirmed"
 TAG_REJECTED = "camtrapverify:rejected"
-TAG_UNCERTAIN = "camtrapverify:uncertain"
+TAG_UNCERTAIN = "camtrapverify:unsure"
 TAG_ACTUAL_SPECIES = "camtrapverify-actual-species:"
 
 
@@ -2077,7 +2077,7 @@ def reviewed_event_tags(
 
     An event was *inspected and not confirmed* when its cell has a confirmation at a later rank,
     or has none and the species finished a round at that rank or later. Such an event is tagged
-    ``camtrapverify:rejected``, or ``camtrapverify:uncertain`` when it was marked uncertain (which
+    ``camtrapverify:rejected``, or ``camtrapverify:unsure`` when it was marked unsure (which
     behaves as a rejection in the histories). With a recorded actual species the event also gets
     ``camtrapverify-actual-species:<name>``. Events never inspected get no tag.
     """
@@ -2204,14 +2204,14 @@ def export_verified_camtrapdp(
         mask = pd.Series(False, index=obs.index)
 
     # Record the review in observationTags (``key:value`` pairs separated by ``|``): confirmed,
-    # rejected, uncertain (a rejection that is counted apart) and, when recorded, the actual species.
+    # rejected, unsure (a rejection that is counted apart) and, when recorded, the actual species.
     # Only the observations the reviewer looked at get a tag; existing tags are kept.
     tag_by_row: dict[int, list[str]] = {}
     if mask.any():
         for i in obs.index[mask]:
             tag_by_row[i] = [TAG_CONFIRMED]
     if candidates is not None and not candidates.empty:
-        unc = load_all_uncertain(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
+        unc = load_all_unsure(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
         unc_ids = set(unc["observationID"].dropna()) if not unc.empty else set()
         rev = reviewed_event_tags(candidates, _rep_confirmed(decisions_dir), unc_ids, rounds_completed(decisions_dir), corrections)
         if rev:
@@ -2812,9 +2812,9 @@ def build_species_effort(
       the confirmed one, over detection cells.
     * ``rejected_score_{min,median,max}``: score of every rejected event.
     * ``confirmed_score_{min,median,max}``: score of the confirmed event.
-    * ``uncertain_events``: events the reviewer marked *uncertain* (not counting any
+    * ``unsure_events``: events the reviewer marked *unsure* (not counting any
       later confirmed). They behave exactly as rejections in the histories.
-      ``non_detection_cells_with_uncertain``: non-detection cells holding at least one.
+      ``non_detection_cells_with_unsure``: non-detection cells holding at least one.
     * ``review_active_seconds``, ``review_decisions_timed``,
       ``review_seconds_per_decision``, ``review_est_full_seconds``,
       ``review_est_saved_seconds``: active review time from the decision timestamps
@@ -2846,7 +2846,7 @@ def build_species_effort(
     dec = load_all_decisions(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
     conf_ids = set(dec["observationID"].dropna()) if not dec.empty else set()
 
-    unc = load_all_uncertain(decisions_dir)
+    unc = load_all_unsure(decisions_dir)
     unc_ids = set(unc["observationID"].dropna()) - conf_ids
 
     cand = candidates.copy()
@@ -2872,8 +2872,8 @@ def build_species_effort(
             "pct_events_inspected": round(100 * acc["insp"] / acc["events"], 1) if acc["events"] else None,
             "candidate_photos": acc["photos"],
             "photos_inspected": acc["insp"],
-            "uncertain_events": acc["unc"],
-            "non_detection_cells_with_uncertain": acc["unc_cells"],
+            "unsure_events": acc["unc"],
+            "non_detection_cells_with_unsure": acc["unc_cells"],
             "photos_in_inspected_events": acc["photos_insp"],
             "events_inspected_in_detection_cells": acc["insp_det"],
             "events_inspected_in_non_detection_cells": acc["insp_non"],

@@ -82,7 +82,7 @@ export interface OccupancyRow {
 export interface SavedProgress {
   iteration: number
   /** repObsId of each decided event -> its decision */
-  decisions: Record<string, 'confirmed' | 'rejected' | 'uncertain'>
+  decisions: Record<string, 'confirmed' | 'rejected' | 'unsure'>
   corrections: Record<string, string>
   decision_times: Record<string, number>
   saved_at: string

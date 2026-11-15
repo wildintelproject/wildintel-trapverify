@@ -52,12 +52,12 @@ export const api = {
   getTaxa: () => req<{ taxa: string[]; extra: string[] }>('/api/taxa'),
 
   getDecisions: (species: string, iteration: number) =>
-    req<{ confirmed: string[]; uncertain: string[]; corrections: Record<string, string> }>(`/api/decisions?species=${species}&iteration=${iteration}`),
+    req<{ confirmed: string[]; unsure: string[]; corrections: Record<string, string> }>(`/api/decisions?species=${species}&iteration=${iteration}`),
 
-  saveDecisions: (species: string, iteration: number, confirmed: string[], uncertain: string[] = [], corrections: Record<string, string> = {}, decisionTimes: Record<string, number> = {}) =>
+  saveDecisions: (species: string, iteration: number, confirmed: string[], unsure: string[] = [], corrections: Record<string, string> = {}, decisionTimes: Record<string, number> = {}) =>
     post<{ success: boolean; done: boolean; next_iteration: number | null; remaining: number }>(
       '/api/decisions',
-      { species, iteration, confirmed, uncertain, corrections, decision_times: decisionTimes },
+      { species, iteration, confirmed, unsure, corrections, decision_times: decisionTimes },
     ),
 
   getProgress: (species: string, iteration: number) =>

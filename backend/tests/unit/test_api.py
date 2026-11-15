@@ -683,7 +683,7 @@ def test_get_events_unknown_species_returns_empty(client, setup_session):
 def test_get_decisions_empty(client, setup_session):
     resp = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1})
     assert resp.status_code == 200
-    assert resp.json() == {"confirmed": [], "uncertain": [], "corrections": {}}
+    assert resp.json() == {"confirmed": [], "unsure": [], "corrections": {}}
 
 def test_post_decisions_save_and_retrieve(client, setup_session):
     # Get events to find a valid observationID
@@ -1293,29 +1293,29 @@ def test_results_exclusions_zero_without_cutoff(client, camtrap_dir, tmp_path):
     assert (tot["excluded_photos"], tot["excluded_events"], tot["excluded_cells"]) == (0, 0, 0)
 
 
-# ─── uncertain decisions ──────────────────────────────────────────────────────
+# ─── unsure decisions ──────────────────────────────────────────────────────
 
-def test_post_decisions_without_uncertain_still_works(client, setup_session):
+def test_post_decisions_without_unsure_still_works(client, setup_session):
     """Older clients (and existing sessions) never send the field."""
     ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
     r = client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1,
                                             "confirmed": [ev[0]["repObsId"]]})
     assert r.status_code == 200
     got = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1}).json()
-    assert got["uncertain"] == []
+    assert got["unsure"] == []
 
-def test_uncertain_roundtrip_counts_as_rejection_and_is_reported(client, setup_session):
+def test_unsure_roundtrip_counts_as_rejection_and_is_reported(client, setup_session):
     ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
     unc, conf = [e["repObsId"] for e in ev[1:]], [ev[0]["repObsId"]]
     r = client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1,
-                                            "confirmed": conf, "uncertain": unc + conf})
+                                            "confirmed": conf, "unsure": unc + conf})
     assert r.status_code == 200
     got = client.get("/api/decisions", params={"species": "Vulpes_vulpes", "iteration": 1}).json()
-    assert got["confirmed"] == conf and sorted(got["uncertain"]) == sorted(unc)  # confirm wins
+    assert got["confirmed"] == conf and sorted(got["unsure"]) == sorted(unc)  # confirm wins
     data = client.get("/api/results").json()
     tot = next(x for x in data["effort_by_species"] if x["species"] == "TOTAL")
-    assert tot["uncertain_events"] == len(unc)
-    assert data["confirmed"] == 1                                               # uncertain != confirmed
+    assert tot["unsure_events"] == len(unc)
+    assert data["confirmed"] == 1                                               # unsure != confirmed
 
 
 # ─── rejection corrections ("actual species") ─────────────────────────────────
@@ -1969,7 +1969,7 @@ def test_no_progress_by_default(client, setup_session):
 def test_progress_is_saved_and_read_back(client, setup_session):
     ev = _round1_events(client)
     body = {"iteration": 1,
-            "decisions": {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "uncertain", ev[2]["repObsId"]: "rejected"},
+            "decisions": {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "unsure", ev[2]["repObsId"]: "rejected"},
             "corrections": {ev[2]["repObsId"]: " Canis lupus "},
             "decision_times": {ev[0]["repObsId"]: 1700000000000}}
     r = client.put("/api/species/Vulpes_vulpes/progress", json=body)
@@ -2024,7 +2024,7 @@ def test_progress_travels_in_the_session_export(client, setup_session, tmp_path,
 def _finish_round1(client, ev, times=None):
     return client.post("/api/decisions", json={
         "species": "Vulpes_vulpes", "iteration": 1,
-        "confirmed": [ev[0]["repObsId"]], "uncertain": [ev[1]["repObsId"]],
+        "confirmed": [ev[0]["repObsId"]], "unsure": [ev[1]["repObsId"]],
         "corrections": {ev[2]["repObsId"]: "Canis lupus"},
         "decision_times": times or {e["repObsId"]: 1700000000000 + 1000 * i for i, e in enumerate(ev)},
     })
@@ -2045,7 +2045,7 @@ def test_reopen_restores_every_decision_flag_and_correction(client, camtrap_dir,
     r = client.post("/api/species/Vulpes_vulpes/reopen")
     assert r.status_code == 200 and r.json()["iteration"] == 1 and r.json()["restored"] == 3
     got = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
-    assert got["decisions"] == {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "uncertain", ev[2]["repObsId"]: "rejected"}
+    assert got["decisions"] == {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "unsure", ev[2]["repObsId"]: "rejected"}
     assert got["corrections"] == {ev[2]["repObsId"]: "Canis lupus"}
     assert len(got["decision_times"]) == 3
     assert not list((sd / "decisions").glob("decisions_Vulpes_vulpes_iter1.csv"))
@@ -2063,7 +2063,7 @@ def test_reopen_and_finish_again_gives_the_same_files(client, camtrap_dir, tmp_p
     r = client.post("/api/decisions", json={
         "species": "Vulpes_vulpes", "iteration": 1,
         "confirmed": [k for k, v in p["decisions"].items() if v == "confirmed"],
-        "uncertain": [k for k, v in p["decisions"].items() if v == "uncertain"],
+        "unsure": [k for k, v in p["decisions"].items() if v == "unsure"],
         "corrections": p["corrections"], "decision_times": p["decision_times"],
     })
     assert r.status_code == 200
@@ -2221,7 +2221,7 @@ def _review_round1(client, camtrap_dir, tmp_path):
     ev = _round1_events(client)
     client.post("/api/decisions", json={
         "species": "Vulpes_vulpes", "iteration": 1,
-        "confirmed": [ev[0]["repObsId"]], "uncertain": [ev[1]["repObsId"]],
+        "confirmed": [ev[0]["repObsId"]], "unsure": [ev[1]["repObsId"]],
         "corrections": {ev[2]["repObsId"]: "Canis lupus"},
     })
     return sd, ev
@@ -2232,13 +2232,13 @@ def _media_of(ev, i):
     return {f["mediaId"] for f in ev[i]["frames"] if f["obsId"] == ev[i]["repObsId"]}
 
 
-def test_confirmed_rejected_and_uncertain_events_carry_their_tag(client, camtrap_dir, tmp_path):
+def test_confirmed_rejected_and_unsure_events_carry_their_tag(client, camtrap_dir, tmp_path):
     sd, ev = _review_round1(client, camtrap_dir, tmp_path)
     client.get("/api/results")                                        # brings the verified CamtrapDP up to date
     tags = _tags_by_media(sd)
     assert all("camtrapverify:confirmed" in tags[m].split("|") for m in _media_of(ev, 0))
     rep = {f["mediaId"] for f in ev[1]["frames"] if f["obsId"] == ev[1]["repObsId"]}
-    assert all(tags[m].split("|") == ["camtrapverify:uncertain"] for m in rep)
+    assert all(tags[m].split("|") == ["camtrapverify:unsure"] for m in rep)
     rep = {f["mediaId"] for f in ev[2]["frames"] if f["obsId"] == ev[2]["repObsId"]}
     assert all(tags[m].split("|") == ["camtrapverify:rejected", "camtrapverify-actual-species:Canis lupus"] for m in rep)
 

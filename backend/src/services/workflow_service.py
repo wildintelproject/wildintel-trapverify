@@ -299,9 +299,9 @@ def reopen_last_round(species_safe: str) -> dict:
             "usa la edición de la especie (candado).",
         )
     dec_file = d / f"decisions_{species_safe}_iter{rounds}.csv"
-    unc_file = d / f"uncertain_{species_safe}_iter{rounds}.csv"
+    unc_file = d / f"unsure_{species_safe}_iter{rounds}.csv"
     confirmed_ids = set(pd.read_csv(dec_file, dtype=str)["observationID"].dropna()) if dec_file.exists() else set()
-    uncertain_ids = set(pd.read_csv(unc_file, dtype=str)["observationID"].dropna()) if unc_file.exists() else set()
+    unsure_ids = set(pd.read_csv(unc_file, dtype=str)["observationID"].dropna()) if unc_file.exists() else set()
 
     backup = d / "reopened"
     backup.mkdir(parents=True, exist_ok=True)
@@ -317,7 +317,7 @@ def reopen_last_round(species_safe: str) -> dict:
         return ev["repObsId"] in ids or any(f["obsId"] in ids for f in ev["frames"])
 
     decisions = {
-        ev["repObsId"]: "confirmed" if _of(ev, confirmed_ids) else "uncertain" if _of(ev, uncertain_ids) else "rejected"
+        ev["repObsId"]: "confirmed" if _of(ev, confirmed_ids) else "unsure" if _of(ev, unsure_ids) else "rejected"
         for ev in events
     }
     corr = load_rejection_corrections(p["corrections"])

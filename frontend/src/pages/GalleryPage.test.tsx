@@ -36,7 +36,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('en')
   vi.clearAllMocks()
   api.getState.mockResolvedValue({ ready: true, config: { total_iterations: 10, gap_seconds: 60, occasion_days: 5, min_score: 0.5 } })
-  api.getDecisions.mockResolvedValue({ confirmed: [], uncertain: [], corrections: {} })
+  api.getDecisions.mockResolvedValue({ confirmed: [], unsure: [], corrections: {} })
   api.getEvents.mockResolvedValue([event('a', 3)])
   api.getReview.mockResolvedValue([])
   api.getTaxa.mockResolvedValue({ taxa: [], extra: [] })

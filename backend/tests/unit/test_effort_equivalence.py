@@ -78,7 +78,7 @@ def test_vectorised_effort_matches_the_cell_walk(seed, done):
     assert _canon(_effort_accumulate(df, conf, unc, done, _fresh())) == _canon(_reference(df, conf, unc, done))
 
 
-def test_no_confirmations_and_no_uncertain():
+def test_no_confirmations_and_no_unsure():
     df = _random_species(1)
     assert _canon(_effort_accumulate(df, set(), set(), 2, _fresh())) == _canon(_reference(df, set(), set(), 2))
 

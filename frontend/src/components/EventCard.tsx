@@ -12,7 +12,7 @@ function bestFrameIndex(frames: DetectionEvent['frames']): number {
   return best
 }
 
-export type Decision = 'confirmed' | 'rejected' | 'uncertain'
+export type Decision = 'confirmed' | 'rejected' | 'unsure'
 
 interface Props {
   event: DetectionEvent
@@ -22,7 +22,7 @@ interface Props {
   onOpenLightbox: (eventIdx: number, frameIdx: number) => void
   eventIdx: number
   readOnly?: boolean
-  allowUncertain?: boolean
+  allowUnsure?: boolean
   showBoxes?: boolean
   recordCorrection?: boolean
   correction?: string
@@ -43,7 +43,7 @@ function EventCard({
   onOpenLightbox,
   eventIdx,
   readOnly = false,
-  allowUncertain = true,
+  allowUnsure = true,
   showBoxes = false,
   recordCorrection = false,
   correction = '',
@@ -76,7 +76,7 @@ function EventCard({
     ? 'border-2 border-emerald-500'
     : decision === 'rejected'
     ? 'border-2 border-red-500'
-    : decision === 'uncertain'
+    : decision === 'unsure'
     ? 'border-2 border-amber-500'
     : needsDecision
     ? 'border-2 border-amber-400'
@@ -207,18 +207,18 @@ function EventCard({
         >
           {t('gallery.rejected_btn')}
         </button>
-        {allowUncertain && (
+        {allowUnsure && (
           <button
             className={`flex-1 py-1.5 text-sm rounded font-medium transition-colors disabled:opacity-50 ${
-              decision === 'uncertain'
+              decision === 'unsure'
                 ? 'bg-amber-600 text-white hover:bg-amber-700'
                 : 'border border-amber-600 text-amber-400 hover:bg-amber-600 hover:text-white'
             }`}
-            onClick={() => onDecide(event.key, event.repObsId, 'uncertain')}
+            onClick={() => onDecide(event.key, event.repObsId, 'unsure')}
             disabled={readOnly}
-            title={t('gallery.uncertain_hint')}
+            title={t('gallery.unsure_hint')}
           >
-            {t('gallery.uncertain_btn')}
+            {t('gallery.unsure_btn')}
           </button>
         )}
       </div>
