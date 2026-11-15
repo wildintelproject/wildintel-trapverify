@@ -1213,6 +1213,100 @@ def build_false_positive_sources(
     return df
 
 
+REVIEW_LOG_COLS = ["observationID", "site_occasion_key", "species_safe", "scientificName",
+                   "iteration", "decision", "decided_at"]
+
+
+def save_review_log(
+    path: Path,
+    candidates: pd.DataFrame,
+    species_safe: str,
+    iteration: int,
+    confirmed: list[str],
+    uncertain: list[str],
+    times_ms: dict[str, int],
+) -> pd.DataFrame:
+    """Record when each decision of a round was made, in ``review_log.csv``.
+
+    ``times_ms`` maps ``observationID`` -> epoch milliseconds taken in the browser
+    when the reviewer clicked. The decision is ``confirmed`` or ``uncertain`` when
+    the ID is in those lists and ``rejected`` otherwise. Rows of this species and
+    round are replaced; an event that has no new time (it was restored from an
+    earlier save and not touched) keeps its previous timestamp. Purely
+    informational: nothing here feeds decisions, histories or cell status.
+
+    Returns:
+        The full contents of the file after the update.
+    """
+    old = load_review_log(path)
+    prev = {}
+    if not old.empty:
+        same = (old["species_safe"] == species_safe) & (old["iteration"].astype(int) == iteration)
+        prev = dict(zip(old.loc[same, "observationID"], old.loc[same, "decided_at"]))
+        old = old[~same]
+    conf, unc = set(confirmed), set(uncertain)
+    meta = candidates[candidates["observationID"].isin(set(times_ms) | set(prev))] \
+        .drop_duplicates("observationID")
+    rows = []
+    for _, r in meta.iterrows():
+        oid = r["observationID"]
+        if oid in times_ms:
+            at = pd.Timestamp(int(times_ms[oid]), unit="ms", tz="UTC").strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        else:
+            at = prev[oid]
+        rows.append({
+            "observationID": oid, "site_occasion_key": r["site_occasion_key"],
+            "species_safe": species_safe, "scientificName": r["scientificName"],
+            "iteration": iteration,
+            "decision": "confirmed" if oid in conf else "uncertain" if oid in unc else "rejected",
+            "decided_at": at,
+        })
+    out = pd.concat([old, pd.DataFrame(rows, columns=REVIEW_LOG_COLS)], ignore_index=True)
+    out.to_csv(path, index=False)
+    return out
+
+
+def load_review_log(path: Path) -> pd.DataFrame:
+    """Read ``review_log.csv`` (empty frame with the columns if absent: older sessions)."""
+    if not path.exists():
+        return pd.DataFrame(columns=REVIEW_LOG_COLS)
+    return pd.read_csv(path, dtype=str).fillna("")
+
+
+def review_time_by_species(log: pd.DataFrame, idle_seconds: int = 120) -> dict:
+    """Active review time from the decision timestamps, per species and in total.
+
+    Decisions of the whole session are put in time order. Each decision is
+    credited with the time since the previous one **if that gap is at most
+    ``idle_seconds``**; a longer gap is idle time (a break) and is not counted.
+    The time before the first decision of each work block is not observable, so
+    the result is a slight underestimate (about one decision per block).
+
+    Returns:
+        ``{"by_species": {scientificName: {"seconds", "credited", "timed"}},
+        "seconds", "credited", "timed", "idle_seconds"}``; ``timed`` is the number of
+        decisions with a timestamp and ``credited`` those that received time.
+        Empty ``by_species`` and zeros when there is no log (sessions made
+        before this was recorded).
+    """
+    out = {"by_species": {}, "seconds": 0.0, "credited": 0, "timed": 0, "idle_seconds": idle_seconds}
+    if log.empty:
+        return out
+    t = pd.to_datetime(log["decided_at"], errors="coerce", utc=True)
+    df = log.assign(_t=t).dropna(subset=["_t"]).sort_values("_t")
+    if df.empty:
+        return out
+    gap = df["_t"].diff().dt.total_seconds()
+    df["_credit"] = gap.where((gap >= 0) & (gap <= idle_seconds))
+    for sp, g in df.groupby("scientificName"):
+        out["by_species"][sp] = {"seconds": float(g["_credit"].fillna(0).sum()),
+                                 "credited": int(g["_credit"].notna().sum()), "timed": int(len(g))}
+    out["seconds"] = float(df["_credit"].fillna(0).sum())
+    out["credited"] = int(df["_credit"].notna().sum())
+    out["timed"] = int(len(df))
+    return out
+
+
 # ─── Species stats for index page ─────────────────────────────────────────────
 
 def species_stats(
@@ -1914,6 +2008,8 @@ def build_species_effort(
     out_dir: Path,
     rounds_done: Optional[dict[str, int]] = None,
     exclusions: Optional[pd.DataFrame] = None,
+    review_log: Optional[pd.DataFrame] = None,
+    idle_seconds: int = 120,
 ) -> pd.DataFrame:
     """Generate ``effort_report.csv``: verification effort per species plus a total row.
 
@@ -1939,6 +2035,13 @@ def build_species_effort(
     * ``uncertain_events``: events the reviewer marked *uncertain* (not counting any
       later confirmed). They behave exactly as rejections in the histories.
       ``non_detection_cells_with_uncertain``: non-detection cells holding at least one.
+    * ``review_active_seconds``, ``review_decisions_timed``,
+      ``review_seconds_per_decision``, ``review_est_full_seconds``,
+      ``review_est_saved_seconds``: active review time from the decision timestamps
+      (see :func:`review_time_by_species`; pauses over ``idle_seconds`` are not
+      counted) and an **estimate** of a full event-level review (candidate events
+      x the session's mean seconds per decision) and of the time saved. Empty for
+      sessions without timestamps.
     * ``excluded_photos`` / ``excluded_events`` / ``excluded_cells``: what the
       ``min_score`` cut-off removed before review (see
       :func:`compute_min_score_exclusions`); empty when ``exclusions`` is not given.
@@ -1949,6 +2052,8 @@ def build_species_effort(
         out_dir: Destination directory (created if absent).
         exclusions: Optional per-species output of
             :func:`compute_min_score_exclusions` to include in the report.
+        review_log: Optional ``review_log.csv`` contents for the review-time columns.
+        idle_seconds: Pause length (s) above which time between decisions is idle.
         rounds_done: Optional ``species_safe`` -> completed rounds. When given,
             a cell with no confirmation whose events are not all inspected yet
             is ``cells_unverified`` and only events of rank <= rounds count as
@@ -2043,6 +2148,24 @@ def build_species_effort(
     if rows:
         rows.append(build_row("TOTAL", total))
     df = pd.DataFrame(rows)
+    rt = review_time_by_species(review_log if review_log is not None else pd.DataFrame(), idle_seconds)
+    rate = rt["seconds"] / rt["credited"] if rt["credited"] else None
+    tcols = ["review_active_seconds", "review_decisions_timed", "review_seconds_per_decision",
+             "review_est_full_seconds", "review_est_saved_seconds"]
+    for c in tcols:
+        df[c] = None
+    if rt["timed"] and not df.empty:
+        for i, r in df.iterrows():
+            tot = r["species"] == "TOTAL"
+            d = {"seconds": rt["seconds"], "timed": rt["timed"]} if tot else rt["by_species"].get(r["species"])
+            if d is None:
+                continue
+            est = round(rate * r["candidate_events"]) if rate is not None else None
+            df.loc[i, "review_active_seconds"] = round(d["seconds"])
+            df.loc[i, "review_decisions_timed"] = d["timed"]
+            df.loc[i, "review_seconds_per_decision"] = round(rate, 1) if rate is not None else None
+            df.loc[i, "review_est_full_seconds"] = est
+            df.loc[i, "review_est_saved_seconds"] = round(est - d["seconds"]) if est is not None else None
     cols = ["excluded_photos", "excluded_events", "excluded_cells"]
     if exclusions is not None and not df.empty:
         ex = exclusions.set_index("species")[cols]

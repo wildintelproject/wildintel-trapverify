@@ -45,6 +45,7 @@ export interface WorkflowConfig {
   classified_by: string
   extended_confirmation: boolean
   record_rejection_species: boolean
+  review_idle_seconds: number
 }
 
 export type Decision = 'confirmed' | 'rejected' | null

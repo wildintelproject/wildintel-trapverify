@@ -67,7 +67,7 @@
     | `dethist_verified_{sp}.csv` | Detection history after human verification |
     | `verification_summary.csv` | Per-species: combos, detections, false positives, ψ_obs |
     | `review_effort.csv` | Actual number of images inspected per cell |
-    | `effort_report.csv` | Effort per species and total: events and cells inspected, by outcome, with rejected/confirmed scores |
+    | `effort_report.csv` | Effort per species and total: events and cells inspected, by outcome, with rejected/confirmed scores, active review time and an estimate of the time saved |
     | `false_positive_sources.csv` | Main sources of false positives per species (only with *Record the actual species when rejecting*) |
 
 - **Incremental regeneration** — output files are regenerated automatically after every save, so intermediate results are always up to date.

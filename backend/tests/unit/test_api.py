@@ -1356,3 +1356,40 @@ def test_taxa_endpoint_lists_dataset_species_and_extras(client, setup_session):
     data = client.get("/api/taxa").json()
     assert "Vulpes vulpes" in data["taxa"]
     assert "Homo sapiens" in data["extra"] and "No animal / empty" in data["extra"]
+
+
+# ─── review time ──────────────────────────────────────────────────────────────
+
+def test_decision_times_give_active_review_time_in_results(client, setup_session):
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    ids = [e["repObsId"] for e in ev]
+    t0 = 1_767_261_600_000
+    times = {oid: t0 + 40_000 * i for i, oid in enumerate(ids)}                    # 40 s apart
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1,
+                                        "confirmed": [ids[0]], "decision_times": times})
+    data = client.get("/api/results").json()
+    tot = next(r for r in data["effort_by_species"] if r["species"] == "TOTAL")
+    assert tot["review_active_seconds"] == 40 * (len(ids) - 1)
+    assert tot["review_decisions_timed"] == len(ids) and data["review_idle_seconds"] == 120
+
+def test_results_review_time_is_none_without_timestamps(client, setup_session):
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1,
+                                        "confirmed": [ev[0]["repObsId"]]})       # older client: no times
+    tot = next(r for r in client.get("/api/results").json()["effort_by_species"] if r["species"] == "TOTAL")
+    assert tot["review_active_seconds"] is None and tot["review_est_saved_seconds"] is None
+
+def test_idle_threshold_comes_from_setup(client, camtrap_dir, tmp_path):
+    client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"),
+        "target_species": ["Vulpes vulpes"], "study_start": "2025-11-01", "study_end": "2025-11-10",
+        "occasion_days": 5, "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.5,
+        "review_idle_seconds": 30})
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    ids = [e["repObsId"] for e in ev]
+    t0 = 1_767_261_600_000
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [],
+                                        "decision_times": {oid: t0 + 40_000 * i for i, oid in enumerate(ids)}})
+    data = client.get("/api/results").json()
+    tot = next(r for r in data["effort_by_species"] if r["species"] == "TOTAL")
+    assert data["review_idle_seconds"] == 30 and tot["review_active_seconds"] == 0   # every 40 s gap is idle

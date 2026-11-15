@@ -12,6 +12,7 @@ from camtrap_workflow import (
     resolve_camtrapdp_resource,
     save_decisions,
     save_rejection_corrections,
+    save_review_log,
     save_uncertain,
 )
 from schemas.requests import DecisionsRequest, RejectRequest, UnrejectRequest
@@ -51,6 +52,11 @@ def post_decisions(req: DecisionsRequest) -> dict:
     save_uncertain(
         p["decisions"], candidates, req.species, req.iteration,
         [u for u in req.uncertain if u not in set(req.confirmed)],
+    )
+
+    save_review_log(
+        p["review_log"], candidates, req.species, req.iteration,
+        req.confirmed, [u for u in req.uncertain if u not in set(req.confirmed)], req.decision_times,
     )
 
     if config.get("record_rejection_species"):

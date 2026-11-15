@@ -327,6 +327,7 @@ These control what is recorded in the output when an expert confirms a detection
 | **Classified by** | `expert_review` | Value written to the `classifiedBy` field in the verified CamtrapDP for every confirmed observation. Change this to identify the reviewer (e.g. `ornithologist_A`). |
 | **Extended confirmation** | Off | When enabled, all observations in the confirmed burst — not just the highest-confidence frame — are marked as human-verified in the output. |
 | **Record the actual species when rejecting** | Off | Adds an optional field to rejected detection events to type what the animal really is. It never changes the verification. See [Recording the actual species](#recording-the-actual-species-of-rejected-events). |
+| **Idle threshold for review time** | 120 s | A pause longer than this between two decisions is a break and is not counted as review time. See [Review time](#review-time). |
 | **Show all event frames** | Off | When enabled, all frames from the same deployment captured between the first and last detection of the target species are shown in the carousel, even if they are not labelled as that species. This lets you see the full context of the animal's visit. Context frames appear dimmed and do not affect the decision. |
 
 Click **✓ Start verification** to process the data and begin the review.
@@ -453,6 +454,18 @@ With the option on, a rejected card shows an optional field *Actual species*. St
 This **never changes the verification**: a rejection is still a rejection, the next detection event is still shown in the following round, and the detection histories are identical with the option on or off. In particular, a rejected event relabelled as another species is **not** counted as a detection of that species; recording it only keeps the information the reviewer already had.
 
 The values are saved in `rejection_corrections.csv` in the session folder. From them the Results page and `occupancy_inputs/false_positive_sources.csv` show, per species, the main sources of false positives: the actual species, the number of rejected events and their share of all the rejected events of that species. A row *not recorded* collects the rejected events with no actual species typed, so the shares add up to 100 % and you can see how complete the record is.
+
+### Review time
+
+The app records **when** each decision is made, in `review_log.csv` in the session folder (one row per detection event: its decision, `confirmed`, `rejected` or `uncertain`, and a UTC timestamp), so the effort can be reported in hours and not only in photos or events. The timestamp is taken when you click; if you change a decision before saving the round, the time of the last change is kept.
+
+The **active review time** is computed from the time between consecutive decisions, over the whole session and all species:
+
+- Each decision is credited with the time since the previous decision **if that gap is at most the idle threshold** (120 s by default, set in the setup under *Idle threshold for review time*). A longer gap is a break and counts as zero.
+- The time before the first decision of each work block cannot be observed, so the result is a slight underestimate (about one decision per block).
+- **Confirm all** and other bulk actions produce decisions with almost no time between them, so they add almost no time.
+
+The Results page and `effort_report.csv` (`review_active_seconds`, `review_decisions_timed`, `review_seconds_per_decision`) give the active time per species and in total. They also give an **estimate** of a full event-level review (`review_est_full_seconds` = candidate events × your mean seconds per decision) and of the time saved (`review_est_saved_seconds`). It is an estimate, not a measurement: it assumes the events that were never inspected would have taken as long as the ones you did. Sessions made before this was recorded have no timestamps and show *n/a*.
 
 ### Saving Decisions
 

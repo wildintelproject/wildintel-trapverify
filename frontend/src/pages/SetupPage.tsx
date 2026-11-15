@@ -24,6 +24,7 @@ const DEFAULT: WorkflowConfig = {
   classified_by: 'expert_review',
   extended_confirmation: false,
   record_rejection_species: false,
+  review_idle_seconds: 120,
 }
 
 const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
@@ -1100,6 +1101,19 @@ export default function SetupPage({ onSetup, ready }: Props) {
               onChange={(e) => set('classified_by', e.target.value)}
             />
             <p className={hintClass}>{t('setup.hint_classified_by')}</p>
+          </div>
+
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_review_idle_seconds')}</label>
+            <input
+              type="number"
+              min={10}
+              step={10}
+              className={inputClass}
+              value={form.review_idle_seconds}
+              onChange={(e) => set('review_idle_seconds', Math.max(10, Number(e.target.value) || 120))}
+            />
+            <p className={hintClass}>{t('setup.hint_review_idle_seconds')}</p>
           </div>
 
           <div className="mb-4">

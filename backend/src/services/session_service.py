@@ -60,6 +60,7 @@ def paths() -> dict[str, Path]:
         "manifest":      sd / "candidate_manifest.csv",
         "exclusions":    sd / "min_score_exclusions.csv",
         "corrections":   sd / "rejection_corrections.csv",
+        "review_log":    sd / "review_log.csv",
         "rejected":      sd / "rejected_media.json",
         "decisions":     sd / "decisions",
         "camtrap_out":   sd / "camtrap_dp_verified",

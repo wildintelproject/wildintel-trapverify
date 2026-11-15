@@ -54,10 +54,10 @@ export const api = {
   getDecisions: (species: string, iteration: number) =>
     req<{ confirmed: string[]; uncertain: string[]; corrections: Record<string, string> }>(`/api/decisions?species=${species}&iteration=${iteration}`),
 
-  saveDecisions: (species: string, iteration: number, confirmed: string[], uncertain: string[] = [], corrections: Record<string, string> = {}) =>
+  saveDecisions: (species: string, iteration: number, confirmed: string[], uncertain: string[] = [], corrections: Record<string, string> = {}, decisionTimes: Record<string, number> = {}) =>
     post<{ success: boolean; done: boolean; next_iteration: number | null; remaining: number }>(
       '/api/decisions',
-      { species, iteration, confirmed, uncertain, corrections },
+      { species, iteration, confirmed, uncertain, corrections, decision_times: decisionTimes },
     ),
 
   rejectBurst: (mediaId: string) =>
