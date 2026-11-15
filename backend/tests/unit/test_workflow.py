@@ -466,6 +466,37 @@ def test_build_candidates_same_timestamp_frames_ordered_by_capture_seq(tmp_path)
     ordered = result.sort_values("burst_seq")
     assert list(ordered["mediaID"]) == ["m001", "m002"]
 
+def test_same_timestamp_frames_ordered_by_file_name_when_file_path_is_a_url():
+    """Combined datasets keep Trapper web addresses in filePath, which carry no
+    file name; the capture number must then come from fileName."""
+    dep = pd.DataFrame({"deploymentID": ["DEP1"], "locationID": ["SITE_A"]})
+    med = pd.DataFrame({
+        "mediaID":      ["m3", "m1", "m2"],   # fed out of capture order
+        "deploymentID": ["DEP1"] * 3,
+        "timestamp":    ["2025-11-02 10:00:00"] * 3,
+        "filePath":     [f"https://trap.example/storage/resource/media/{i}/file/" for i in (3, 1, 2)],
+        "fileName":     ["CAM__20251102_10.JPEG", "CAM__20251102_8.JPEG", "CAM__20251102_9.JPEG"],
+    })
+    obs = pd.DataFrame({
+        "observationID":             ["o3", "o1", "o2"],
+        "deploymentID":              ["DEP1"] * 3,
+        "mediaID":                   ["m3", "m1", "m2"],
+        "observationLevel":          ["media"] * 3,
+        "observationType":           ["animal"] * 3,
+        "scientificName":            ["Vulpes vulpes"] * 3,
+        "classificationProbability": [0.9, 0.5, 0.7],
+    })
+    result = build_candidates(
+        dep, med, obs, target_species=["Vulpes vulpes"], study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10), occasion_days=5, total_iterations=100_000, gap_seconds=60,
+    )
+    assert list(result.sort_values("burst_seq")["mediaID"]) == ["m1", "m2", "m3"]
+    # the gallery re-sorts its rows: the capture order must survive a shuffle
+    from camtrap_workflow import _sort_frames
+    shuffled = result.sample(frac=1, random_state=1)
+    assert list(_sort_frames(shuffled, ["burst_id", "ts"])["mediaID"]) == ["m1", "m2", "m3"]
+
+
 def test_build_candidates_occasion_assignment(candidates):
     # m003 at 2025-11-07 must be in occ2 (days 6-10)
     occ = candidates[candidates["mediaID"] == "m003"]["occasion"].iloc[0]
@@ -782,6 +813,46 @@ def test_get_review_events_sorted_by_site_occasion(decisions_dir, candidates):
     assert sites == sorted(sites) or occasions == sorted(occasions)
 
 
+def test_get_review_events_shows_event_confirmed_in_later_round(tmp_path, candidates):
+    """A cell confirmed in round 2 is shown with its rank-2 event, not rank 1."""
+    from camtrap_workflow import save_decisions
+    d = tmp_path / "decisions"
+    d.mkdir()
+    key = "SITE_A_occ1_Vulpes_vulpes"
+    save_decisions(d, candidates, "Vulpes_vulpes", 1, [])
+    rank2 = candidates[(candidates["site_occasion_key"] == key) & (candidates["rank"] == 2)]
+    obs2 = str(rank2.iloc[0]["observationID"])
+    save_decisions(d, candidates, "Vulpes_vulpes", 2, [obs2])
+
+    sp_cands = candidates[candidates["species_safe"] == "Vulpes_vulpes"]
+    ev = next(e for e in get_review_events(sp_cands, d) if e["key"] == key)
+    assert ev["status"] == "confirmed"
+    assert ev["rank"] == 2
+    assert ev["repObsId"] == obs2
+    assert obs2 in [str(f["obsId"]) for f in ev["frames"]]
+    rank1_obs = set(candidates.loc[(candidates["site_occasion_key"] == key) & (candidates["rank"] == 1),
+                                   "observationID"].astype(str))
+    assert not rank1_obs & {str(f["obsId"]) for f in ev["frames"]}
+
+
+def test_get_review_events_unconfirmed_cell_keeps_rank1(decisions_dir, candidates):
+    sp_cands = candidates[candidates["species_safe"] == "Vulpes_vulpes"]
+    ev = next(e for e in get_review_events(sp_cands, decisions_dir) if e["key"] == "SITE_B_occ1_Vulpes_vulpes")
+    assert ev["status"] == "not_confirmed"
+    assert ev["rank"] == 1
+
+
+def test_confirmed_observations_maps_cell_to_confirmed_obs(tmp_path, candidates):
+    from camtrap_workflow import confirmed_observations, save_decisions
+    d = tmp_path / "decisions"
+    d.mkdir()
+    key = "SITE_A_occ1_Vulpes_vulpes"
+    obs2 = str(candidates[(candidates["site_occasion_key"] == key) & (candidates["rank"] == 2)].iloc[0]["observationID"])
+    save_decisions(d, candidates, "Vulpes_vulpes", 2, [obs2])
+    sp_cands = candidates[candidates["species_safe"] == "Vulpes_vulpes"]
+    assert confirmed_observations(d, sp_cands) == {key: obs2}
+
+
 # ─── validate_camtrapdp_datapackage ───────────────────────────────────────────
 
 def _write_datapackage(tmp_path: Path, deployments_required: bool) -> Path:
@@ -909,6 +980,40 @@ def test_export_no_decisions_all_unchanged(camtrap_dir, tmp_path):
     obs_orig = pd.read_csv(camtrap_dir / "observations.csv", dtype=str)
     obs_new  = pd.read_csv(out / "observations.csv", dtype=str)
     assert obs_orig["classificationMethod"].tolist() == obs_new["classificationMethod"].tolist()
+
+def test_export_tags_review_outcomes(camtrap_dir, tmp_path, decisions_dir, candidates):
+    """Round 1 showed the rank-1 event of every cell: SITE_A occ1 was confirmed,
+    the others were rejected; the export says so in observationTags."""
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, decisions_dir, set(), candidates=candidates)
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    tags = obs.set_index("observationID")["observationTags"].fillna("")
+    conf_id = pd.read_csv(decisions_dir / "decisions_Vulpes_vulpes_iter1.csv", dtype=str)["observationID"].iloc[0]
+    assert tags[conf_id] == "camtrapverify:confirmed"
+    rank1 = candidates[(candidates["rank"] == 1) & (candidates["site_occasion_key"] != "SITE_A_occ1_Vulpes_vulpes")]
+    assert len(rank1) > 0
+    for oid in rank1["observationID"]:
+        assert tags[oid] == "camtrapverify:rejected"
+    # events never shown (rank 2 and later) carry no review tag
+    later = candidates[candidates["rank"] > 1]["observationID"]
+    assert all(tags[o] == "" for o in later)
+    cols = list(obs.columns)
+    assert cols.index("observationTags") < cols.index("observationComments") if "observationComments" in cols else True
+
+
+def test_export_unsure_tag(camtrap_dir, tmp_path, candidates):
+    from camtrap_workflow import save_decisions
+    d = tmp_path / "decisions"
+    d.mkdir()
+    key = "SITE_A_occ1_Vulpes_vulpes"
+    oid = candidates[(candidates["rank"] == 1) & (candidates["site_occasion_key"] == key)].iloc[0]["observationID"]
+    save_decisions(d, candidates, "Vulpes_vulpes", 1, [], unsure_ids=[oid])
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, d, set(), candidates=candidates)
+    obs = pd.read_csv(out / "observations.csv", dtype=str).set_index("observationID")
+    assert obs.loc[oid, "observationTags"] == "camtrapverify:unsure"
+    assert obs.loc[oid, "classificationMethod"] == "machine"
+
 
 # ─── classified_by parameter ──────────────────────────────────────────────────
 
@@ -1561,3 +1666,126 @@ def test_burst_context_excludes_frames_beyond_gap_seconds(camtrap_dir: Path):
     )
     ctx_ids = set(cands[cands["is_context"] == True]["mediaID"])  # noqa: E712
     assert "m_far_before" not in ctx_ids
+
+
+def test_build_candidates_min_score_by_species_overrides_general(camtrap_dir):
+    """A per-species threshold replaces the general min_score for that species
+    only; species without an override keep the general value."""
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    common = dict(
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+    )
+    # General 0.5 would keep everything; the fox override (0.75) drops m003/m005.
+    stricter = build_candidates(dep, med, obs, min_score=0.5,
+                                min_score_by_species={"Vulpes vulpes": 0.75}, **common)
+    assert "m005" not in set(stricter["mediaID"])
+    assert "m003" not in set(stricter["mediaID"])
+    assert {"m001", "m002", "m004"} <= set(stricter["mediaID"])
+    # General 0.95 would drop everything; a lower fox override (0.0) keeps them.
+    looser = build_candidates(dep, med, obs, min_score=0.95,
+                              min_score_by_species={"Vulpes vulpes": 0.0}, **common)
+    plain = build_candidates(dep, med, obs, min_score=0.0, **common)
+    assert set(looser["mediaID"]) == set(plain["mediaID"])
+    # An override for another species leaves this one on the general value.
+    other = build_candidates(dep, med, obs, min_score=0.75,
+                             min_score_by_species={"Meles meles": 0.1}, **common)
+    general = build_candidates(dep, med, obs, min_score=0.75, **common)
+    assert set(other["mediaID"]) == set(general["mediaID"])
+
+
+def test_export_rejected_photo_with_another_species(camtrap_dir, tmp_path, candidates):
+    """A detection event rejected for its species whose photo was used to
+    confirm another species: the first species' row says rejected, the other
+    species gets a confirmed row of its own in the same photo."""
+    from camtrap_workflow import save_decisions, set_cross_confirmation
+    d = tmp_path / "decisions"
+    d.mkdir()
+    save_decisions(d, candidates, "Vulpes_vulpes", 1, [])   # round 1: everything rejected
+    row = candidates[candidates["rank"] == 1].iloc[0]
+    set_cross_confirmation(d, "Meles meles", row["siteID"], int(row["occasion"]), row["mediaID"],
+                           "", "Vulpes vulpes")
+    out = tmp_path / "verified"
+    export_verified_camtrapdp(camtrap_dir, out, d, set(), candidates=candidates)
+    obs = pd.read_csv(out / "observations.csv", dtype=str)
+    photo = obs[obs["mediaID"] == row["mediaID"]].set_index("scientificName")
+    assert photo.loc["Vulpes vulpes", "observationTags"] == "camtrapverify:rejected"
+    assert photo.loc["Vulpes vulpes", "classificationMethod"] == "machine"
+    assert photo.loc["Meles meles", "observationTags"] == "camtrapverify:confirmed"
+    assert photo.loc["Meles meles", "classificationMethod"] == "human"
+
+
+# ─── Review order by time and sub-day occasions ───────────────────────────────
+
+def _fixture_with_late_high_score(camtrap_dir):
+    obs = pd.read_csv(camtrap_dir / "observations.csv", dtype=str)
+    obs.loc[obs["mediaID"] == "m005", "classificationProbability"] = "0.95"   # SITE_A occ1, 12:00
+    obs.to_csv(camtrap_dir / "observations.csv", index=False)
+    from camtrap_workflow import load_camtrapdp
+    return load_camtrapdp(camtrap_dir)
+
+
+def _build(dep, med, obs, **kw):
+    from camtrap_workflow import build_candidates
+    return build_candidates(dep, med, obs, target_species=["Vulpes vulpes"], study_start=date(2025, 11, 1),
+                            study_end=date(2025, 11, 10), occasion_days=5, total_iterations=100_000,
+                            gap_seconds=60, **kw)
+
+
+def test_review_order_time_ranks_earliest_event_first(camtrap_dir):
+    dep, med, obs = _fixture_with_late_high_score(camtrap_dir)
+    key = "SITE_A_occ1_Vulpes_vulpes"
+    by_score = _build(dep, med, obs)
+    by_time = _build(dep, med, obs, review_order="time")
+    first = lambda c: set(c[(c["site_occasion_key"] == key) & (c["rank"] == 1)]["mediaID"])
+    assert first(by_score) == {"m005"}            # 0.95 at 12:00
+    assert first(by_time) == {"m001", "m002"}     # 10:00 event, though lower score
+    # same events and cells either way
+    assert set(by_score["site_occasion_key"]) == set(by_time["site_occasion_key"])
+
+
+def test_time_to_detection_outputs(camtrap_dir, tmp_path, session_config):
+    from camtrap_workflow import build_occupancy_inputs, save_decisions
+    dep, med, obs = _fixture_with_late_high_score(camtrap_dir)
+    c = _build(dep, med, obs, review_order="time")
+    d = tmp_path / "dec"
+    d.mkdir()
+    oid = c[(c["site_occasion_key"] == "SITE_A_occ1_Vulpes_vulpes") & (c["rank"] == 1)].iloc[0]["observationID"]
+    save_decisions(d, c, "Vulpes_vulpes", 1, [oid])          # round 1 done: occ2 and SITE_B rejected
+    out = tmp_path / "occ"
+    build_occupancy_inputs(c, d, {**session_config, "review_order": "time"}, out)
+    v = pd.read_csv(out / "ttd_verified_Vulpes_vulpes.csv").set_index("siteID")
+    n = pd.read_csv(out / "ttd_naive_Vulpes_vulpes.csv").set_index("siteID")
+    assert v.loc["SITE_A", "occ1"] == 34.0        # 1 Nov 00:00 -> 2 Nov 10:00
+    assert v.loc["SITE_A", "occ2"] == 120.0       # rejected: censored at the occasion length
+    assert v.loc["SITE_B", "occ1"] == 120.0
+    assert n.loc["SITE_A", "occ2"] == 38.0        # 6 Nov 00:00 -> 7 Nov 14:00
+    assert n.loc["SITE_B", "occ1"] == 57.0
+    # score order writes no time-to-detection files
+    out2 = tmp_path / "occ2"
+    build_occupancy_inputs(c, d, session_config, out2)
+    assert not list(out2.glob("ttd_*.csv"))
+
+
+def test_occasions_in_hours(camtrap_dir, tmp_path, session_config, candidates):
+    from camtrap_workflow import build_occupancy_inputs, load_camtrapdp
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    c = _build(dep, med, obs, occasion_hours=12)
+    occ = c.set_index("mediaID")["occasion"]
+    assert occ["m001"] == 3       # 2 Nov 10:00 is 34 h in: third 12-h window
+    assert occ["m005"] == 4       # 2 Nov 12:00
+    assert occ["m003"] == 14      # 7 Nov 14:00 is 158 h in (158 // 12 + 1)
+    out = tmp_path / "occ"
+    build_occupancy_inputs(c, tmp_path / "none", {**session_config, "occasion_hours": 12}, out)
+    op = pd.read_csv(out / "camera_operation.csv").set_index("siteID")
+    assert list(op.columns) == [f"occ{j}" for j in range(1, 21)]    # 10 days × 2
+    assert (op.loc["SITE_A"] == 12).all()                            # hours active, last day included
+    h = pd.read_csv(out / "dethist_naive_Vulpes_vulpes.csv").set_index("siteID")
+    assert h.loc["SITE_A", "occ3"] == 1 and h.loc["SITE_A", "occ1"] == 0
+    # days mode is unchanged: 5-day occasions, 5 days of operation each
+    c5 = _build(dep, med, obs, occasion_hours=0)
+    assert c5.set_index("mediaID")["occasion"].equals(candidates.set_index("mediaID")["occasion"])
