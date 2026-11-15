@@ -2361,3 +2361,32 @@ def test_image_token_changes_when_the_photos_are_relinked(client, setup_session,
     before = session_service.image_token()
     session_service.update_paths(str(camtrap_dir), "/somewhere/else", False)
     assert session_service.image_token() != before
+
+
+# ─── Datasets made by "Classifiers and reference" ─────────────────────────────
+
+def _tag_filtered(camtrap_dir, media_id="m005"):
+    f = camtrap_dir / "observations.csv"
+    df = pd.read_csv(f, dtype=str)
+    df["observationTags"] = ""
+    df.loc[df["mediaID"] == media_id, "observationTags"] = "camtrapverify:filtered"
+    df.to_csv(f, index=False)
+
+
+def test_events_removed_by_the_classifier_combination_are_not_reviewed(client, camtrap_dir, tmp_path):
+    _tag_filtered(camtrap_dir)                                         # m005 is SITE_A occ1's second event
+    _setup_recording(client, camtrap_dir, tmp_path)
+    media = {f["mediaId"] for it in (1, 2) for e in client.get("/api/species/Vulpes_vulpes/events", params={"iteration": it}).json() for f in e["frames"]}
+    assert "m005" not in media and "m001" in media
+    assert client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 2}).json() == []     # no second event left
+
+
+def test_filtered_and_review_tags_live_together_in_the_verified_camtrapdp(client, camtrap_dir, tmp_path):
+    _tag_filtered(camtrap_dir)
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev = _round1_events(client)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
+    client.get("/api/results")
+    tags = _tags_by_media(sd)
+    assert tags["m005"] == "camtrapverify:filtered"                    # kept, never reviewed
+    assert "camtrapverify:confirmed" in tags[next(iter(_media_of(ev, 0)))].split("|")

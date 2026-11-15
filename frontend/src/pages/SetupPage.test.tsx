@@ -6,6 +6,7 @@ import i18n from '../i18n'
 
 const api = vi.hoisted(() => ({
   getState: vi.fn(), getRecentSessions: vi.fn(), getSpecies: vi.fn(), renameSession: vi.fn(), loadSession: vi.fn(),
+  mcDefaults: vi.fn(),
 }))
 vi.mock('../api', () => ({ api }))
 
@@ -22,6 +23,7 @@ beforeEach(async () => {
   api.getState.mockResolvedValue({ ready: false, default_output_dir: '/out' })
   api.getRecentSessions.mockResolvedValue(recent)
   api.getSpecies.mockResolvedValue([])
+  api.mcDefaults.mockResolvedValue({ output_dir: '/out/conversions' })
 })
 
 function renderSetup() {
@@ -61,5 +63,26 @@ describe('recent sessions on the welcome screen', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Rename Doñana spring 2023' }))
     expect(screen.getByRole('textbox')).toHaveValue('Doñana spring 2023')
     expect(api.loadSession).not.toHaveBeenCalled()
+  })
+})
+
+describe('local data formats', () => {
+  async function openFormats() {
+    renderSetup()
+    await userEvent.click(await screen.findByRole('button', { name: /Start verifying/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Local filesystem/ }))
+  }
+
+  it('offers Classifiers and reference next to the CamtrapDP, DeepFaune and CSV formats', async () => {
+    await openFormats()
+    for (const name of [/CamtrapDP directory|CamtrapDP folder/, /DeepFaune/, /Custom CSV|CSV/, /Classifiers and reference/]) {
+      expect(screen.getAllByRole('button', { name }).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('opens the combination form from that option', async () => {
+    await openFormats()
+    await userEvent.click(screen.getByRole('button', { name: /Classifiers and reference/ }))
+    expect(await screen.findByRole('heading', { name: 'Classifiers and reference' })).toBeInTheDocument()
   })
 })

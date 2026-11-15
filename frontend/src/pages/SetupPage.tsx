@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import DirectoryPicker from '../components/DirectoryPicker'
+import MultiClassifierForm, { type McParams } from '../components/MultiClassifierForm'
+import { occasionDuration } from '../utils/occasionDuration'
 import CsvImportForm from '../components/CsvImportForm'
 import RelinkDialog from '../components/RelinkDialog'
 import type { RecentSession, RelinkStatus, WorkflowConfig } from '../types'
@@ -76,7 +78,11 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [loadingClassProjects, setLoadingClassProjects] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
-  const [localFormat, setLocalFormat] = useState<'camtrapdp' | 'deepfaune' | 'csv' | null>(null)
+  const [localFormat, setLocalFormat] = useState<'camtrapdp' | 'deepfaune' | 'csv' | 'multiclassifier' | null>(null)
+  // Dataset made by "Classifiers and reference": period, occasions, gap and minimum confidence
+  // were fixed when it was scored and cannot change here.
+  const [mcLocked, setMcLocked] = useState(false)
+  const [mcFilter, setMcFilter] = useState<string | null>(null)
   const [deepfauneForm, setDeepfauneForm] = useState({ csvPath: '' })
   const [converting, setConverting] = useState(false)
   const [convertError, setConvertError] = useState<string | null>(null)
@@ -234,6 +240,28 @@ export default function SetupPage({ onSetup, ready }: Props) {
     return null
   }
 
+  // The combined dataset was scored with its own study period, occasion length and event gap:
+  // the session must use the same ones, and its probabilities are already filtered, so no
+  // minimum confidence is applied.
+  async function afterMcConversion(camtrap_dir: string, p: McParams) {
+    await afterConversion(camtrap_dir)
+    setForm((f) => ({
+      ...f,
+      study_start: p.study_start,
+      study_end: p.study_end,
+      occasion_days: p.occasion_days,
+      occasion_hours: p.occasion_hours ?? 0,
+      gap_seconds: p.gap_seconds,
+      min_score: 0,
+      min_score_by_species: {},
+      image_base_dir: p.images_dir || f.image_base_dir,
+    }))
+    setDataRange({ min: p.study_start, max: p.study_end })
+    setSelectedSpecies(new Set(p.species))
+    setMcLocked(true)
+    setMcFilter(p.filter_mode ?? null)
+  }
+
   async function goNext() {
     let currentDataRange = dataRange
     if (step === 0 && !dataRange && form.camtrap_dir.trim()) {
@@ -257,7 +285,8 @@ export default function SetupPage({ onSetup, ready }: Props) {
     const err = validate(currentDataRange)
     if (err) { setStepError(err); return }
     setStepError(null)
-    setStep((s) => s + 1)
+    // The study period of a combined dataset was set when combining the classifiers: skip that step.
+    setStep((s) => (mcLocked && s + 1 === 2 ? 3 : s + 1))
   }
 
   function goBack() {
@@ -265,11 +294,13 @@ export default function SetupPage({ onSetup, ready }: Props) {
     if (step === 0 && sourceType === 'local' && localFormat !== null) {
       setLocalFormat(null)
       setConvertError(null)
+      setMcLocked(false)
     } else if (step === 0 && sourceType !== null) {
       setSourceType(null)
       setLocalFormat(null)
+      setMcLocked(false)
     } else {
-      setStep((s) => s - 1)
+      setStep((s) => (mcLocked && s - 1 === 2 ? 1 : s - 1))
     }
   }
 
@@ -844,7 +875,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
         <div>
           <h4 className="text-lg font-semibold mb-1">{t('setup.local_format_title')}</h4>
           <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t('setup.local_format_desc')}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <button
               className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-center group"
               onClick={() => setLocalFormat('camtrapdp')}
@@ -875,6 +906,16 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </strong>
               <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.local_format_csv_desc')}</span>
             </button>
+            <button
+              className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-zinc-300 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-center group"
+              onClick={() => setLocalFormat('multiclassifier')}
+            >
+              <span className="text-4xl">🧩</span>
+              <strong className="text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                {t('setup.local_format_mc')}
+              </strong>
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">{t('setup.local_format_mc_desc')}</span>
+            </button>
           </div>
         </div>
       )}
@@ -882,9 +923,16 @@ export default function SetupPage({ onSetup, ready }: Props) {
       {/* ── Step 0d: CamtrapDP directory ── */}
       {step === 0 && sourceType === 'local' && localFormat === 'camtrapdp' && (
         <div>
-          <h4 className="text-lg font-semibold mb-1">{t('setup.step0_title')}</h4>
-          <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t('setup.step0_desc')}</p>
+          <h4 className="text-lg font-semibold mb-1">{t(mcLocked ? 'setup.mc_dataset_title' : 'setup.step0_title')}</h4>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">{t(mcLocked ? 'setup.mc_dataset_desc' : 'setup.step0_desc')}</p>
 
+          {mcLocked && (
+            <div className="mb-6">
+              <label className={labelClass}>{t('setup.label_data_dir')}</label>
+              <p className="font-mono text-sm break-all text-zinc-800 dark:text-zinc-200" data-testid="mc-dataset-path">{form.camtrap_dir}</p>
+            </div>
+          )}
+          {!mcLocked && (
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_data_dir')}</label>
             <div className="flex">
@@ -900,6 +948,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </button>
             </div>
           </div>
+          )}
 
           <div className="mb-6">
             <label className={labelClass}>
@@ -1038,6 +1087,11 @@ export default function SetupPage({ onSetup, ready }: Props) {
         <CsvImportForm onConverted={afterConversion} onBack={goBack} />
       )}
 
+      {/* ── Step 0g: combine several classifiers ── */}
+      {step === 0 && sourceType === 'local' && localFormat === 'multiclassifier' && (
+        <MultiClassifierForm onConverted={afterMcConversion} onBack={goBack} />
+      )}
+
       {/* ── Step 1 ── */}
       {step === 1 && (
         <div>
@@ -1098,13 +1152,13 @@ export default function SetupPage({ onSetup, ready }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>{t('setup.label_start')}</label>
-              <input type="date" className={inputClass} value={form.study_start}
+              <input type="date" className={inputClass} value={form.study_start} disabled={mcLocked}
                 min={dataRange?.min} max={dataRange?.max}
                 onChange={(e) => set('study_start', e.target.value)} />
             </div>
             <div>
               <label className={labelClass}>{t('setup.label_end')}</label>
-              <input type="date" className={inputClass} value={form.study_end}
+              <input type="date" className={inputClass} value={form.study_end} disabled={mcLocked}
                 min={dataRange?.min} max={dataRange?.max}
                 onChange={(e) => set('study_end', e.target.value)} />
             </div>
@@ -1155,9 +1209,21 @@ export default function SetupPage({ onSetup, ready }: Props) {
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1">
             {t('setup.section_sampling')}
           </p>
+          {!mcLocked && (
           <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm"
             dangerouslySetInnerHTML={{ __html: t('setup.step3_desc') }} />
+          )}
+          {mcLocked && (
+            <div className="mb-6 px-3.5 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 text-sm" data-testid="mc-sampling-summary">
+              {t('setup.mc_sampling_summary', {
+                start: formatDate(form.study_start), end: formatDate(form.study_end),
+                duration: occasionDuration(t, form.occasion_days, form.occasion_hours),
+                gap: form.gap_seconds,
+              })}
+            </div>
+          )}
 
+          {!mcLocked && (
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_occasion_length')}</label>
             <div className="flex gap-2">
@@ -1181,14 +1247,25 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </p>
             )}
           </div>
+          )}
 
+          {!mcLocked && (
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_gap')}</label>
             <input type="number" className={inputClass} min={1} value={form.gap_seconds}
               onChange={(e) => set('gap_seconds', Number(e.target.value))} />
             <p className={hintClass}>{t('setup.hint_gap')}</p>
           </div>
+          )}
 
+          {mcLocked && (
+            <div className="mb-6">
+              <label className={labelClass}>{t('setup.label_min_score')}</label>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">{t('setup.mc_locked_score')}</p>
+            </div>
+          )}
+
+          {!mcLocked && (
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_min_score')}</label>
             <div className="flex items-center gap-3">
@@ -1233,6 +1310,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </details>
             )}
           </div>
+          )}
 
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_review_order')}</label>
@@ -1242,6 +1320,9 @@ export default function SetupPage({ onSetup, ready }: Props) {
               <option value="time">{t('setup.review_order_time')}</option>
             </select>
             <p className={hintClass}>{t('setup.hint_review_order')}</p>
+            {form.review_order === 'time' && mcLocked && mcFilter === 'cells' && (
+              <p className="text-xs mt-1 text-amber-600 dark:text-amber-400">{t('setup.review_order_mc_warning')}</p>
+            )}
             {form.review_order === 'time' && (form.min_score > 0 || Object.values(form.min_score_by_species ?? {}).some((v) => v > 0)) && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{t('setup.hint_review_order_cutoff')}</p>
             )}
@@ -1373,13 +1454,13 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
       {/* Navigation */}
       <div className="flex justify-between mt-10">
-        {step === 0 && sourceType === 'local' && (localFormat === 'deepfaune' || localFormat === 'csv')
+        {step === 0 && sourceType === 'local' && (localFormat === 'deepfaune' || localFormat === 'csv' || localFormat === 'multiclassifier')
           ? <div />
           : <button type="button" className={btnOutline} onClick={goBack}>
               {step === 0 && sourceType === null ? t('setup.back_welcome') : t('setup.back')}
             </button>
         }
-        {(step === 0 && sourceType === null) || (step === 0 && sourceType === 'local' && localFormat === null) || (step === 0 && sourceType === 'local' && localFormat === 'deepfaune') || (step === 0 && sourceType === 'local' && localFormat === 'csv') || (step === 0 && sourceType === 'trapper') ? (
+        {(step === 0 && sourceType === null) || (step === 0 && sourceType === 'local' && localFormat === null) || (step === 0 && sourceType === 'local' && localFormat === 'deepfaune') || (step === 0 && sourceType === 'local' && localFormat === 'csv') || (step === 0 && sourceType === 'local' && localFormat === 'multiclassifier') || (step === 0 && sourceType === 'trapper') ? (
           <div />
         ) : step < STEP_LABELS.length - 1 ? (
           <button type="button" className={btnPrimary} onClick={goNext}>

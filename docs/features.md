@@ -5,6 +5,7 @@
 - **CamtrapDP v1.0** — loads any directory with `deployments.csv`, `media.csv`, and `observations.csv` produced by an AI classifier or citizen-science platform. No conversion required.
 - **DeepFaune CSV importer** — converts DeepFaune classification exports directly to CamtrapDP format; species labels are mapped automatically to scientific names via a built-in lookup table.
 - **Generic CSV importer** — accepts any classifier CSV with configurable column mapping (image path, datetime, species label, confidence score, site). An interactive species-name editor allows mapping custom labels to scientific names; non-animal labels (`empty`, `human`, `blank`, etc.) are handled automatically.
+- **Classifiers and reference** — combines the CamtrapDP folders of one or more AI classifiers and, optionally, a human reference (e.g. Zooniverse) into one CamtrapDP with a recalculated probability per photo and target species. With a reference, five methods are compared out of sample and per-species thresholds take out of the review the detection events not worth reviewing; they stay in the dataset tagged `camtrapverify:filtered`. See [Classifiers and reference](multiclassifier.md).
 - **Flexible timestamp parsing** — accepts ISO 8601 and EXIF-style (`YYYY:MM:DD HH:MM:SS`) timestamps transparently.
 - **Automatic metadata detection** — infers available species and the study date range directly from `observations.csv` on load.
 - **Site resolution** — uses `locationID` when present; falls back to `deploymentID`, so both survey designs are supported.

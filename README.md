@@ -25,6 +25,7 @@ Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP pac
 **Data ingestion**
 - Accepts any [CamtrapDP v1.0](https://camtrap-dp.tdwg.org/) directory directly
 - Built-in converter for [DeepFaune](https://www.deepfaune.cnrs.fr/) CSV exports
+- **Classifiers and reference**: combines the CamtrapDP folders of one or more AI classifiers and, optionally, a human reference (e.g. Zooniverse) into one CamtrapDP with a recalculated probability per photo and species, chosen and filtered against the reference so fewer detection events need review (see [methods](docs/multiclassifier.md))
 - Generic CSV importer with configurable column mapping and interactive species-name editor for any AI classifier output
 
 **Review workflow**

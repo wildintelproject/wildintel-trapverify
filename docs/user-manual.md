@@ -16,6 +16,7 @@
      - [Option B — DeepFaune CSV](#option-b--deepfaune-csv)
      - [Option C — Custom CSV](#option-c--custom-csv)
      - [Option D — Trapper instance](#option-d--trapper-instance)
+     - [Option E — Classifiers and reference](#option-e--classifiers-and-reference)
    - [Step 2 — Species](#step-2--species)
    - [Step 3 — Study Period](#step-3--study-period)
    - [Step 4 — Parameters](#step-4--parameters)
@@ -198,10 +199,10 @@ First choose where your data comes from: **Local filesystem** or a **Trapper ins
 ![Setup — Step 1: Data source](./img/user_manual/setup-step1-source.png)
 *Data source selector.*
 
-If you select **Local filesystem**, a second selector appears asking for the **data format**. Three formats are supported:
+If you select **Local filesystem**, a second selector appears asking for the **data format**. Four formats are supported (the fourth, **Classifiers and reference**, is described in [Option E](#option-e--classifiers-and-reference)):
 
 ![Setup — Step 1: Format selector](./img/user_manual/setup-step1-format.png)
-*Format selector: CamtrapDP directory, DeepFaune CSV or Custom CSV.*
+*Format selector: CamtrapDP directory, DeepFaune CSV, Custom CSV or Classifiers and reference (the screenshot predates the fourth option).*
 
 #### Option A — CamtrapDP directory
 
@@ -277,6 +278,33 @@ Connect to a [Trapper](https://trapper-project.readthedocs.io/) installation to 
 
 > **Note:** Trapper integration is currently under active development. Some features may not yet be available.
 
+#### Option E — Classifiers and reference
+
+When the same photos have been processed by one or more AI classifiers (for example DeepFaune and a YOLO model) and, optionally, part of them has been labelled by people (for example the volunteers of a Zooniverse project), choose **Classifiers and reference**. The application combines them into a single CamtrapDP whose `classificationProbability` is recalculated, and removes the detection events that are not worth reviewing. The review then continues with that dataset as with any CamtrapDP.
+
+A single AI classifier is enough when there is a reference: its probabilities are calibrated and weighted against the people's labels, and the events not worth reviewing are removed (on the Doñana 2023 archive, DeepFaune alone with Zooniverse removed 12 % of the events of five ungulate species without losing any cell; DeepFaune and YOLO together, 28 %). One AI classifier without a reference changes nothing: open its CamtrapDP directly instead.
+
+1. **Classifiers.** One row per classifier, with a name you type (e.g. *DeepFaune*, *YOLO*, *Zooniverse*; each must be different), its CamtrapDP folder and its role. The form starts with one **AI classifier** row and one **Reference (humans)** row; add more with **+ Add classifier**, and leave the reference row empty if you have none. AI classifiers propose detections. The reference is taken as truth: it is used to measure the AI classifiers, to learn how much to trust each of them, to choose the scoring method and to decide which events can be removed. Photos are matched by `mediaID`, so every folder must use the same IDs.
+2. **Read labels** (required). The application reads which labels and dates each classifier has; the period, the species and the options appear after this step. If you change a classifier, read them again. When the classifiers' `media.csv` hold web addresses (e.g. Trapper URLs) instead of paths on your computer, a note says so: nothing else is needed, because in the **Images directory** step the photos are found by their camera folder and file name (see the note at the start of [Step 1](#step-1--source)).
+3. **Study period and occasions.** Start and end dates, occasion length and the gap that separates detection events. The session created afterwards uses the same values (they are filled in for you), because the method is chosen on those very cells and events.
+4. **Target species and groups.** Tick the target species, the ones reviewed afterwards. A *group* is what a classifier can say without naming the species, e.g. *Cervidae* for red and fallow deer, or *Leporidae* for hare and rabbit: species of the same group are scored together and then split animal by animal. Species are proposed as a group when some classifier uses their genus (e.g. *Martes*) or their family (e.g. *Cervidae*) as a label; mammal families come from the [Mammal Diversity Database](https://www.mammaldiversity.org) (all 1,363 mammal genera). The group of each species can be left empty (a species on its own), taken from the suggestions or typed freely, e.g. to score two confusable species together or for birds. The groups you use are remembered and proposed again next time.
+   Below the species, **Labels that are not a species** lists the other labels (e.g. *Cervidae*, *Leporidae*, *Aves*, a common name such as *deer*) with their photos per classifier. They can't be ticked as target species, because the review is per species and they don't say which one, but they are used: a label that is a group's name means "an animal of that group, species unknown" and counts for the group's presence. Any other label can be told to mean a group or a target species; otherwise it counts as another animal.
+5. **How the new probability is calculated** (collapsible) explains, in the form itself, the score, the five methods with an example, how the method is chosen, how events are removed and how the reference is used.
+6. **Advanced options** (optional): which detection events are removed (by cells or none), the share to keep, how ties between methods are broken and whether the reference's verdict is used on the photos it reviewed. Each option says what it does, when to change it and what it costs.
+7. **Where to save the combined dataset.** A folder (by default `Documents/camtrap_verify/conversions`) and, optionally, the name of the new folder created inside it (by default `multiclassifier_<date and time>`). A folder that already holds files is never overwritten.
+
+Click **Combine**. On large archives it takes a minute or two. The result first says in sentences what the combination did (which method was chosen and why, how many events were removed, that every cell keeps an event, and each species' threshold or why it was not filtered) and then shows the details: the comparison between methods and the events per species. Click **Use this dataset** to continue the wizard. The data directory, period, occasion length and event gap come from the combination and are not asked again: the first step only shows the combined dataset and asks where the photos are (the *Images directory* is filled in when the photos' common folder exists on this computer), the *Period* step is skipped, and the setup parameters show those values in a summary. The minimum detection confidence is 0 because the detection events have already been filtered. To change any of them, run the combination again.
+
+**How the probability is calculated.** For each photo and group, *presence* (is there an animal of this group?) comes from what each AI classifier says, with what probability, whether they agree and, when they don't, what the other says (empty, another animal, a person). For groups with several species, the *species* is decided animal by animal: boxes of different classifiers that overlap by at least 30 % (intersection over union ≥ 0.3) are taken as the same animal, and the photo gets each species with the probability of the animal where it is clearest, so a photo with red and fallow deer can be high for both. The score is presence × species. With a reference, five methods are compared: *Highest probability* (the previous behaviour), *Agreement probability*, *Calibrated agreement probability*, *Learned probability* and *Learned probability with neighbouring photos*. A classifier that never names a group (its model has no such class) counts, for that group, as not having seen the photos, so its silence doesn't lower the probability.
+
+**How the method is chosen.** Each method is evaluated out of sample (cross-validation by camera: every photo is scored by a model that never saw its camera). For each species, the threshold is the highest one that still leaves a true event in 99 % of the cells (site × occasion) where the reference confirms the species. The method that leaves the fewest events to look at wins; if others are not distinguishable from it (bootstrap by site), the one whose species are clearest is chosen (lowest average probability of the second species in photos of red/fallow deer or hare/rabbit). Events are never removed when the reference confirmed them or marked an animal it could not identify, and the best event of every cell is always kept. Species with fewer than 100 reference cells are not filtered.
+
+> **Note:** the removed detection events are not deleted: they stay in the combined `observations.csv` tagged `camtrapverify:filtered` (column `observationTags`), and the review skips them.
+
+> **Note:** filtering by cells keeps the presence in each cell, not every confirmed detection event, which is what the review verifies. To keep every detection event in the new CamtrapDP, choose **None** in the advanced options.
+
+The five methods, the choice and the filter are explained step by step, with the results on a real archive, in [Combining several classifiers: methods and workflow](multiclassifier.md).
+
 ### Step 2 — Species
 
 Choose which species you want to verify. The list is populated from the `scientificName` column in `observations.csv`.
@@ -312,9 +340,9 @@ These control how the data is segmented into reviewable units.
 |---|---|---|
 | **Sampling occasion duration** (days or hours) | 5 days | Groups images at a location into consecutive windows of N days, or of N **hours** if you choose *Hours* (for example 1 hour, for activity patterns). The windows start at 00:00 of the first day of the study; the last one is shorter if the study period is not a multiple of the window. The number of occasions adapts automatically to the study duration. See [Occasions shorter than a day](#occasions-shorter-than-a-day). |
 | **Gap between detection events (seconds)** | 60 | Images less than N seconds apart at the same site belong to the same detection event. |
-| **Minimum detection score** | 0.5 | Detections scoring **below** this threshold are excluded from the candidate set (a score equal to the threshold is kept, and a photo with no score is never excluded). See [When to use a minimum score](#when-to-use-a-minimum-score). |
+| **Minimum detection score** | 0.5 | Detections scoring **below** this threshold are excluded from the candidate set (a score equal to the threshold is kept, and a photo with no score is never excluded). Not used with *Classifiers and reference*, which already filters the detection events. See [When to use a minimum score](#when-to-use-a-minimum-score). |
 | **Minimum detection confidence per species** | none | Optional. Under the general score, a collapsible list gives each selected species a box for its own cut-off, which replaces the general one for that species. An empty box uses the general score and `0` turns the cut-off off for that species. See [When to use a minimum score](#when-to-use-a-minimum-score). |
-| **Order of the detection events** | By score | *By score* shows each occasion's most confident event first (fewest photos to inspect). *By time* shows the earliest first, so the first confirmed event is the first true detection (needed for time-to-detection analyses such as `unmarked::occuTTD`); more photos may have to be inspected. The detection histories are the same either way. Stored as `review_order` in `config.json`. |
+| **Order of the detection events** | By score | *By score* shows each occasion's most confident event first (fewest photos to inspect). *By time* shows the earliest first, so the first confirmed event is the first true detection (needed for time-to-detection analyses such as `unmarked::occuTTD`); more photos may have to be inspected. The detection histories are the same either way. Stored as `review_order` in `config.json`. With a dataset from *Classifiers and reference* filtered *By cells*, the earliest event of an occasion may have been removed: for time to detection, combine with *None*. |
 | **Random seed for tied detection events** | 42 | Detection events with the same score in a cell (all of them when the photos have no score) are shown in a pseudo-random order, not by date. The seed makes that order reproducible: the same data and seed always give the same order. It is stored in `config.json`; record it when you report your results. |
 | **Session name** | empty | Optional name to tell sessions apart (for example two sessions with the same species). It is shown in **Recent sessions** and at the top of the species index, and it can be changed later with **✎**. See [Naming a session](#naming-a-session). |
 
