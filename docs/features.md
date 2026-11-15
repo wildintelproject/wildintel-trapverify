@@ -57,6 +57,7 @@
     | `classifiedBy` | configurable (default `"expert_review"`) |
     | `classificationTimestamp` | current UTC timestamp |
 
+- **Review recorded in `observationTags`** — the verified CamtrapDP tags the photos the reviewer looked at: `camtrapverify:confirmed`, `camtrapverify:rejected`, `camtrapverify:uncertain` (a rejection counted apart) and, when recorded, `camtrapverify-actual-species:<name>`. Pipe-separated `key:value` pairs as CamtrapDP defines; existing tags are kept.
 - **Configurable `classifiedBy` label** — the value written to `classifiedBy` can be set per session (e.g. `"expert_review"`, `"ornithologist_A"`).
 - **Extended confirmation** — when enabled, all observations in the confirmed burst (not just the highest-confidence representative frame) are marked as human-verified in the output.
 - **`occupancy_inputs/`** — ready-to-use files for single-species occupancy models:

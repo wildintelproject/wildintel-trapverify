@@ -47,6 +47,12 @@ def export_is_stale() -> bool:
     return sd is not None and (sd / EXPORT_STALE_MARKER).exists()
 
 
+def _corrections_by_observation(path: Path) -> dict[str, str]:
+    """``observationID`` -> actual species typed for a rejected event (empty when none was recorded)."""
+    corr = load_rejection_corrections(path)
+    return dict(zip(corr["observationID"], corr["actual_species"])) if not corr.empty else {}
+
+
 def write_verified_export() -> None:
     """Write ``camtrap_dp_verified/`` from the current decisions (rewrites the whole observations table)."""
     p = session_service.paths()
@@ -56,6 +62,7 @@ def write_verified_export() -> None:
         classified_by_label=config.get("classified_by", "expert_review"),
         extended_confirmation=bool(config.get("extended_confirmation", False)),
         candidates=session_service.get_candidates(),
+        corrections=_corrections_by_observation(p["corrections"]),
     )
     (session_service.session_dir() / EXPORT_STALE_MARKER).unlink(missing_ok=True)
 

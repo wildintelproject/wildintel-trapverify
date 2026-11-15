@@ -1966,6 +1966,65 @@ def get_review_events(
 
 # ─── Export verified CamtrapDP ────────────────────────────────────────────────
 
+TAG_CONFIRMED = "camtrapverify:confirmed"
+TAG_REJECTED = "camtrapverify:rejected"
+TAG_UNCERTAIN = "camtrapverify:uncertain"
+TAG_ACTUAL_SPECIES = "camtrapverify-actual-species:"
+
+
+def _rep_confirmed(decisions_dir: Path) -> set:
+    """``observationID`` of the confirmed representative of every confirmed event (decision files)."""
+    ids: set = set()
+    if decisions_dir.exists():
+        for f in decisions_dir.glob("decisions_*_iter*.csv"):
+            df = pd.read_csv(f, dtype=str)
+            if "observationID" in df.columns:
+                ids.update(df["observationID"].dropna())
+    return ids
+
+
+def reviewed_event_tags(
+    candidates: pd.DataFrame,
+    conf_ids: set,
+    unc_ids: set,
+    rounds_done: dict[str, int],
+    corrections: Optional[dict[str, str]] = None,
+) -> dict[str, list[str]]:
+    """Tags for the events the reviewer rejected, by the ``observationID`` that represents each event.
+
+    An event was *inspected and not confirmed* when its cell has a confirmation at a later rank,
+    or has none and the species finished a round at that rank or later. Such an event is tagged
+    ``camtrapverify:rejected``, or ``camtrapverify:uncertain`` when it was marked uncertain (which
+    behaves as a rejection in the histories). With a recorded actual species the event also gets
+    ``camtrapverify-actual-species:<name>``. Events never inspected get no tag.
+    """
+    cand = candidates
+    if "is_context" in cand.columns:
+        cand = cand[~cand["is_context"].fillna(False).astype(bool)]
+    if cand.empty:
+        return {}
+    cell, burst = "site_occasion_key", "burst_id"
+    cr = cand.loc[cand["observationID"].isin(conf_ids)].groupby(cell)["rank"].min()
+    rows = cand.assign(
+        _p=pd.to_numeric(cand["classificationProbability"], errors="coerce").fillna(0),
+        _cr=cand[cell].map(cr),
+        _done=cand["species_safe"].map(rounds_done).fillna(0),
+    ).sort_values([cell, burst, "ts"], kind="stable")
+    limit = rows["_cr"].where(rows["_cr"].notna(), rows["_done"] + 1)       # exclusive: ranks below it were inspected
+    rows = rows[rows["rank"] < limit]
+    if rows.empty:
+        return {}
+    reps = rows.loc[rows.groupby([cell, burst], sort=False)["_p"].idxmax(), "observationID"]
+    tags: dict[str, list[str]] = {}
+    for oid in reps:
+        t = [TAG_UNCERTAIN if oid in unc_ids and oid not in conf_ids else TAG_REJECTED]
+        actual = (corrections or {}).get(oid, "").strip().replace("|", " ")
+        if actual:
+            t.append(TAG_ACTUAL_SPECIES + actual)
+        tags[str(oid)] = t
+    return tags
+
+
 def export_verified_camtrapdp(
     camtrap_dir: Path,
     out_dir: Path,
@@ -1974,6 +2033,7 @@ def export_verified_camtrapdp(
     classified_by_label: str = "expert_review",
     extended_confirmation: bool = False,
     candidates: Optional["pd.DataFrame"] = None,
+    corrections: Optional[dict[str, str]] = None,
 ) -> None:
     """Write ``camtrap_dp_verified/``, replicating R's ``update_metadata()`` + ``export_results()``.
 
@@ -2057,6 +2117,33 @@ def export_verified_camtrapdp(
         obs.loc[mask, "classificationProbability"] = "1.0"
         obs.loc[mask, "classifiedBy"] = classified_by_label
         obs.loc[mask, "classificationTimestamp"] = now_ts
+    else:
+        mask = pd.Series(False, index=obs.index)
+
+    # Record the review in observationTags (``key:value`` pairs separated by ``|``): confirmed,
+    # rejected, uncertain (a rejection that is counted apart) and, when recorded, the actual species.
+    # Only the observations the reviewer looked at get a tag; existing tags are kept.
+    tag_by_row: dict[int, list[str]] = {}
+    if mask.any():
+        for i in obs.index[mask]:
+            tag_by_row[i] = [TAG_CONFIRMED]
+    if candidates is not None and not candidates.empty:
+        unc = load_all_uncertain(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
+        unc_ids = set(unc["observationID"].dropna()) if not unc.empty else set()
+        rev = reviewed_event_tags(candidates, _rep_confirmed(decisions_dir), unc_ids, rounds_completed(decisions_dir), corrections)
+        if rev:
+            rep_rows = obs[obs["observationID"].isin(rev)]
+            by_pair = {(m, s): rev[str(o)] for o, m, s in zip(rep_rows["observationID"], rep_rows["mediaID"], rep_rows["scientificName"])}
+            pairs = pd.Series(list(zip(obs["mediaID"], obs["scientificName"])), index=obs.index)
+            for i, pair in pairs[pairs.isin(by_pair)].items():
+                if i not in tag_by_row:                       # a confirmed photo is not also "rejected"
+                    tag_by_row[i] = by_pair[pair]
+    if tag_by_row:
+        if "observationTags" not in obs.columns:
+            obs["observationTags"] = ""
+        new = pd.Series({i: "|".join(t) for i, t in tag_by_row.items()})
+        old = obs.loc[new.index, "observationTags"].fillna("").astype(str).str.strip()
+        obs.loc[new.index, "observationTags"] = (old + "|" + new).str.strip("|")
 
     obs.to_csv(out_dir / "observations.csv", index=False)
 
