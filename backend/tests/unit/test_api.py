@@ -2089,3 +2089,50 @@ def test_cannot_reopen_after_the_species_was_edited(client, setup_session):
     keys = [e["key"] for e in ev]
     client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": keys[:1]})
     assert client.post("/api/species/Vulpes_vulpes/reopen").status_code == 400
+
+
+# ─── Large archives: image index, cacheable URLs ──────────────────────────────
+
+def test_gallery_image_urls_carry_the_session_token(client, setup_session):
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    imgs = [f["img"] for e in ev for f in e["frames"]]
+    assert imgs and all(i.startswith("/api/image/") and "?v=" in i for i in imgs)
+    assert len({i.split("?v=")[1] for i in imgs}) == 1
+
+
+def test_image_with_token_is_cacheable_and_bare_url_is_not(client, camtrap_dir, photos, tmp_path):
+    client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"), "target_species": ["Vulpes vulpes"],
+        "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5, "total_iterations": 100_000,
+        "gap_seconds": 60, "min_score": 0.5,
+    })
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    url = ev[0]["frames"][0]["img"]
+    assert client.get(url).headers["cache-control"] == "private, max-age=86400"
+    bare = url.split("?")[0]
+    r = client.get(bare)
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
+
+
+def test_image_lookup_uses_the_index_and_still_404s_unknown_media(client, setup_session):
+    assert client.get("/api/image/does-not-exist").status_code == 404
+
+
+def test_media_index_is_rebuilt_for_a_new_session(client, camtrap_dir, tmp_path):
+    from services import session_service
+    for n in ("a", "b"):
+        client.post("/api/setup", json={
+            "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / n), "target_species": ["Vulpes vulpes"],
+            "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5, "total_iterations": 100_000,
+            "gap_seconds": 60, "min_score": 0.5,
+        })
+        assert session_service.media_lookup("m001")["filePath"].endswith("frame0.jpg")
+        first = session_service._state["_media_index"][0]
+        assert first is session_service.get_candidates()
+
+
+def test_image_token_changes_when_the_photos_are_relinked(client, setup_session, camtrap_dir):
+    from services import session_service
+    before = session_service.image_token()
+    session_service.update_paths(str(camtrap_dir), "/somewhere/else", False)
+    assert session_service.image_token() != before

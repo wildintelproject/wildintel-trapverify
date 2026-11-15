@@ -12,20 +12,21 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/image/{media_id}")
-def serve_image(media_id: str, obs: str | None = None, boxes: bool = False) -> Response:
+def serve_image(media_id: str, obs: str | None = None, boxes: bool = False, v: str | None = None) -> Response:
     """Serve a camera-trap image from the local filesystem by mediaID.
 
     With ``boxes=true`` and ``obs=<observationID>``, the bounding boxes of that
     observation's species in the photo are drawn on the image (only when the
     candidate has valid boxes; otherwise the original file is served).
     """
-    candidates = session_service.get_candidates()
-    if candidates is None:
+    if session_service.get_candidates() is None:
         raise HTTPException(404, "No data loaded")
-    row = candidates[candidates["mediaID"] == media_id]
-    if row.empty:
+    row = session_service.media_lookup(media_id)
+    if row is None:
         logger.warning("Image not found: mediaId=%s", media_id)
         raise HTTPException(404, f"Media {media_id} not found")
+    # URLs carrying the session token (?v=) can be kept by the browser; bare URLs never are.
+    cache = {"Cache-Control": "private, max-age=86400"} if v else {"Cache-Control": "no-store"}
 
     from camtrap_workflow import media_extra_bases, resolve_media_path
 
@@ -33,9 +34,9 @@ def serve_image(media_id: str, obs: str | None = None, boxes: bool = False) -> R
     image_base_dir = config.get("image_base_dir", "")
     fallback_base = Path(image_base_dir) if image_base_dir else Path(config["camtrap_dir"])
     file_path = resolve_media_path(
-        str(row.iloc[0]["filePath"]),
-        str(row.iloc[0].get("deploymentID", "")),
-        str(row.iloc[0].get("fileName", "")),
+        str(row["filePath"]),
+        str(row.get("deploymentID", "")),
+        str(row.get("fileName", "")),
         image_base_dir,
         fallback_base,
         flat_search=bool(config.get("flat_search", False)),
@@ -54,17 +55,16 @@ def serve_image(media_id: str, obs: str | None = None, boxes: bool = False) -> R
         from image_boxes import render_with_boxes
         import json
 
-        cand = candidates[candidates["observationID"] == obs]
-        raw = cand.iloc[0].get("bboxes") if not cand.empty else None
+        raw = session_service.observation_boxes(obs)
         if count_boxes(raw):
             try:
                 data, media_type = render_with_boxes(file_path, json.loads(raw))
-                return Response(content=data, media_type=media_type, headers={"Cache-Control": "no-store"})
+                return Response(content=data, media_type=media_type, headers=cache)
             except Exception:                       # unreadable or unsupported image: fall back to the file
                 logger.warning("Could not draw boxes on %s; serving the original", file_path, exc_info=True)
     return FileResponse(
         str(file_path), stat_result=stat_result,
-        headers={"Cache-Control": "no-store"},
+        headers=cache,
     )
 
 
