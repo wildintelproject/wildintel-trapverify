@@ -5,6 +5,10 @@ export interface Frame {
   ts: string
   prob: number | null
   isContext?: boolean
+  /** Pending cards only: representative observation of this frame's event. */
+  burstRepObsId?: string
+  /** Pending cards only: rank of this frame's detection event. */
+  rank?: number
 }
 
 export interface DetectionEvent {
@@ -16,7 +20,7 @@ export interface DetectionEvent {
   repObsId: string
   maxProb: number
   frames: Frame[]
-  status?: 'confirmed' | 'not_confirmed'
+  status?: 'confirmed' | 'not_confirmed' | 'pending'
 }
 
 export interface SpeciesStats {
@@ -25,11 +29,16 @@ export interface SpeciesStats {
   n_total_combos: number
   n_confirmed_combos: number
   n_resolved: number
+  /** Cells whose events ran out with at least one marked unsure. */
+  n_pending: number
   current_iteration: number
+  /** rounds: review in progress · pending: only pending cells left · complete */
+  phase: 'rounds' | 'pending' | 'complete'
   thumbnails: string[]
 }
 
 export interface WorkflowConfig {
+  session_name?: string
   camtrap_dir: string
   image_base_dir: string
   flat_search: boolean
@@ -38,15 +47,31 @@ export interface WorkflowConfig {
   study_start: string
   study_end: string
   occasion_days: number
+  /** > 0: sampling occasions of this many hours instead of days. */
+  occasion_hours?: number
+  /** Order of the detection events of a cell: by score (default) or by time. */
+  review_order?: 'score' | 'time'
   total_iterations: number
   gap_seconds: number
   min_score: number
+  /** Per-species overrides of min_score (scientificName -> threshold). */
+  min_score_by_species?: Record<string, number>
   include_burst_context: boolean
   classified_by: string
   extended_confirmation: boolean
 }
 
-export type Decision = 'confirmed' | 'rejected' | null
+export type DecisionValue = 'confirmed' | 'rejected' | 'unsure'
+export type Decision = DecisionValue | null
+
+export interface RelinkStatus {
+  camtrap_dir_ok: boolean
+  images_ok: boolean
+  needs_relink: boolean
+  camtrap_dir: string
+  image_base_dir: string
+  flat_search: boolean
+}
 
 export interface OccupancyRow {
   species: string
@@ -65,7 +90,118 @@ export interface OccupancyRow {
 export interface RecentSession {
   session_dir: string
   last_opened: string
+  session_name?: string
   target_species: string[]
   study_start: string | null
   study_end: string | null
+}
+
+/** Decisions of an unfinished round kept in the session folder. */
+export interface SavedProgress {
+  mode: 'rounds' | 'pending'
+  iteration: number
+  saved_at: string
+  decisions: Record<string, DecisionValue>
+  chosen_rep: Record<string, string>
+}
+
+/** State of a target species at one site and occasion (lightbox side panel). */
+export interface CrossSpecies {
+  scientificName: string
+  species_safe: string
+  /** cross: confirmed from a photo of another species; confirmed: in its own review */
+  status: 'none' | 'cross' | 'confirmed'
+  mediaID?: string
+  observationID?: string
+  source?: string
+}
+
+// ── Combine several classifiers (multiclassifier) ──────────────────────────
+
+export interface McClassifier {
+  name: string
+  path: string
+  role: 'ai' | 'reference'
+}
+
+export interface McLabels {
+  date_min: string | null
+  date_max: string | null
+  n_photos: number
+  labels: { classifier: string; label: string; photos: number }[]
+  families: string[]
+  remote_paths: number
+}
+
+export interface McRunRequest {
+  classifiers: McClassifier[]
+  groups: Record<string, string[]>
+  date_start: string
+  date_end: string
+  occasion_days: number
+  occasion_hours?: number
+  gap_seconds: number
+  filter_mode: 'cells' | 'events' | 'none'
+  retention: number
+  tie_break: 'ambiguous' | 'simple' | 'none'
+  use_reference_in_output: boolean
+  aliases?: Record<string, string>
+  output_dir?: string | null
+  output_name?: string | null
+}
+
+export interface McStrategyRow {
+  strategy: string
+  rounds: number
+  cell_retention: number
+  eligible: boolean
+  diff_ci_low: number | null
+  diff_ci_high: number | null
+  tie: boolean
+  ambiguous_photos: number | null
+  mean_second_species: number | null
+  best: boolean
+  chosen: boolean
+}
+
+export interface McSpeciesRow {
+  species: string
+  events_before: number
+  events_after: number
+  removed: number
+  saving: number
+  cells_before: number
+  cells_after: number
+  reference_cells: number | null
+  threshold: number | null
+}
+
+export interface McResult {
+  camtrap_dir: string
+  strategy: string
+  has_reference: boolean
+  filter_mode: string
+  events_before: number
+  events_after: number
+  photos_high_in_two_before: number
+  photos_high_in_two_after: number
+  by_species: McSpeciesRow[]
+  strategies: McStrategyRow[]
+  study_start: string
+  study_end: string
+  occasion_days: number
+  occasion_hours?: number
+  gap_seconds: number
+  warnings: string[]
+  /** Folder the photo paths were made relative to, if it exists here. */
+  images_dir?: string | null
+}
+
+export interface McJob {
+  status: 'running' | 'done' | 'error'
+  log: string[]
+  out_dir: string
+  result?: McResult
+  error?: string
+  unmapped?: string[]
 }

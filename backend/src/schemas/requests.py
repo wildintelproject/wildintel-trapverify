@@ -1,8 +1,12 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class SetupRequest(BaseModel):
     camtrap_dir: str
+    # Shown in Recent sessions and on the species page to tell sessions apart.
+    session_name: str = Field("", max_length=120)
     image_base_dir: str = ""
     flat_search: bool = False
     output_dir: str = ""
@@ -10,9 +14,16 @@ class SetupRequest(BaseModel):
     study_start: str
     study_end: str
     occasion_days: int = 5
+    # Sub-day occasions: length in hours (e.g. 1 for activity patterns); 0 = use occasion_days.
+    occasion_hours: int = Field(0, ge=0, le=24 * 365)
+    # "score": detection events reviewed from the highest score; "time": from
+    # the earliest, for time-to-detection (writes ttd_*.csv).
+    review_order: Literal["score", "time"] = "score"
     total_iterations: int = 100000
     gap_seconds: int = 60
     min_score: float = 0.5
+    # Per-species overrides of min_score (scientificName -> threshold).
+    min_score_by_species: dict[str, float] = {}
     include_burst_context: bool = False
     classified_by: str = "expert_review"
     extended_confirmation: bool = False
@@ -22,6 +33,38 @@ class DecisionsRequest(BaseModel):
     species: str
     iteration: int
     confirmed: list[str]
+    unsure: list[str] = []
+
+
+class CrossRequest(BaseModel):
+    species: str
+    site_id: str
+    occasion: int
+    media_id: str = ""
+    observation_id: str = ""
+    source_species: str = ""
+
+
+class ProgressRequest(BaseModel):
+    mode: str
+    iteration: int
+    decisions: dict[str, str] = {}
+    chosen_rep: dict[str, str] = {}
+
+
+class PendingDecisionsRequest(BaseModel):
+    confirmed: list[str] = []
+    rejected_keys: list[str] = []
+
+
+class RelinkRequest(BaseModel):
+    camtrap_dir: str
+    image_base_dir: str = ""
+    flat_search: bool = False
+
+
+class ImportSessionRequest(BaseModel):
+    zip_path: str
 
 
 class RejectRequest(BaseModel):
@@ -34,6 +77,11 @@ class UnrejectRequest(BaseModel):
 
 class ReviewDecisionsRequest(BaseModel):
     confirmed_keys: list[str]
+
+
+class RenameSessionRequest(BaseModel):
+    session_dir: str = ""          # empty: the active session
+    name: str = Field("", max_length=120)
 
 
 class LoadSessionRequest(BaseModel):
