@@ -1572,3 +1572,55 @@ def test_effort_report_uses_the_real_rank_of_the_confirmed_event_after_an_edit(f
     client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": keys})
     tot = next(r for r in client.get("/api/results").json()["effort_by_species"] if r["species"] == "TOTAL")
     assert tot["cells_detection"] == 3 and tot["events_inspected"] == 4          # A/occ1 needed 2 events, the others 1
+
+
+# ─── Trapper-style export: web addresses in filePath, photos in deployment folders ───
+
+@pytest.fixture
+def trapper_style(client, camtrap_dir, tmp_path):
+    """filePath is a URL with no file name, fileName says .JPEG and the photos are images/<group>/<deployment>/*.jpg."""
+    from PIL import Image
+    media = pd.read_csv(camtrap_dir / "media.csv")
+    media["fileName"] = [f"frame{i}.JPEG" for i in range(len(media))]
+    media["filePath"] = [f"https://trap.example/storage/resource/media/{i}/file/" for i in range(len(media))]
+    media.to_csv(camtrap_dir / "media.csv", index=False)
+    images = tmp_path / "images"
+    for _, r in media.iterrows():
+        d = images / "group1" / r["deploymentID"]
+        d.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (64, 40), (70, 70, 70)).save(d / r["fileName"].replace(".JPEG", ".jpg"))
+    return camtrap_dir, images
+
+
+def test_check_images_counts_trapper_style_photos_as_found(client, trapper_style):
+    data, images = trapper_style
+    without = client.get("/api/fs/check-images", params={"camtrap_dir": str(data)}).json()
+    with_dir = client.get("/api/fs/check-images", params={"camtrap_dir": str(data), "image_base_dir": str(images)}).json()
+    assert without["total"] == 0                                    # remote paths are skipped without an images folder
+    assert with_dir["total"] == 5 and with_dir["missing"] == 0
+
+
+def test_gallery_and_image_route_serve_trapper_style_photos_locally(client, trapper_style, tmp_path):
+    data, images = trapper_style
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(data), "image_base_dir": str(images), "output_dir": str(tmp_path / "out"),
+        "target_species": ["Vulpes vulpes"], "study_start": "2025-11-01", "study_end": "2025-11-10",
+        "occasion_days": 5, "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.5})
+    assert r.status_code == 200
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    imgs = {f["img"] for e in ev for f in e["frames"]}
+    assert imgs and all(u.startswith("/api/image/") for u in imgs)          # none through the network proxy
+    first = next(iter(imgs))
+    resp = client.get(first)
+    assert resp.status_code == 200 and resp.content[:3] == b"\xff\xd8\xff"   # a real JPEG from the deployment folder
+
+
+def test_images_folder_one_level_too_deep_is_checked_through_the_data_folder(client, camtrap_dir):
+    from PIL import Image
+    media = pd.read_csv(camtrap_dir / "media.csv")                  # filePath: img/frame0.jpg ...
+    (camtrap_dir / "img").mkdir(exist_ok=True)
+    for fp in media["filePath"]:
+        Image.new("RGB", (8, 8)).save(camtrap_dir / fp)
+    too_deep = camtrap_dir / "img"                                  # the user picked img/ as the Images directory
+    res = client.get("/api/fs/check-images", params={"camtrap_dir": str(camtrap_dir), "image_base_dir": str(too_deep)}).json()
+    assert res["total"] == 5 and res["missing"] == 0
