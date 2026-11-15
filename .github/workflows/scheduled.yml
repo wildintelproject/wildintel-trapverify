@@ -1,0 +1,69 @@
+name: Scheduled dependency check
+
+# Weekly: test against the latest compatible dependencies (ignoring the lock files)
+# and open an issue if they break, so problems are found before users hit them.
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backend:
+    name: Backend with latest dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+      - uses: astral-sh/setup-uv@v5
+      - name: Upgrade dependencies and test
+        run: |
+          uv sync --upgrade --group dev
+          uv run pytest -v
+
+  frontend:
+    name: Frontend with latest dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install latest dependencies, lint, test and build
+        working-directory: frontend
+        # Ignore the lock file to resolve the newest versions allowed by package.json.
+        # --legacy-peer-deps: npm 10 crashes resolving the latest peer ranges from scratch.
+        run: |
+          rm -f package-lock.json
+          npm install --legacy-peer-deps
+          npm run lint
+          npm test
+          npm run build
+
+  report:
+    name: Open an issue on failure
+    needs: [backend, frontend]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create dependency-check --repo "$GITHUB_REPOSITORY" --color D93F0B \
+            --description "Scheduled dependency check failed" 2>/dev/null || true
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label dependency-check --state open --json number --jq '.[0].number')
+          body="The scheduled check with the latest compatible dependencies failed: $RUN_URL"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label dependency-check \
+              --title "Scheduled dependency check failed" --body "$body"
+          fi

@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    target-branch: development
+    schedule: {interval: weekly}
+    groups:
+      python-dependencies: {patterns: ["*"]}
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: development
+    schedule: {interval: weekly}
+    groups:
+      frontend-dependencies: {patterns: ["*"]}
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: development
+    schedule: {interval: monthly}
+  - package-ecosystem: docker
+    directory: /backend
+    target-branch: development
+    schedule: {interval: monthly}
+  - package-ecosystem: docker
+    directory: /frontend
+    target-branch: development
+    schedule: {interval: monthly}
