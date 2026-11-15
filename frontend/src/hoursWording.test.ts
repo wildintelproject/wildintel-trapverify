@@ -17,7 +17,8 @@ describe('sampling occasions in hours', () => {
   it('uses the Polish plural forms', async () => {
     await i18n.changeLanguage('pl')
     const sub = (n: number) => i18n.t('index.subtitle_hours', { count: n, start: 'a', end: 'b' })
-    expect(sub(1)).toContain('trwa') && expect(sub(1)).toContain('1 godzina')
+    expect(sub(1)).toContain('trwa')
+    expect(sub(1)).toContain('1 godzina')
     expect(sub(2)).toContain('2 godziny')
     expect(sub(5)).toContain('5 godzin')
     expect(sub(22)).toContain('22 godziny')
