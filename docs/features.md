@@ -79,7 +79,7 @@
 - **Needs labels that already exist** — a classifier or citizen-science labels for the study system; it does not classify.
 - **Still images only** — video files are not read; extract frames and classify them first (see the [user manual](user-manual.md#9-scope-and-limitations) for guidance).
 - **Designed for occupancy models** — only one detection event per cell is verified, so the verified data are not suitable for counting events, activity patterns or abundance; time-to-first-detection needs care because the highest-scoring event is shown first, not the earliest.
-- **The score only orders the events** — it does not need to be calibrated (raw model outputs work with the minimum score set to 0); without scores the events are shown in time order.
+- **The score only orders the events** — it does not need to be calibrated (raw model outputs work with the minimum score set to 0); without scores the events are shown in a seeded random order.
 - **Corrects false positives, not missed detections** — animals the classifier missed or labelled as another species are not recovered.
 - **Uncertain cases** — mark them *Uncertain*: they are counted as rejections and reported separately.
 

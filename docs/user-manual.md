@@ -603,7 +603,7 @@ The score is used only to **order** the detection events within each site and sa
 
 - If your scores are not between 0 and 1 (for example raw logits, which can be negative), set the **Minimum detection score** to 0 to turn the cut-off off; with the default 0.5 every photo below it would be dropped. If the folder has a `datapackage.json`, a (non-blocking) warning that `classificationProbability` is outside 0–1 is also shown when the folder is checked.
 - A photo with **no score** is treated as having a score of 0. If some photos have no score, those with a negative score are shown after them.
-- If **no photos have a score**, the detection events are presented in time order, earliest first. The review is still valid, but the first round is no longer the most likely detection, so more photos will usually need to be inspected.
+- If **no photos have a score**, the detection events of each cell are presented in a **random order set by the random seed** (setup parameter, 42 by default), the same order every time for the same data and seed. The same applies to any events that share the same score. The review is still valid, but the first round is no longer the most likely detection, so more photos will usually need to be inspected. Report the seed with your results.
 - A cut-off hides the photos below it for good, and the savings and results then apply only to the photos above it (see [When to use a minimum score](#when-to-use-a-minimum-score)).
 
 ### Guidance for reviewers
