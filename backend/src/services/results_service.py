@@ -17,7 +17,7 @@ from camtrap_workflow import (
     load_review_log,
     rounds_completed,
 )
-from services import session_service
+from services import session_service, workflow_service
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ def compute_results() -> dict:
     if candidates is None:
         raise HTTPException(400, "Aún no hay sesión activa.")
     logger.info("Computing results for %d candidate rows", len(candidates))
+    workflow_service.ensure_export_fresh()
 
     p = session_service.paths()
     decisions_dir = p["decisions"]

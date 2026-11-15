@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
 from occupancy_model import fit_naive_vs_verified
-from services import results_service, session_service
+from services import results_service, session_service, workflow_service
 
 router = APIRouter(prefix="/api", tags=["results"])
 logger = logging.getLogger(__name__)
@@ -68,6 +68,7 @@ def download_results() -> FileResponse:
     if sd is None:
         raise HTTPException(400, "No hay sesión activa.")
 
+    workflow_service.ensure_export_fresh()
     zip_name = f"wildintel-camtrap-verify-{sd.name}"
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp_path = Path(tmp.name)
@@ -96,6 +97,7 @@ def open_folder() -> dict:
     if sd is None:
         raise HTTPException(400, "No hay sesión activa.")
 
+    workflow_service.ensure_export_fresh()
     folder = str(sd)
     logger.info("Opening session folder: %s", folder)
     cmd = _OPEN_FOLDER_CMD.get(sys.platform, "xdg-open")

@@ -28,6 +28,16 @@ def _media_resolution_config() -> tuple[str, Path, bool, tuple]:
             media_extra_bases(config["camtrap_dir"], image_base_dir))
 
 
+def _with_image_token(events: list[dict]) -> list[dict]:
+    """Add the session token to the app's own image URLs so the browser may cache them."""
+    token = session_service.image_token()
+    for ev in events:
+        for fr in ev["frames"]:
+            if fr["img"].startswith("/api/image/") and "?" not in fr["img"]:
+                fr["img"] = f"{fr['img']}?v={token}"
+    return events
+
+
 @router.get("")
 def list_species() -> list[dict]:
     """Return per-species progress statistics and thumbnail URLs."""
@@ -57,7 +67,7 @@ def get_species_events(species_safe: str, iteration: int = 1) -> list[dict]:
     p = session_service.paths()
     p["decisions"].mkdir(parents=True, exist_ok=True)
     image_base_dir, fallback_base, flat_search, extra_bases = _media_resolution_config()
-    return get_events(
+    events = get_events(
         session_service.get_candidates(),
         p["decisions"],
         session_service.get_rejected_media(),
@@ -68,6 +78,7 @@ def get_species_events(species_safe: str, iteration: int = 1) -> list[dict]:
         flat_search,
         extra_bases,
     )
+    return _with_image_token(events)
 
 
 @router.get("/{species_safe}/review")
@@ -79,7 +90,8 @@ def get_species_review(species_safe: str) -> list[dict]:
     if sp_cands.empty:
         return []
     image_base_dir, fallback_base, flat_search, extra_bases = _media_resolution_config()
-    return get_review_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases)
+    return _with_image_token(
+        get_review_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases))
 
 
 @router.put("/{species_safe}/decisions")

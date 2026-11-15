@@ -48,6 +48,50 @@ def get_rejected_media() -> set[str]:
     return _state.get("rejected_media", set())
 
 
+def media_lookup(media_id: str) -> Optional[dict]:
+    """``filePath`` / ``deploymentID`` / ``fileName`` of a media file, from an in-memory index.
+
+    Built once per loaded manifest (a pandas scan of every candidate per image request does not
+    scale to archives of millions of rows). The first row of a mediaID wins, as before.
+    """
+    candidates = get_candidates()
+    if candidates is None:
+        return None
+    idx = _state.get("_media_index")
+    if idx is None or idx[0] is not candidates:
+        first = candidates.drop_duplicates("mediaID")
+        cols = [c for c in ("filePath", "deploymentID", "fileName") if c in first.columns]
+        records = first[["mediaID"] + cols].to_dict("records")
+        idx = (candidates, {str(r["mediaID"]): r for r in records})
+        _state["_media_index"] = idx
+    return idx[1].get(media_id)
+
+
+def observation_boxes(observation_id: str) -> Optional[str]:
+    """Raw ``bboxes`` text of an observation (None when it has none), from an in-memory index."""
+    candidates = get_candidates()
+    if candidates is None or "bboxes" not in candidates.columns:
+        return None
+    idx = _state.get("_box_index")
+    if idx is None or idx[0] is not candidates:
+        with_boxes = candidates[candidates["bboxes"].notna() & (candidates["bboxes"].astype(str) != "")]
+        with_boxes = with_boxes.drop_duplicates("observationID")
+        idx = (candidates, dict(zip(with_boxes["observationID"].astype(str), with_boxes["bboxes"])))
+        _state["_box_index"] = idx
+    return idx[1].get(observation_id)
+
+
+def image_token() -> str:
+    """Short per-session token for image URLs (``?v=``): it changes when the session or where its
+    photos are looked up changes, so a browser can keep the photos of a session cached."""
+    import hashlib
+    config = get_config() or {}
+    raw = "|".join(str(x) for x in (
+        session_dir(), config.get("camtrap_dir", ""), config.get("image_base_dir", ""), config.get("flat_search", False),
+    ))
+    return hashlib.sha1(raw.encode()).hexdigest()[:10]
+
+
 def paths() -> dict[str, Path]:
     """Return well-known paths for the active session.
 

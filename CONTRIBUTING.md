@@ -25,6 +25,9 @@ cd wildintel-trapverify
 uv run cli dev             # backend + frontend
 ```
 
+To check that a change does not slow the backend down, `uv run python scripts/benchmark_backend.py` times the real
+API on a synthetic archive (`--scale 10` for about 100 000 photos, `--src` to compare another checkout).
+
 ## Pull requests
 
 1. Fork the repository and create a branch **from `development`** (`feat/…`, `fix/…`, `docs/…`, `chore/…`).

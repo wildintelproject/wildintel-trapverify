@@ -38,27 +38,64 @@ from schemas.requests import SetupRequest
 from services import progress_service, session_service
 
 
+EXPORT_STALE_MARKER = ".camtrap_dp_stale"
+
+
+def export_is_stale() -> bool:
+    """True when ``camtrap_dp_verified/`` does not reflect the latest decisions."""
+    sd = session_service.session_dir()
+    return sd is not None and (sd / EXPORT_STALE_MARKER).exists()
+
+
 def _corrections_by_observation(path: Path) -> dict[str, str]:
     """``observationID`` -> actual species typed for a rejected event (empty when none was recorded)."""
     corr = load_rejection_corrections(path)
     return dict(zip(corr["observationID"], corr["actual_species"])) if not corr.empty else {}
 
 
-def rebuild_outputs() -> None:
-    """Regenerate camtrap_dp_verified and occupancy_inputs from current session state."""
+def write_verified_export() -> None:
+    """Write ``camtrap_dp_verified/`` from the current decisions (rewrites the whole observations table)."""
+    p = session_service.paths()
+    config = session_service.get_config()
+    export_verified_camtrapdp(
+        Path(config["camtrap_dir"]), p["camtrap_out"], p["decisions"], session_service.get_rejected_media(),
+        classified_by_label=config.get("classified_by", "expert_review"),
+        extended_confirmation=bool(config.get("extended_confirmation", False)),
+        candidates=session_service.get_candidates(),
+        corrections=_corrections_by_observation(p["corrections"]),
+    )
+    (session_service.session_dir() / EXPORT_STALE_MARKER).unlink(missing_ok=True)
+
+
+def ensure_export_fresh() -> None:
+    """Bring ``camtrap_dp_verified/`` up to date if saving a round left it stale.
+
+    Saving a round only marks it stale (rewriting the whole observations table on every save is the
+    slowest step on a large archive); it is rebuilt here, when the results are opened, downloaded
+    or the session folder is opened.
+    """
+    sd = session_service.session_dir()
+    if sd is None or session_service.get_config() is None:
+        return
+    if export_is_stale() or not session_service.paths()["camtrap_out"].exists():
+        logger.info("Rebuilding the verified CamtrapDP (stale)")
+        write_verified_export()
+
+
+def rebuild_outputs(export: bool = True) -> None:
+    """Regenerate occupancy_inputs (and, unless deferred, camtrap_dp_verified) from the session state.
+
+    With ``export=False`` the verified CamtrapDP is only marked stale; see :func:`ensure_export_fresh`.
+    """
     logger.info("Rebuilding output files")
     p = session_service.paths()
     config = session_service.get_config()
     candidates = session_service.get_candidates()
-    rejected = session_service.get_rejected_media()
 
-    export_verified_camtrapdp(
-        Path(config["camtrap_dir"]), p["camtrap_out"], p["decisions"], rejected,
-        classified_by_label=config.get("classified_by", "expert_review"),
-        extended_confirmation=bool(config.get("extended_confirmation", False)),
-        candidates=candidates,
-        corrections=_corrections_by_observation(p["corrections"]),
-    )
+    if export:
+        write_verified_export()
+    else:
+        (session_service.session_dir() / EXPORT_STALE_MARKER).write_text("")
     build_occupancy_inputs(candidates, p["decisions"], config, p["occupancy_out"])
     build_review_effort(candidates, p["decisions"], config, p["occupancy_out"])
     exclusions = pd.read_csv(p["exclusions"]) if p["exclusions"].exists() else None
