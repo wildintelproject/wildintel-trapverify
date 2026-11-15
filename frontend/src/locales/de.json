@@ -206,7 +206,8 @@
     "round": "Runde {{n}}",
     "no_species": "Keine Arten mit Kandidaten. Überprüfen Sie Ihre Konfiguration.",
     "pending": "{{n}} zur Expertenprüfung offen",
-    "pending_badge": "{{n}} zur Expertenprüfung offen"
+    "pending_badge": "{{n}} zur Expertenprüfung offen",
+    "see_results_pending": "Ergebnisse anzeigen ({{n}} offene Stichprobenanlässe erscheinen als NA)"
   },
   "gallery": {
     "title": "Erkennungsüberprüfung",

@@ -208,7 +208,8 @@
     "round": "Runda {{n}}",
     "no_species": "Brak gatunków z kandydatami. Sprawdź konfigurację.",
     "pending": "{{n}} do oceny eksperta",
-    "pending_badge": "{{n}} do oceny eksperta"
+    "pending_badge": "{{n}} do oceny eksperta",
+    "see_results_pending": "Zobacz wyniki ({{n}} okazji do oceny eksperta pojawi się jako NA)"
   },
   "gallery": {
     "title": "Weryfikacja wykryć",

@@ -206,7 +206,8 @@
     "round": "Round {{n}}",
     "no_species": "No species with candidates. Check your configuration.",
     "pending": "{{n}} pending expert review",
-    "pending_badge": "{{n}} pending expert review"
+    "pending_badge": "{{n}} pending expert review",
+    "see_results_pending": "See results ({{n}} occasions pending expert review will appear as NA)"
   },
   "gallery": {
     "title": "Detection verification",

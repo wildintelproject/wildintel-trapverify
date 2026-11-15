@@ -206,7 +206,8 @@
     "round": "Ronda {{n}}",
     "no_species": "No hay especies con candidatos. Comprueba la configuración.",
     "pending": "{{n}} pendientes de experto",
-    "pending_badge": "{{n}} pendientes de experto"
+    "pending_badge": "{{n}} pendientes de experto",
+    "see_results_pending": "Ver resultados ({{n}} ocasiones pendientes de experto aparecerán como NA)"
   },
   "gallery": {
     "title": "Verificación de detecciones",

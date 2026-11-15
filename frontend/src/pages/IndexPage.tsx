@@ -68,6 +68,9 @@ export default function IndexPage() {
   const totalResolved = species.reduce((s, sp) => s + sp.n_resolved, 0)
   const totalDetected = species.reduce((s, sp) => s + sp.n_confirmed_combos, 0)
   const overallPct    = totalCombos > 0 ? Math.round(totalResolved / totalCombos * 100) : 0
+  const totalPending  = species.reduce((n, sp) => n + (sp.n_pending ?? 0), 0)
+  // Results can be read once every cell is settled or waiting for an expert (pending ones are NA there).
+  const canSeeResults = totalCombos > 0 && totalResolved + totalPending >= totalCombos
 
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-4">
@@ -131,14 +134,15 @@ export default function IndexPage() {
           </button>
           <button
             className={`px-4 py-1.5 text-sm rounded transition-colors ${
-              overallPct === 100
+              canSeeResults
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                 : 'bg-zinc-700 text-zinc-400 cursor-not-allowed opacity-60'
             }`}
-            disabled={overallPct < 100}
+            disabled={!canSeeResults}
             onClick={() => navigate('/results')}
-            title={overallPct < 100
+            title={!canSeeResults
               ? `${t('index.see_results')} (${overallPct}%)`
+              : totalPending > 0 ? t('index.see_results_pending', { n: totalPending })
               : t('index.see_results')}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }}>
