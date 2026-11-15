@@ -782,6 +782,46 @@ def test_get_review_events_sorted_by_site_occasion(decisions_dir, candidates):
     assert sites == sorted(sites) or occasions == sorted(occasions)
 
 
+def test_get_review_events_shows_event_confirmed_in_later_round(tmp_path, candidates):
+    """A cell confirmed in round 2 is shown with its rank-2 event, not rank 1."""
+    from camtrap_workflow import save_decisions
+    d = tmp_path / "decisions"
+    d.mkdir()
+    key = "SITE_A_occ1_Vulpes_vulpes"
+    save_decisions(d, candidates, "Vulpes_vulpes", 1, [])
+    rank2 = candidates[(candidates["site_occasion_key"] == key) & (candidates["rank"] == 2)]
+    obs2 = str(rank2.iloc[0]["observationID"])
+    save_decisions(d, candidates, "Vulpes_vulpes", 2, [obs2])
+
+    sp_cands = candidates[candidates["species_safe"] == "Vulpes_vulpes"]
+    ev = next(e for e in get_review_events(sp_cands, d) if e["key"] == key)
+    assert ev["status"] == "confirmed"
+    assert ev["rank"] == 2
+    assert ev["repObsId"] == obs2
+    assert obs2 in [str(f["obsId"]) for f in ev["frames"]]
+    rank1_obs = set(candidates.loc[(candidates["site_occasion_key"] == key) & (candidates["rank"] == 1),
+                                   "observationID"].astype(str))
+    assert not rank1_obs & {str(f["obsId"]) for f in ev["frames"]}
+
+
+def test_get_review_events_unconfirmed_cell_keeps_rank1(decisions_dir, candidates):
+    sp_cands = candidates[candidates["species_safe"] == "Vulpes_vulpes"]
+    ev = next(e for e in get_review_events(sp_cands, decisions_dir) if e["key"] == "SITE_B_occ1_Vulpes_vulpes")
+    assert ev["status"] == "not_confirmed"
+    assert ev["rank"] == 1
+
+
+def test_confirmed_observations_maps_cell_to_confirmed_obs(tmp_path, candidates):
+    from camtrap_workflow import confirmed_observations, save_decisions
+    d = tmp_path / "decisions"
+    d.mkdir()
+    key = "SITE_A_occ1_Vulpes_vulpes"
+    obs2 = str(candidates[(candidates["site_occasion_key"] == key) & (candidates["rank"] == 2)].iloc[0]["observationID"])
+    save_decisions(d, candidates, "Vulpes_vulpes", 2, [obs2])
+    sp_cands = candidates[candidates["species_safe"] == "Vulpes_vulpes"]
+    assert confirmed_observations(d, sp_cands) == {key: obs2}
+
+
 # ─── validate_camtrapdp_datapackage ───────────────────────────────────────────
 
 def _write_datapackage(tmp_path: Path, deployments_required: bool) -> Path:
@@ -1561,3 +1601,33 @@ def test_burst_context_excludes_frames_beyond_gap_seconds(camtrap_dir: Path):
     )
     ctx_ids = set(cands[cands["is_context"] == True]["mediaID"])  # noqa: E712
     assert "m_far_before" not in ctx_ids
+
+
+def test_build_candidates_min_score_by_species_overrides_general(camtrap_dir):
+    """A per-species threshold replaces the general min_score for that species
+    only; species without an override keep the general value."""
+    dep, med, obs = load_camtrapdp(camtrap_dir)
+    common = dict(
+        target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1),
+        study_end=date(2025, 11, 10),
+        occasion_days=5,
+        total_iterations=100_000,
+        gap_seconds=60,
+    )
+    # General 0.5 would keep everything; the fox override (0.75) drops m003/m005.
+    stricter = build_candidates(dep, med, obs, min_score=0.5,
+                                min_score_by_species={"Vulpes vulpes": 0.75}, **common)
+    assert "m005" not in set(stricter["mediaID"])
+    assert "m003" not in set(stricter["mediaID"])
+    assert {"m001", "m002", "m004"} <= set(stricter["mediaID"])
+    # General 0.95 would drop everything; a lower fox override (0.0) keeps them.
+    looser = build_candidates(dep, med, obs, min_score=0.95,
+                              min_score_by_species={"Vulpes vulpes": 0.0}, **common)
+    plain = build_candidates(dep, med, obs, min_score=0.0, **common)
+    assert set(looser["mediaID"]) == set(plain["mediaID"])
+    # An override for another species leaves this one on the general value.
+    other = build_candidates(dep, med, obs, min_score=0.75,
+                             min_score_by_species={"Meles meles": 0.1}, **common)
+    general = build_candidates(dep, med, obs, min_score=0.75, **common)
+    assert set(other["mediaID"]) == set(general["mediaID"])
