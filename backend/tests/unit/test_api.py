@@ -1692,6 +1692,7 @@ def test_one_species_losing_all_its_photos_does_not_break_the_session(client, ca
     sus = rows["Sus scrofa"]                               # still reported, not silently dropped
     assert sus["candidate_events"] == 0 and sus["excluded_photos"] == 2 and sus["min_score"] == 0.9
     assert rows["Vulpes vulpes"]["candidate_events"] == 4 and rows["TOTAL"]["excluded_photos"] == 2
+    assert [x["species"] for x in data["effort_by_species"]] == ["Sus scrofa", "Vulpes vulpes", "TOTAL"]   # alphabetical, TOTAL last
     assert [s["species_safe"] for s in client.get("/api/species").json()] == ["Vulpes_vulpes"]   # nothing of Sus to review
     assert client.get("/api/results/occupancy").status_code == 200
 

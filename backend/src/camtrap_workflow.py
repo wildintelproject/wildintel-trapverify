@@ -2579,6 +2579,7 @@ def build_species_effort(
         for sp in exclusions["species"]:
             if sp not in present:
                 rows.append(build_row(sp, new_acc()))
+        rows.sort(key=lambda r: str(r["species"]))
     if rows:
         rows.append(build_row("TOTAL", total))
     df = pd.DataFrame(rows)
