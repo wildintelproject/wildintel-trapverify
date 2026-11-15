@@ -17,6 +17,7 @@ from camtrap_workflow import (
     build_candidates,
     build_occupancy_inputs,
     build_review_effort,
+    build_false_positive_sources,
     build_species_effort,
     compute_min_score_exclusions,
     rounds_completed,
@@ -49,10 +50,11 @@ def rebuild_outputs() -> None:
     build_occupancy_inputs(candidates, p["decisions"], config, p["occupancy_out"])
     build_review_effort(candidates, p["decisions"], config, p["occupancy_out"])
     exclusions = pd.read_csv(p["exclusions"]) if p["exclusions"].exists() else None
-    build_species_effort(
+    effort = build_species_effort(
         candidates, p["decisions"], p["occupancy_out"], rounds_completed(p["decisions"]),
         exclusions=exclusions,
     )
+    build_false_positive_sources(effort, p["decisions"], p["corrections"], p["occupancy_out"])
     fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))
     logger.info("Output files rebuilt successfully")
 

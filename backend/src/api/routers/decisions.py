@@ -1,10 +1,19 @@
 import logging
+from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.deps import require_candidates
-from camtrap_workflow import confirmed_keys_set, save_decisions, save_uncertain
+from camtrap_workflow import (
+    NO_ANIMAL_LABEL,
+    confirmed_keys_set,
+    load_rejection_corrections,
+    resolve_camtrapdp_resource,
+    save_decisions,
+    save_rejection_corrections,
+    save_uncertain,
+)
 from schemas.requests import DecisionsRequest, RejectRequest, UnrejectRequest
 from services import session_service, workflow_service
 
@@ -20,7 +29,10 @@ def get_decisions(species: str, iteration: int) -> dict:
     upath = p["decisions"] / f"uncertain_{species}_iter{iteration}.csv"
     confirmed = pd.read_csv(path, dtype=str)["observationID"].tolist() if path.exists() else []
     uncertain = pd.read_csv(upath, dtype=str)["observationID"].tolist() if upath.exists() else []
-    return {"confirmed": confirmed, "uncertain": uncertain}
+    corr = load_rejection_corrections(p["corrections"])
+    corr = corr[(corr["species_safe"] == species) & (corr["iteration"] == str(iteration))]
+    return {"confirmed": confirmed, "uncertain": uncertain,
+            "corrections": dict(zip(corr["observationID"], corr["actual_species"]))}
 
 
 @router.post("/decisions", dependencies=[Depends(require_candidates)])
@@ -40,6 +52,13 @@ def post_decisions(req: DecisionsRequest) -> dict:
         p["decisions"], candidates, req.species, req.iteration,
         [u for u in req.uncertain if u not in set(req.confirmed)],
     )
+
+    if config.get("record_rejection_species"):
+        skip = set(req.confirmed) | set(req.uncertain)
+        save_rejection_corrections(
+            p["corrections"], candidates, req.species, req.iteration,
+            {k: v for k, v in req.corrections.items() if k not in skip},
+        )
 
     conf_keys = confirmed_keys_set(p["decisions"])
     rejected = session_service.get_rejected_media()
@@ -62,6 +81,23 @@ def post_decisions(req: DecisionsRequest) -> dict:
         "next_iteration": next_iter if not done else None,
         "remaining": int(next_cands["site_occasion_key"].nunique()) if not done else 0,
     }
+
+
+_taxa_cache: dict[str, list[str]] = {}
+
+
+@router.get("/taxa")
+def get_taxa() -> dict:
+    """Taxa found in the dataset's observations, for the "actual species" suggestions."""
+    camtrap_dir = str((session_service.get_config() or {}).get("camtrap_dir", ""))
+    if camtrap_dir not in _taxa_cache:
+        path = resolve_camtrapdp_resource(Path(camtrap_dir), "observations") if camtrap_dir else None
+        names: list[str] = []
+        if path is not None:
+            col = pd.read_csv(path, usecols=["scientificName"], dtype=str)["scientificName"]
+            names = sorted(col.dropna().unique().tolist())
+        _taxa_cache[camtrap_dir] = names
+    return {"taxa": _taxa_cache[camtrap_dir], "extra": ["Homo sapiens", NO_ANIMAL_LABEL]}
 
 
 @router.get("/rejected")

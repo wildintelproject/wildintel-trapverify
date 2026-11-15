@@ -10,7 +10,12 @@ import logging
 import pandas as pd
 from fastapi import HTTPException
 
-from camtrap_workflow import build_species_effort, confirmed_keys_set, rounds_completed
+from camtrap_workflow import (
+    build_false_positive_sources,
+    build_species_effort,
+    confirmed_keys_set,
+    rounds_completed,
+)
 from services import session_service
 
 logger = logging.getLogger(__name__)
@@ -151,6 +156,8 @@ def compute_results() -> dict:
         candidates, decisions_dir, p["occupancy_out"], iter_by_sp, exclusions=exclusions,
     )
     effort_by_species = json.loads(effort_df.to_json(orient="records"))
+    fp_df = build_false_positive_sources(effort_df, decisions_dir, p["corrections"], p["occupancy_out"])
+    false_positive_sources = json.loads(fp_df.to_json(orient="records")) if fp_df is not None else []
     datapackage_generated, datapackage_fabricated_fields = _datapackage_warning(p["camtrap_out"])
     return {
         "session_dir":     str(session_service.session_dir()),
@@ -169,5 +176,7 @@ def compute_results() -> dict:
         "seq_unverified":  int(s_counts.get("unverified", 0)),
         "by_species_seqs": by_species_seqs,
         "effort_by_species": effort_by_species,
+        "record_rejection_species": bool((session_service.get_config() or {}).get("record_rejection_species", False)),
+        "false_positive_sources": false_positive_sources,
         "min_score":       float((session_service.get_config() or {}).get("min_score", 0) or 0),
     }

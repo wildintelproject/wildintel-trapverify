@@ -46,6 +46,9 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [completed, setCompleted] = useState(false)
+  const [recordRejection, setRecordRejection] = useState(false)
+  const [corrections, setCorrections] = useState<Record<string, string>>({})
+  const [taxa, setTaxa] = useState<string[]>([])
   const [locked, setLocked] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null)
@@ -81,6 +84,11 @@ export default function GalleryPage() {
       const sp = allStats.find((s) => s.species_safe === species)
       if (sp) setSpStats(sp)
       if (state.config?.total_iterations) setTotalIterations(state.config.total_iterations)
+      const recording = !!state.config?.record_rejection_species
+      setRecordRejection(recording)
+      if (recording) {
+        api.getTaxa().then((r) => setTaxa(Array.from(new Set([...r.taxa, ...r.extra])))).catch(() => {})
+      }
       if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, min_score: state.config.min_score })
 
       if (sp && sp.n_resolved >= sp.n_total_combos) {
@@ -106,6 +114,12 @@ export default function GalleryPage() {
         if (ev && !pre[ev.key]) pre[ev.key] = 'uncertain'
       })
       setDecisions(pre)
+      const corr: Record<string, string> = {}
+      Object.entries(saved.corrections ?? {}).forEach(([id, text]) => {
+        const ev = evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
+        if (ev) corr[ev.key] = text
+      })
+      setCorrections(corr)
       setNeedsDecision(new Set())
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar eventos')
@@ -189,6 +203,7 @@ export default function GalleryPage() {
     const ev = events[lbEvIdx]
     if (!ev) return
     setDecisions((prev) => ({ ...prev, [ev.key]: d }))
+    if (d !== 'rejected') dropCorrection(ev.key)
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(ev.key); return s })
     if (!completed) {
       // decisionsRef mirrors state as of the last render, so it doesn't
@@ -226,8 +241,17 @@ export default function GalleryPage() {
   }
   decideInLbRef.current = decideInLb
 
+  function dropCorrection(key: string) {
+    setCorrections((prev) => { if (!(key in prev)) return prev; const c = { ...prev }; delete c[key]; return c })
+  }
+
+  function setCorrection(key: string, value: string) {
+    setCorrections((prev) => ({ ...prev, [key]: value }))
+  }
+
   function decide(key: string, _repObsId: string, d: Decision) {
     setDecisions((prev) => ({ ...prev, [key]: d }))
+    if (d !== 'rejected') dropCorrection(key)
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(key); return s })
   }
 
@@ -235,6 +259,7 @@ export default function GalleryPage() {
     const all: Record<string, Decision> = {}
     events.forEach((ev) => { all[ev.key] = 'confirmed' })
     setDecisions(all)
+    setCorrections({})
     setNeedsDecision(new Set())
   }
 
@@ -256,7 +281,12 @@ export default function GalleryPage() {
       const uncertainIds = events
         .filter((e) => decisions[e.key] === 'uncertain')
         .map((e) => e.repObsId)
-      const result = await api.saveDecisions(species, iteration, confirmedIds, uncertainIds)
+      const correctionIds: Record<string, string> = {}
+      events.forEach((e) => {
+        const text = (corrections[e.key] ?? '').trim()
+        if (decisions[e.key] === 'rejected' && text) correctionIds[e.repObsId] = text
+      })
+      const result = await api.saveDecisions(species, iteration, confirmedIds, uncertainIds, correctionIds)
       if (result.done) {
         showToast(t('gallery.toast_done'), 'success')
         setTimeout(() => navigate('/species'), 1500)
@@ -470,6 +500,9 @@ export default function GalleryPage() {
                       needsDecision={needsDecision.has(ev.key)}
                       onDecide={decide}
                       allowUncertain={!completed}
+                      recordCorrection={recordRejection && !completed}
+                      correction={corrections[ev.key] ?? ''}
+                      onCorrect={setCorrection}
                       onOpenLightbox={(eIdx, fIdx) => openLightbox(eIdx, fIdx)}
                       eventIdx={idx}
                       readOnly={completed && locked}
@@ -491,6 +524,9 @@ export default function GalleryPage() {
         overflow: visible !important;
       }`}</style>
 
+      <datalist id="actual-species-list">
+        {taxa.map((n) => <option key={n} value={n} />)}
+      </datalist>
       <YARLightbox
         key={lbEvIdx}
         open={lbOpen}
@@ -569,6 +605,20 @@ export default function GalleryPage() {
                   </button>
                 )}
               </div>
+              {recordRejection && !completed && lbDecision === 'rejected' && lbCurrentEv && (
+                <input
+                  type="text"
+                  list="actual-species-list"
+                  className="w-full mt-3 px-3 py-2 text-sm rounded border border-zinc-500 bg-black/50 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  style={{ maxWidth: 420 }}
+                  placeholder={t('gallery.actual_species_placeholder')}
+                  title={t('gallery.actual_species_hint')}
+                  value={corrections[lbCurrentEv.key] ?? ''}
+                  onChange={(e) => setCorrection(lbCurrentEv.key, e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  readOnly={lbReadOnly}
+                />
+              )}
             </div>
           ),
         }}

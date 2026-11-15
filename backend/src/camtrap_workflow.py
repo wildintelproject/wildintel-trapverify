@@ -1113,6 +1113,106 @@ def load_all_uncertain(decisions_dir: Path) -> pd.DataFrame:
     return pd.concat([pd.read_csv(f, dtype=str) for f in files], ignore_index=True)
 
 
+NO_ANIMAL_LABEL = "No animal / empty"
+CORRECTION_COLS = ["observationID", "site_occasion_key", "mediaID", "scientificName",
+                   "species_safe", "iteration", "actual_species"]
+
+
+def save_rejection_corrections(
+    path: Path,
+    candidates: pd.DataFrame,
+    species_safe: str,
+    iteration: int,
+    corrections: dict[str, str],
+) -> pd.DataFrame:
+    """Record the "actual species" typed for rejected events of one round.
+
+    Writes ``rejection_corrections.csv``. The rows of this species and round are
+    replaced (so editing a round leaves no stale entries) and the rest are kept.
+    Purely informational: nothing here feeds decisions, detection histories or
+    cell status. Empty values and unknown observation IDs are ignored.
+
+    Args:
+        path: ``rejection_corrections.csv`` in the session folder.
+        candidates: Full candidate manifest (used to look up metadata by ID).
+        species_safe: Sanitized species name of the reviewed species.
+        iteration: Round number.
+        corrections: ``observationID`` -> actual species (free text).
+
+    Returns:
+        The full contents of the file after the update.
+    """
+    clean = {k: str(v).strip() for k, v in corrections.items() if str(v).strip()}
+    meta = candidates[candidates["observationID"].isin(clean)].drop_duplicates("observationID")
+    new = meta[["observationID", "site_occasion_key", "mediaID", "scientificName", "species_safe"]].copy()
+    new["iteration"] = iteration
+    new["actual_species"] = new["observationID"].map(clean)
+    old = load_rejection_corrections(path)
+    if not old.empty:
+        same = (old["species_safe"] == species_safe) & (old["iteration"].astype(int) == iteration)
+        old = old[~same]
+    out = pd.concat([old, new[CORRECTION_COLS]], ignore_index=True)
+    out.to_csv(path, index=False)
+    return out
+
+
+def load_rejection_corrections(path: Path) -> pd.DataFrame:
+    """Read ``rejection_corrections.csv`` (empty frame with the columns if absent)."""
+    if not path.exists():
+        return pd.DataFrame(columns=CORRECTION_COLS)
+    return pd.read_csv(path, dtype=str).fillna("")
+
+
+def build_false_positive_sources(
+    effort: pd.DataFrame,
+    decisions_dir: Path,
+    corrections_path: Path,
+    out_dir: Path,
+) -> Optional[pd.DataFrame]:
+    """Write ``false_positive_sources.csv``: what rejected events actually were, per species.
+
+    One row per (species, actual species) with the number of rejected events and
+    their share of **all** the rejected events of that species, plus a
+    ``(not recorded)`` row for rejected events with no correction, so the shares
+    add up to 100 % and the coverage of the recording is visible. A rejected
+    event is any inspected event that was not confirmed (uncertain events
+    included, since they behave as rejections).
+
+    Args:
+        effort: Per-species rows of :func:`build_species_effort` (``TOTAL`` is ignored).
+        decisions_dir: Directory with the decision CSVs (to drop corrections of
+            events that were confirmed afterwards).
+        corrections_path: ``rejection_corrections.csv``.
+        out_dir: Destination directory.
+
+    Returns:
+        The table, or ``None`` when no corrections file exists (feature never used).
+    """
+    if not corrections_path.exists():
+        return None
+    corr = load_rejection_corrections(corrections_path)
+    dec = load_all_decisions(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
+    if not dec.empty and not corr.empty:
+        corr = corr[~corr["observationID"].isin(set(dec["observationID"].dropna()))]
+    rows = []
+    for _, e in effort[effort["species"] != "TOTAL"].iterrows():
+        rejected = int(e["events_inspected"] - e["cells_detection"])
+        sub = corr[corr["scientificName"] == e["species"]]
+        counts = sub["actual_species"].value_counts()
+        for actual, n in counts.items():
+            rows.append({"species": e["species"], "actual_species": actual, "rejected_events": int(n),
+                         "pct_of_rejected_events": round(100 * int(n) / rejected, 1) if rejected else None})
+        missing = max(rejected - int(counts.sum()), 0)
+        if rejected:
+            rows.append({"species": e["species"], "actual_species": "(not recorded)",
+                         "rejected_events": missing,
+                         "pct_of_rejected_events": round(100 * missing / rejected, 1)})
+    df = pd.DataFrame(rows, columns=["species", "actual_species", "rejected_events", "pct_of_rejected_events"])
+    out_dir.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out_dir / "false_positive_sources.csv", index=False)
+    return df
+
+
 # ─── Species stats for index page ─────────────────────────────────────────────
 
 def species_stats(

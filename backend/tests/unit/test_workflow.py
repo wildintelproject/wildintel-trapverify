@@ -1718,3 +1718,56 @@ def test_effort_report_zero_uncertain_without_files(candidates, tmp_path):
     from camtrap_workflow import build_species_effort
     row = build_species_effort(candidates, tmp_path / "none", tmp_path / "o").iloc[0]
     assert row["uncertain_events"] == 0 and row["non_detection_cells_with_uncertain"] == 0
+
+
+# ─── rejection corrections ("actual species") ─────────────────────────────────
+# Fixture events: A/occ1 rank1=o001 rank2=o005, A/occ2=o003, B/occ1=o004. decisions_dir confirms o001.
+
+def test_save_rejection_corrections_replaces_round_and_ignores_noise(candidates, tmp_path):
+    from camtrap_workflow import load_rejection_corrections, save_rejection_corrections
+    f = tmp_path / "rejection_corrections.csv"
+    save_rejection_corrections(f, candidates, "Vulpes_vulpes", 1, {"o003": "Dama dama", "o004": "  ", "nope": "x"})
+    df = load_rejection_corrections(f)
+    assert list(df["observationID"]) == ["o003"] and list(df["actual_species"]) == ["Dama dama"]
+    save_rejection_corrections(f, candidates, "Vulpes_vulpes", 2, {"o005": "Homo sapiens"})
+    save_rejection_corrections(f, candidates, "Vulpes_vulpes", 1, {"o004": "Canis familiaris"})   # redo round 1
+    df = load_rejection_corrections(f)
+    assert sorted(df["observationID"]) == ["o004", "o005"]
+
+def test_false_positive_sources_counts_and_coverage(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import build_false_positive_sources, build_species_effort, save_rejection_corrections
+    f = tmp_path / "rejection_corrections.csv"
+    save_rejection_corrections(f, candidates, "Vulpes_vulpes", 1,
+                               {"o003": "Dama dama", "o004": "Homo sapiens", "o001": "Dama dama"})  # o001 is confirmed
+    eff = build_species_effort(candidates, decisions_dir, tmp_path / "o")
+    fp = build_false_positive_sources(eff, decisions_dir, f, tmp_path / "o").set_index("actual_species")
+    assert (tmp_path / "o" / "false_positive_sources.csv").exists()
+    assert fp.loc["Dama dama", "rejected_events"] == 1 and fp.loc["Dama dama", "pct_of_rejected_events"] == 50.0
+    assert fp.loc["Homo sapiens", "rejected_events"] == 1
+    assert fp.loc["(not recorded)", "rejected_events"] == 0           # o001 ignored: confirmed
+
+def test_false_positive_sources_reports_uncorrected_share(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import build_false_positive_sources, build_species_effort, save_rejection_corrections
+    f = tmp_path / "rejection_corrections.csv"
+    save_rejection_corrections(f, candidates, "Vulpes_vulpes", 1, {"o003": "Dama dama"})
+    eff = build_species_effort(candidates, decisions_dir, tmp_path / "o")
+    fp = build_false_positive_sources(eff, decisions_dir, f, tmp_path / "o")
+    assert fp["pct_of_rejected_events"].sum() == 100.0
+    assert fp[fp["actual_species"] == "(not recorded)"]["rejected_events"].iloc[0] == 1
+
+def test_false_positive_sources_none_when_feature_unused(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import build_false_positive_sources, build_species_effort
+    eff = build_species_effort(candidates, decisions_dir, tmp_path / "o")
+    assert build_false_positive_sources(eff, decisions_dir, tmp_path / "missing.csv", tmp_path / "o") is None
+
+def test_corrections_do_not_change_histories(candidates, decisions_dir, session_config, tmp_path):
+    from camtrap_workflow import save_rejection_corrections
+    a, b = tmp_path / "a", tmp_path / "b"
+    build_occupancy_inputs(candidates, decisions_dir, session_config, a)
+    save_rejection_corrections(tmp_path / "rejection_corrections.csv", candidates, "Vulpes_vulpes", 1,
+                               {"o003": "Dama dama", "o004": "Homo sapiens"})
+    build_occupancy_inputs(candidates, decisions_dir, session_config, b)
+    names = sorted(f.name for f in a.glob("*.csv"))
+    assert names == sorted(f.name for f in b.glob("*.csv"))
+    for n in names:
+        assert (a / n).read_text() == (b / n).read_text(), n

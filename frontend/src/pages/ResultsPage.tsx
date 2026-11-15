@@ -36,6 +36,13 @@ interface EffortRow {
   excluded_cells: number | null
 }
 
+interface FalsePositiveRow {
+  species: string
+  actual_species: string
+  rejected_events: number
+  pct_of_rejected_events: number | null
+}
+
 interface Results {
   session_dir: string
   output_dir: string
@@ -51,6 +58,8 @@ interface Results {
   by_species_seqs: SpeciesRow[]
   effort_by_species: EffortRow[]
   min_score: number
+  record_rejection_species: boolean
+  false_positive_sources: FalsePositiveRow[]
   datapackage_generated: boolean
   datapackage_fabricated_fields: string[]
 }
@@ -432,6 +441,47 @@ export default function ResultsPage() {
             </>
           )}
           {results.min_score <= 0 && <div className="mb-10" />}
+        </>
+      )}
+
+      {/* False-positive sources */}
+      {results.record_rejection_species && (
+        <>
+          <h5 className="text-base font-semibold mb-1">{t('results.fp_title')}</h5>
+          <p className="text-zinc-500 dark:text-zinc-400 mb-3 text-sm">{t('results.fp_hint')}</p>
+          <div className={`${cardClass} mb-10`}>
+            {results.false_positive_sources.length === 0 ? (
+              <p className="p-3 text-sm text-zinc-500">{t('results.fp_empty')}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-700">
+                      <th className="text-left py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.col_species')}</th>
+                      <th className="text-left py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.fp_col_actual')}</th>
+                      <th className="text-right py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.fp_col_events')}</th>
+                      <th className="text-right py-2 px-2 font-semibold text-zinc-700 dark:text-zinc-300">{t('results.fp_col_pct')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.false_positive_sources.map((r, i) => {
+                      const missing = r.actual_species === '(not recorded)'
+                      return (
+                        <tr key={`${r.species}-${r.actual_species}-${i}`} className="border-b border-zinc-100 dark:border-zinc-800">
+                          <td className="py-2 px-2 font-mono text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{r.species}</td>
+                          <td className={`py-2 px-2 ${missing ? 'italic text-zinc-500' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                            {missing ? t('results.fp_not_recorded') : r.actual_species}
+                          </td>
+                          <td className="py-2 px-2 text-right text-zinc-700 dark:text-zinc-300">{r.rejected_events}</td>
+                          <td className="py-2 px-2 text-right text-zinc-700 dark:text-zinc-300">{fmt(r.pct_of_rejected_events)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </>
       )}
 

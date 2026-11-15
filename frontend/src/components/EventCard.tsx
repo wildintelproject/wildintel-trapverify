@@ -27,6 +27,9 @@ interface Props {
   eventIdx: number
   readOnly?: boolean
   allowUncertain?: boolean
+  recordCorrection?: boolean
+  correction?: string
+  onCorrect?: (key: string, value: string) => void
 }
 
 export default function EventCard({
@@ -38,6 +41,9 @@ export default function EventCard({
   eventIdx,
   readOnly = false,
   allowUncertain = true,
+  recordCorrection = false,
+  correction = '',
+  onCorrect,
 }: Props) {
   const { t, i18n } = useTranslation()
   const imgError = i18n.language.startsWith('es') ? '/img-error-es.svg' : '/img-error-en.svg'
@@ -169,6 +175,20 @@ export default function EventCard({
           </button>
         )}
       </div>
+      {recordCorrection && decision === 'rejected' && !readOnly && (
+        <div className="px-2 pb-2">
+          <input
+            type="text"
+            list="actual-species-list"
+            className="w-full px-2 py-1 text-xs rounded border border-zinc-600 bg-zinc-900 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            placeholder={t('gallery.actual_species_placeholder')}
+            title={t('gallery.actual_species_hint')}
+            value={correction}
+            onChange={(e) => onCorrect?.(event.key, e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   )
 }

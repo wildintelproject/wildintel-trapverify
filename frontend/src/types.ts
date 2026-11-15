@@ -44,6 +44,7 @@ export interface WorkflowConfig {
   include_burst_context: boolean
   classified_by: string
   extended_confirmation: boolean
+  record_rejection_species: boolean
 }
 
 export type Decision = 'confirmed' | 'rejected' | null
