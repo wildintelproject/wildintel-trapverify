@@ -16,7 +16,7 @@ from camtrap_workflow import (
     save_uncertain,
 )
 from schemas.requests import DecisionsRequest, RejectRequest, UnrejectRequest
-from services import session_service, workflow_service
+from services import progress_service, session_service, workflow_service
 
 router = APIRouter(prefix="/api", tags=["decisions"])
 logger = logging.getLogger(__name__)
@@ -78,6 +78,7 @@ def post_decisions(req: DecisionsRequest) -> dict:
     done = len(next_cands) == 0 or next_iter > config["total_iterations"]
     logger.info("Decisions saved: done=%s next_iteration=%s remaining=%d", done, next_iter if not done else None, int(next_cands["site_occasion_key"].nunique()) if not done else 0)
 
+    progress_service.clear_progress(p["decisions"], req.species, req.iteration)
     workflow_service.rebuild_outputs()
 
     return {

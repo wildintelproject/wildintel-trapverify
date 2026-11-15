@@ -22,6 +22,8 @@ from camtrap_workflow import (
     compute_min_score_exclusions,
     dataset_fingerprint,
     confirmed_observations,
+    get_events,
+    load_rejection_corrections,
     load_review_log,
     rounds_completed,
     clear_media_caches,
@@ -33,7 +35,7 @@ from fastapi import HTTPException
 from occupancy_model import fit_naive_vs_verified
 
 from schemas.requests import SetupRequest
-from services import session_service
+from services import progress_service, session_service
 
 
 def rebuild_outputs() -> None:
@@ -221,5 +223,68 @@ def replace_species_decisions(species_safe: str, confirmed_keys: list[str]) -> i
         pd.DataFrame(columns=["observationID", "site_occasion_key", "mediaID",
                               "scientificName", "siteID", "occasion"]).to_csv(last_round, index=False)
 
+    # Remember the species was edited as a whole: the rounds no longer describe what was decided
+    # in each, so the last one cannot be reopened any more.
+    pd.DataFrame({"edited_at": [datetime.now().isoformat(timespec="seconds")]}).to_csv(
+        p["decisions"] / f"edited_{species_safe}.csv", index=False)
+    progress_service.clear_progress(p["decisions"], species_safe)
     rebuild_outputs()
     return len(confirmed_keys)
+
+
+def reopen_last_round(species_safe: str) -> dict:
+    """Re-open the last finished round of a species so it can be corrected.
+
+    The round's decision files are moved to ``decisions/reopened/`` (a backup the app never
+    reads) and its decisions, actual-species corrections and decision times become the saved
+    progress of that round, so the gallery shows them exactly as they were. Progress of the
+    round that was being reviewed is kept. Finishing the re-opened round again writes the same
+    files as deciding it once.
+    """
+    p = session_service.paths()
+    d = p["decisions"]
+    rounds = rounds_completed(d).get(species_safe, 0)
+    if rounds < 1:
+        raise HTTPException(400, "Esta especie no tiene ninguna ronda terminada.")
+    if (d / f"edited_{species_safe}.csv").exists():
+        raise HTTPException(
+            400,
+            "Las decisiones de esta especie se han editado en bloque; para corregir algo, "
+            "usa la edición de la especie (candado).",
+        )
+    dec_file = d / f"decisions_{species_safe}_iter{rounds}.csv"
+    unc_file = d / f"uncertain_{species_safe}_iter{rounds}.csv"
+    confirmed_ids = set(pd.read_csv(dec_file, dtype=str)["observationID"].dropna()) if dec_file.exists() else set()
+    uncertain_ids = set(pd.read_csv(unc_file, dtype=str)["observationID"].dropna()) if unc_file.exists() else set()
+
+    backup = d / "reopened"
+    backup.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    for f in (dec_file, unc_file):
+        if f.exists():
+            f.replace(backup / f"{f.stem}.{stamp}.bak")
+
+    candidates = session_service.get_candidates()
+    events = get_events(candidates, d, session_service.get_rejected_media(), species_safe, rounds)
+
+    def _of(ev: dict, ids: set[str]) -> bool:
+        return ev["repObsId"] in ids or any(f["obsId"] in ids for f in ev["frames"])
+
+    decisions = {
+        ev["repObsId"]: "confirmed" if _of(ev, confirmed_ids) else "uncertain" if _of(ev, uncertain_ids) else "rejected"
+        for ev in events
+    }
+    corr = load_rejection_corrections(p["corrections"])
+    corr = corr[(corr["species_safe"] == species_safe) & (corr["iteration"] == str(rounds))]
+    corrections = {o: t for o, t in zip(corr["observationID"], corr["actual_species"]) if o in decisions}
+    log = load_review_log(p["review_log"])
+    times: dict[str, int] = {}
+    if not log.empty:
+        mine = log[(log["species_safe"] == species_safe) & (log["iteration"] == str(rounds))]
+        for o, at in zip(mine["observationID"], mine["decided_at"]):
+            if o in decisions and at:
+                times[o] = int(pd.Timestamp(at).timestamp() * 1000)
+    progress_service.save_progress(d, species_safe, rounds, decisions, corrections, times)
+    rebuild_outputs()
+    logger.info("Round %d of %s re-opened (%d decisions restored)", rounds, species_safe, len(decisions))
+    return {"success": True, "iteration": rounds, "restored": len(decisions)}

@@ -1943,3 +1943,149 @@ def test_import_auto_relinks_when_the_dataset_is_known_locally(client, setup_ses
     assert r.status_code == 200
     assert r.json()["relink"]["needs_relink"] is False
     assert r.json()["config"]["camtrap_dir"] == json.loads((Path(setup_session["session_dir"]) / "config.json").read_text())["camtrap_dir"]
+
+
+# ─── Progress of an unfinished round / reopening the previous round ───────────
+
+def _setup_recording(client, camtrap_dir, tmp_path):
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"),
+        "target_species": ["Vulpes vulpes"], "study_start": "2025-11-01", "study_end": "2025-11-10",
+        "occasion_days": 5, "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.5,
+        "record_rejection_species": True,
+    })
+    assert r.status_code == 200
+    return Path(r.json()["session_dir"])
+
+
+def _round1_events(client):
+    return client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+
+
+def test_no_progress_by_default(client, setup_session):
+    assert client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json() == {"progress": None}
+
+
+def test_progress_is_saved_and_read_back(client, setup_session):
+    ev = _round1_events(client)
+    body = {"iteration": 1,
+            "decisions": {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "uncertain", ev[2]["repObsId"]: "rejected"},
+            "corrections": {ev[2]["repObsId"]: " Canis lupus "},
+            "decision_times": {ev[0]["repObsId"]: 1700000000000}}
+    r = client.put("/api/species/Vulpes_vulpes/progress", json=body)
+    assert r.status_code == 200 and r.json()["n"] == 3
+    got = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
+    assert got["decisions"] == body["decisions"]
+    assert got["corrections"] == {ev[2]["repObsId"]: "Canis lupus"}
+    assert got["decision_times"] == {ev[0]["repObsId"]: 1700000000000}
+    assert got["saved_at"]
+
+
+def test_progress_changes_no_result(client, setup_session):
+    ev = _round1_events(client)
+    before = client.get("/api/species").json()
+    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed"}})
+    assert client.get("/api/species").json() == before
+
+
+def test_progress_ignores_unknown_values_and_empty_removes_it(client, setup_session):
+    ev = _round1_events(client)
+    r = client.put("/api/species/Vulpes_vulpes/progress",
+                   json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "maybe"}})
+    assert r.json()["n"] == 1
+    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {}})
+    assert client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"] is None
+
+
+def test_finishing_the_round_removes_its_progress(client, setup_session):
+    ev = _round1_events(client)
+    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed"}})
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
+    assert client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"] is None
+
+
+def test_progress_of_a_finished_round_is_refused(client, setup_session):
+    ev = _round1_events(client)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
+    r = client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed"}})
+    assert r.status_code == 400
+
+
+def test_progress_travels_in_the_session_export(client, setup_session, tmp_path, import_root):
+    ev = _round1_events(client)
+    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed"}})
+    zp = _export_to(client, tmp_path)
+    assert "decisions/progress_Vulpes_vulpes_iter1.csv" in zipfile.ZipFile(zp).namelist()
+    client.post("/api/session/import", json={"zip_path": str(zp)})
+    got = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
+    assert got["decisions"] == {ev[0]["repObsId"]: "confirmed"}
+
+
+def _finish_round1(client, ev, times=None):
+    return client.post("/api/decisions", json={
+        "species": "Vulpes_vulpes", "iteration": 1,
+        "confirmed": [ev[0]["repObsId"]], "uncertain": [ev[1]["repObsId"]],
+        "corrections": {ev[2]["repObsId"]: "Canis lupus"},
+        "decision_times": times or {e["repObsId"]: 1700000000000 + 1000 * i for i, e in enumerate(ev)},
+    })
+
+
+def _session_files(sd):
+    """Every file of the session except the backups and the CamtrapDP export, which carries
+    wall-clock stamps (``generatedAt``, classification timestamp) that differ between runs."""
+    return {f.relative_to(sd).as_posix(): f.read_bytes()
+            for f in sorted(sd.rglob("*"))
+            if f.is_file() and "reopened" not in f.parts and "camtrap_dp_verified" not in f.parts}
+
+
+def test_reopen_restores_every_decision_flag_and_correction(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev = _round1_events(client)
+    _finish_round1(client, ev)
+    r = client.post("/api/species/Vulpes_vulpes/reopen")
+    assert r.status_code == 200 and r.json()["iteration"] == 1 and r.json()["restored"] == 3
+    got = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
+    assert got["decisions"] == {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "uncertain", ev[2]["repObsId"]: "rejected"}
+    assert got["corrections"] == {ev[2]["repObsId"]: "Canis lupus"}
+    assert len(got["decision_times"]) == 3
+    assert not list((sd / "decisions").glob("decisions_Vulpes_vulpes_iter1.csv"))
+    assert list((sd / "decisions" / "reopened").glob("decisions_Vulpes_vulpes_iter1.*.bak"))
+    assert client.get("/api/species").json()[0]["n_confirmed_combos"] == 0        # nothing counts while it is open
+
+
+def test_reopen_and_finish_again_gives_the_same_files(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev = _round1_events(client)
+    _finish_round1(client, ev)
+    before = _session_files(sd)
+    client.post("/api/species/Vulpes_vulpes/reopen")
+    p = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
+    r = client.post("/api/decisions", json={
+        "species": "Vulpes_vulpes", "iteration": 1,
+        "confirmed": [k for k, v in p["decisions"].items() if v == "confirmed"],
+        "uncertain": [k for k, v in p["decisions"].items() if v == "uncertain"],
+        "corrections": p["corrections"], "decision_times": p["decision_times"],
+    })
+    assert r.status_code == 200
+    assert _session_files(sd) == before
+
+
+def test_reopen_keeps_the_progress_of_the_later_round(client, camtrap_dir, tmp_path):
+    _setup_recording(client, camtrap_dir, tmp_path)
+    ev = _round1_events(client)
+    _finish_round1(client, ev)
+    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 2, "decisions": {ev[0]["repObsId"]: "rejected"}})
+    client.post("/api/species/Vulpes_vulpes/reopen")
+    assert client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 2}).json()["progress"] is not None
+
+
+def test_cannot_reopen_without_a_finished_round(client, setup_session):
+    assert client.post("/api/species/Vulpes_vulpes/reopen").status_code == 400
+
+
+def test_cannot_reopen_after_the_species_was_edited(client, setup_session):
+    ev = _round1_events(client)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [e["repObsId"] for e in ev]})
+    keys = [e["key"] for e in ev]
+    client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": keys[:1]})
+    assert client.post("/api/species/Vulpes_vulpes/reopen").status_code == 400

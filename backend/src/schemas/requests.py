@@ -31,6 +31,15 @@ class SetupRequest(BaseModel):
     review_idle_seconds: int = 120
 
 
+class ProgressRequest(BaseModel):
+    """Unfinished decisions of one round, saved while the reviewer works."""
+    iteration: int
+    # observationID of the event's representative detection -> confirmed | rejected | uncertain
+    decisions: dict[str, str] = {}
+    corrections: dict[str, str] = {}
+    decision_times: dict[str, int] = {}
+
+
 class DecisionsRequest(BaseModel):
     species: str
     iteration: int

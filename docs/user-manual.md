@@ -508,15 +508,21 @@ The Results page and `effort_report.csv` (`review_active_seconds`, `review_decis
 
 ### Saving Decisions
 
-Once you have reviewed the detection events, click **💾 Save decisions** (floating button, bottom-right).
+Once you have reviewed the detection events, click **Finish round** (floating button, bottom-right).
 
 ![Save button](./img/user_manual/gallery-save.png)
-*Floating action buttons: Confirm all, Save decisions.*
+*Floating action buttons: Confirm all, Save progress, Finish round (the screenshot predates the Save progress button).*
 
 - If all detection events have been decided, the session advances to the next round (if any occasions were rejected) or marks the species as **Complete**.
 - If some detection events are still undecided, a warning is shown.
 
 The **✓✓ Confirm all** button marks every undecided detection event in the current view as confirmed in one click.
+
+### Saving progress and going back a round
+
+You do not have to finish a round in one sitting. Your decisions (including *Uncertain* flags and any typed *actual species*) are **saved automatically** in the session folder a couple of seconds after each click, when you press **Save progress**, and when you close the page. The button shows when the last save happened. Open the species again, from any browser, and the round comes back as you left it; the progress also travels with the session when you export it (see *Continuing a session on another computer*). Progress is stored in `decisions/progress_<species>_iter<N>.csv` and **changes no result** until you press **Finish round**, which removes it.
+
+If you notice a mistake in a round that is already finished, press **← Back to round N** next to the round badge. That round is reopened with its decisions (flags, actual species and times included) so you can correct them; until you finish it again nothing from it counts. Finishing it again writes the same files as deciding it once. The round's old files are kept as a backup in `decisions/reopened/`, and your progress in the later round is kept. This is not available once the species' decisions were edited as a whole with the lock button (🔒) on a completed species.
 
 ### Completed Species
 
