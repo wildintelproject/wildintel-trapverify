@@ -1666,3 +1666,55 @@ def test_effort_report_includes_exclusion_columns(candidates, decisions_dir, tmp
     assert df.iloc[0]["excluded_photos"] == 4 and df.iloc[-1]["excluded_cells"] == 2
     df2 = build_species_effort(candidates, decisions_dir, tmp_path / "o2")
     assert df2["excluded_photos"].isna().all()
+
+
+# ─── uncertain decisions ──────────────────────────────────────────────────────
+# Fixture cells: A/occ1 (events rank1=o001, rank2=o005), A/occ2 (o003), B/occ1 (o004)
+
+def test_save_uncertain_writes_and_overwrites(candidates, tmp_path):
+    from camtrap_workflow import load_all_uncertain, save_uncertain
+    d = tmp_path / "dec"
+    save_uncertain(d, candidates, "Vulpes_vulpes", 1, ["o003"])
+    assert list(load_all_uncertain(d)["observationID"]) == ["o003"]
+    save_uncertain(d, candidates, "Vulpes_vulpes", 1, [])          # changed round: no stale flag
+    assert load_all_uncertain(d).empty
+
+def test_uncertain_never_confirms_a_cell(candidates, tmp_path):
+    from camtrap_workflow import save_uncertain
+    d = tmp_path / "dec"
+    save_uncertain(d, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])
+    assert confirmed_keys_set(d) == set()
+    assert load_all_decisions(d).empty
+
+def test_uncertain_histories_identical_to_reject(candidates, decisions_dir, session_config, tmp_path):
+    from camtrap_workflow import save_uncertain
+    a, b = tmp_path / "a", tmp_path / "b"
+    build_occupancy_inputs(candidates, decisions_dir, session_config, a)
+    save_uncertain(decisions_dir, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])
+    build_occupancy_inputs(candidates, decisions_dir, session_config, b)
+    names = sorted(f.name for f in a.glob("*.csv"))
+    assert names and names == sorted(f.name for f in b.glob("*.csv"))
+    for n in names:
+        assert (a / n).read_text() == (b / n).read_text(), n
+
+def test_effort_report_counts_uncertain(candidates, tmp_path):
+    from camtrap_workflow import build_species_effort, save_uncertain
+    d = tmp_path / "dec"
+    save_uncertain(d, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])
+    df = build_species_effort(candidates, d, tmp_path / "o")
+    row, tot = df.iloc[0], df.iloc[-1]
+    assert row["uncertain_events"] == 2 and tot["uncertain_events"] == 2
+    assert row["non_detection_cells_with_uncertain"] == 2
+
+def test_effort_report_uncertain_later_confirmed_not_counted(candidates, tmp_path):
+    from camtrap_workflow import build_species_effort, save_decisions, save_uncertain
+    d = tmp_path / "dec"
+    save_uncertain(d, candidates, "Vulpes_vulpes", 1, ["o003", "o004"])
+    save_decisions(d, candidates, "Vulpes_vulpes", 1, ["o003"])    # o003 confirmed after all
+    row = build_species_effort(candidates, d, tmp_path / "o").iloc[0]
+    assert row["uncertain_events"] == 1
+
+def test_effort_report_zero_uncertain_without_files(candidates, tmp_path):
+    from camtrap_workflow import build_species_effort
+    row = build_species_effort(candidates, tmp_path / "none", tmp_path / "o").iloc[0]
+    assert row["uncertain_events"] == 0 and row["non_detection_cells_with_uncertain"] == 0

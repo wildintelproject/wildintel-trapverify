@@ -7,7 +7,7 @@ import Captions from 'yet-another-react-lightbox/plugins/captions'
 import 'yet-another-react-lightbox/styles.css'
 import 'yet-another-react-lightbox/plugins/captions.css'
 import { api } from '../api'
-import EventCard from '../components/EventCard'
+import EventCard, { type Decision } from '../components/EventCard'
 import type { DetectionEvent } from '../types'
 
 interface EventSlide extends SlideImage {
@@ -34,7 +34,7 @@ export default function GalleryPage() {
   const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; min_score: number } | null>(null)
   const [iteration, setIteration] = useState(1)
   const [totalIterations, setTotalIterations] = useState(1)
-  const [decisions, setDecisions] = useState<Record<string, 'confirmed' | 'rejected'>>({})
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({})
   const [needsDecision, setNeedsDecision] = useState<Set<string>>(new Set())
   const [lbOpen, setLbOpen] = useState(false)
   const [lbEvIdx, setLbEvIdx] = useState(0)   // which event is shown in the lightbox
@@ -50,8 +50,10 @@ export default function GalleryPage() {
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null)
   const decisionsRef = useRef(decisions)
+  const completedRef = useRef(false)
   decisionsRef.current = decisions
-  const decideInLbRef = useRef<(d: 'confirmed' | 'rejected') => void>(() => {})
+  completedRef.current = completed
+  const decideInLbRef = useRef<(d: Decision) => void>(() => {})
   const lbControllerRef = useRef<ControllerRef>(null)
 
   function iterationColor(iter: number, total: number): string {
@@ -85,7 +87,7 @@ export default function GalleryPage() {
         setCompleted(true)
         const reviewEvts = await api.getReview(species)
         setEvents(reviewEvts)
-        const pre: Record<string, 'confirmed' | 'rejected'> = {}
+        const pre: Record<string, Decision> = {}
         reviewEvts.forEach((ev) => {
           pre[ev.key] = ev.status === 'confirmed' ? 'confirmed' : 'rejected'
         })
@@ -94,10 +96,14 @@ export default function GalleryPage() {
       }
 
       setEvents(evts)
-      const pre: Record<string, 'confirmed' | 'rejected'> = {}
+      const pre: Record<string, Decision> = {}
       saved.confirmed.forEach((id) => {
         const ev = evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
         if (ev) pre[ev.key] = 'confirmed'
+      })
+      ;(saved.uncertain ?? []).forEach((id) => {
+        const ev = evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
+        if (ev && !pre[ev.key]) pre[ev.key] = 'uncertain'
       })
       setDecisions(pre)
       setNeedsDecision(new Set())
@@ -122,6 +128,7 @@ export default function GalleryPage() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'y' || e.key === 'Y') decideInLbRef.current('confirmed')
       if (e.key === 'n' || e.key === 'N') decideInLbRef.current('rejected')
+      if ((e.key === 'u' || e.key === 'U') && !completedRef.current) decideInLbRef.current('uncertain')
       if (e.key === 'ArrowUp') {
         e.preventDefault()
         e.stopPropagation()
@@ -177,7 +184,7 @@ export default function GalleryPage() {
     setLbInverted(false)
   }
 
-  function decideInLb(d: 'confirmed' | 'rejected') {
+  function decideInLb(d: Decision) {
     if (completed && locked) return
     const ev = events[lbEvIdx]
     if (!ev) return
@@ -219,13 +226,13 @@ export default function GalleryPage() {
   }
   decideInLbRef.current = decideInLb
 
-  function decide(key: string, _repObsId: string, d: 'confirmed' | 'rejected') {
+  function decide(key: string, _repObsId: string, d: Decision) {
     setDecisions((prev) => ({ ...prev, [key]: d }))
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(key); return s })
   }
 
   function confirmAll() {
-    const all: Record<string, 'confirmed' | 'rejected'> = {}
+    const all: Record<string, Decision> = {}
     events.forEach((ev) => { all[ev.key] = 'confirmed' })
     setDecisions(all)
     setNeedsDecision(new Set())
@@ -246,7 +253,10 @@ export default function GalleryPage() {
       const confirmedIds = events
         .filter((e) => decisions[e.key] === 'confirmed')
         .map((e) => e.repObsId)
-      const result = await api.saveDecisions(species, iteration, confirmedIds)
+      const uncertainIds = events
+        .filter((e) => decisions[e.key] === 'uncertain')
+        .map((e) => e.repObsId)
+      const result = await api.saveDecisions(species, iteration, confirmedIds, uncertainIds)
       if (result.done) {
         showToast(t('gallery.toast_done'), 'success')
         setTimeout(() => navigate('/species'), 1500)
@@ -459,6 +469,7 @@ export default function GalleryPage() {
                       decision={decisions[ev.key] ?? null}
                       needsDecision={needsDecision.has(ev.key)}
                       onDecide={decide}
+                      allowUncertain={!completed}
                       onOpenLightbox={(eIdx, fIdx) => openLightbox(eIdx, fIdx)}
                       eventIdx={idx}
                       readOnly={completed && locked}
@@ -543,6 +554,20 @@ export default function GalleryPage() {
                 >
                   {t('gallery.rejected_btn')} <span className="opacity-60">(N)</span>
                 </button>
+                {!completed && (
+                  <button
+                    className={`flex-1 py-2.5 text-base rounded font-medium transition-colors disabled:opacity-50 ${
+                      lbDecision === 'uncertain'
+                        ? 'bg-amber-600 text-white hover:bg-amber-700'
+                        : 'border border-amber-600 bg-black/40 text-amber-400 hover:bg-amber-600 hover:text-white'
+                    }`}
+                    onClick={() => decideInLb('uncertain')}
+                    disabled={lbReadOnly}
+                    title={t('gallery.uncertain_hint')}
+                  >
+                    {t('gallery.uncertain_btn')} <span className="opacity-60">(U)</span>
+                  </button>
+                )}
               </div>
             </div>
           ),

@@ -22,6 +22,8 @@ class DecisionsRequest(BaseModel):
     species: str
     iteration: int
     confirmed: list[str]
+    # Events marked "uncertain": counted as rejections, only recorded for reporting.
+    uncertain: list[str] = []
 
 
 class RejectRequest(BaseModel):

@@ -31,7 +31,7 @@
     - Brightness and contrast controls
     - Tonal inversion (useful for night-vision / near-infrared images)
     - Left / right arrows to move between occasions without closing
-- **Keyboard navigation** — arrow keys advance frames; `C` confirms, `R` rejects (configurable).
+- **Keyboard navigation** — arrow keys advance frames; `C` confirms, `R` rejects (configurable); `U` marks a detection event as uncertain (counted as a rejection, reported separately).
 - **Per-species progress bars** — a coloured badge on each species card shows the current round; the bar fills as cells are resolved.
 
 ---

@@ -128,4 +128,47 @@ describe('EventCard', () => {
     )
     expect(screen.getByText('Contexto')).toBeInTheDocument()
   })
+
+  it('offers an Uncertain button that reports the decision', async () => {
+    const onDecide = vi.fn()
+    render(
+      <EventCard
+        event={makeEvent()}
+        decision={null}
+        needsDecision={false}
+        onDecide={onDecide}
+        onOpenLightbox={vi.fn()}
+        eventIdx={0}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /^\?/ }))
+    expect(onDecide).toHaveBeenCalledWith('site1|1', 'obs-1', 'uncertain')
+  })
+
+  it('highlights uncertain events and can hide the Uncertain button', () => {
+    const { container, rerender } = render(
+      <EventCard
+        event={makeEvent()}
+        decision="uncertain"
+        needsDecision={false}
+        onDecide={vi.fn()}
+        onOpenLightbox={vi.fn()}
+        eventIdx={0}
+      />,
+    )
+    expect(container.firstChild).toHaveClass('border-amber-500')
+    expect(screen.getByRole('button', { name: /^\?/ })).toHaveClass('bg-amber-600')
+    rerender(
+      <EventCard
+        event={makeEvent()}
+        decision={null}
+        needsDecision={false}
+        onDecide={vi.fn()}
+        onOpenLightbox={vi.fn()}
+        eventIdx={0}
+        allowUncertain={false}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /^\?/ })).toBeNull()
+  })
 })

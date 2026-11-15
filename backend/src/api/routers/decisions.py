@@ -4,7 +4,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.deps import require_candidates
-from camtrap_workflow import confirmed_keys_set, save_decisions
+from camtrap_workflow import confirmed_keys_set, save_decisions, save_uncertain
 from schemas.requests import DecisionsRequest, RejectRequest, UnrejectRequest
 from services import session_service, workflow_service
 
@@ -14,13 +14,13 @@ logger = logging.getLogger(__name__)
 
 @router.get("/decisions")
 def get_decisions(species: str, iteration: int) -> dict:
-    """Return confirmed observationID values for a species and round."""
+    """Return confirmed and uncertain observationID values for a species and round."""
     p = session_service.paths()
     path = p["decisions"] / f"decisions_{species}_iter{iteration}.csv"
-    if not path.exists():
-        return {"confirmed": []}
-    df = pd.read_csv(path, dtype=str)
-    return {"confirmed": df["observationID"].tolist()}
+    upath = p["decisions"] / f"uncertain_{species}_iter{iteration}.csv"
+    confirmed = pd.read_csv(path, dtype=str)["observationID"].tolist() if path.exists() else []
+    uncertain = pd.read_csv(upath, dtype=str)["observationID"].tolist() if upath.exists() else []
+    return {"confirmed": confirmed, "uncertain": uncertain}
 
 
 @router.post("/decisions", dependencies=[Depends(require_candidates)])
@@ -36,6 +36,10 @@ def post_decisions(req: DecisionsRequest) -> dict:
         req.species, req.iteration, len(req.confirmed),
     )
     save_decisions(p["decisions"], candidates, req.species, req.iteration, req.confirmed)
+    save_uncertain(
+        p["decisions"], candidates, req.species, req.iteration,
+        [u for u in req.uncertain if u not in set(req.confirmed)],
+    )
 
     conf_keys = confirmed_keys_set(p["decisions"])
     rejected = session_service.get_rejected_media()

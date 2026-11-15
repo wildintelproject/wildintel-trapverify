@@ -16,14 +16,17 @@ function bestFrameIndex(frames: DetectionEvent['frames']): number {
   return best
 }
 
+export type Decision = 'confirmed' | 'rejected' | 'uncertain'
+
 interface Props {
   event: DetectionEvent
-  decision: 'confirmed' | 'rejected' | null
+  decision: Decision | null
   needsDecision: boolean
-  onDecide: (key: string, repObsId: string, d: 'confirmed' | 'rejected') => void
+  onDecide: (key: string, repObsId: string, d: Decision) => void
   onOpenLightbox: (eventIdx: number, frameIdx: number) => void
   eventIdx: number
   readOnly?: boolean
+  allowUncertain?: boolean
 }
 
 export default function EventCard({
@@ -34,6 +37,7 @@ export default function EventCard({
   onOpenLightbox,
   eventIdx,
   readOnly = false,
+  allowUncertain = true,
 }: Props) {
   const { t, i18n } = useTranslation()
   const imgError = i18n.language.startsWith('es') ? '/img-error-es.svg' : '/img-error-en.svg'
@@ -43,6 +47,8 @@ export default function EventCard({
     ? 'border-2 border-emerald-500'
     : decision === 'rejected'
     ? 'border-2 border-red-500'
+    : decision === 'uncertain'
+    ? 'border-2 border-amber-500'
     : needsDecision
     ? 'border-2 border-amber-400'
     : 'border border-zinc-700'
@@ -148,6 +154,20 @@ export default function EventCard({
         >
           {t('gallery.rejected_btn')}
         </button>
+        {allowUncertain && (
+          <button
+            className={`flex-1 py-1.5 text-sm rounded font-medium transition-colors disabled:opacity-50 ${
+              decision === 'uncertain'
+                ? 'bg-amber-600 text-white hover:bg-amber-700'
+                : 'border border-amber-600 text-amber-400 hover:bg-amber-600 hover:text-white'
+            }`}
+            onClick={() => onDecide(event.key, event.repObsId, 'uncertain')}
+            disabled={readOnly}
+            title={t('gallery.uncertain_hint')}
+          >
+            {t('gallery.uncertain_btn')}
+          </button>
+        )}
       </div>
     </div>
   )
