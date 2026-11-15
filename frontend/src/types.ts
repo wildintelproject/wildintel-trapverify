@@ -45,6 +45,8 @@ export interface WorkflowConfig {
   total_iterations: number
   gap_seconds: number
   min_score: number
+  /** Cut-offs that replace min_score for some species (scientific name -> value). */
+  min_score_by_species?: Record<string, number>
   include_burst_context: boolean
   classified_by: string
   extended_confirmation: boolean

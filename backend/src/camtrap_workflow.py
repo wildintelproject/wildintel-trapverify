@@ -975,6 +975,21 @@ def _frame_time(row) -> str:
     return shown if pd.notna(shown) else ""
 
 
+# ─── Minimum score per species ────────────────────────────────────────────────
+
+def species_min_scores(
+    target_species: list[str],
+    min_score: float,
+    min_score_by_species: Optional[dict[str, float]] = None,
+) -> dict[str, float]:
+    """Cut-off that applies to each target species: its own value if it has one, else ``min_score``.
+
+    A value ``<= 0`` means no cut-off for that species (also when the general one is higher).
+    """
+    own = {sp: float(v) for sp, v in (min_score_by_species or {}).items() if v is not None}
+    return {sp: own.get(sp, float(min_score)) for sp in target_species}
+
+
 # ─── Sampling occasion length ─────────────────────────────────────────────────
 
 def occasion_length_hours(occasion_days: int, occasion_hours: Optional[int] = None) -> int:
@@ -1071,6 +1086,7 @@ def build_candidates(
     min_score: float = 0.0,
     seed: int = 42,
     occasion_hours: Optional[int] = None,
+    min_score_by_species: Optional[dict[str, float]] = None,
 ) -> pd.DataFrame:
     """Build the verification candidate manifest from CamtrapDP tables.
 
@@ -1112,6 +1128,9 @@ def build_candidates(
             chronology or on the row order. Defaults to 42.
         occasion_hours: Width of each sampling occasion in hours instead of days
             (e.g. 1 for activity patterns). ``None`` or 0 uses ``occasion_days``.
+        min_score_by_species: Optional ``scientificName`` -> cut-off that replaces
+            ``min_score`` for that species (``<= 0`` for no cut-off). Species not
+            listed use ``min_score``.
 
     Returns:
         DataFrame with one row per candidate frame, including columns
@@ -1164,9 +1183,11 @@ def build_candidates(
     # to_camtrapdp()'s per-frame threshold: a frame with no score at all is never
     # demoted (only a known low score excludes it), and this runs before burst
     # grouping, so a demoted frame no longer counts toward a burst's gap-based grouping.
-    if min_score > 0:
+    overrides = {sp: float(v) for sp, v in (min_score_by_species or {}).items() if v is not None}
+    if min_score > 0 or any(v > 0 for v in overrides.values()):
         target_prob = pd.to_numeric(target_obs["classificationProbability"], errors="coerce")
-        target_obs = target_obs[~(target_prob.notna() & (target_prob < min_score))]
+        threshold = target_obs["scientificName"].map(overrides).fillna(float(min_score)).astype(float)
+        target_obs = target_obs[~(target_prob.notna() & (threshold > 0) & (target_prob < threshold))]
 
     joined = (
         target_obs
@@ -2329,6 +2350,7 @@ def compute_min_score_exclusions(
     min_score: float,
     seed: int = 42,
     occasion_hours: Optional[int] = None,
+    min_score_by_species: Optional[dict[str, float]] = None,
 ) -> pd.DataFrame:
     """Count what the ``min_score`` cut-off removed from the review, per species.
 
@@ -2348,17 +2370,22 @@ def compute_min_score_exclusions(
         dep, med, obs: Loaded CamtrapDP tables.
         target_species, study_start, study_end, occasion_days, total_iterations,
             gap_seconds: Same values used to build ``candidates``.
-        min_score: The cut-off. When ``<= 0`` nothing is excluded.
+        min_score: The general cut-off. When ``<= 0`` nothing is excluded for the
+            species without their own.
+        min_score_by_species: Per-species cut-offs that replace ``min_score``.
 
     Returns:
-        One row per target species with ``species``, ``excluded_photos``,
-        ``excluded_events`` and ``excluded_cells`` (all 0 without a cut-off).
+        One row per target species with ``species``, ``min_score`` (the cut-off that
+        applied to it, 0 for none), ``excluded_photos``, ``excluded_events`` and
+        ``excluded_cells`` (all 0 without a cut-off).
     """
+    cutoffs = species_min_scores(target_species, min_score, min_score_by_species)
     zero = pd.DataFrame({
         "species": list(target_species),
+        "min_score": [max(cutoffs[sp], 0.0) for sp in target_species],
         "excluded_photos": 0, "excluded_events": 0, "excluded_cells": 0,
     })
-    if min_score <= 0:
+    if not any(v > 0 for v in cutoffs.values()):
         return zero
     full = build_candidates(
         dep, med, obs,
@@ -2383,6 +2410,7 @@ def compute_min_score_exclusions(
         cell = sub.groupby("site_occasion_key")["_kept"].any()
         rows.append({
             "species": sp,
+            "min_score": max(cutoffs[sp], 0.0),
             "excluded_photos": int((~sub["_kept"]).sum()),
             "excluded_events": int((~ev).sum()),
             "excluded_cells":  int((~cell).sum()),
@@ -2544,6 +2572,13 @@ def build_species_effort(
         rows.append(build_row(sp_df["scientificName"].iloc[0], acc))
         for k, v in acc.items():
             total[k] = total[k] + v
+    if exclusions is not None:
+        # A species whose photos were all removed by the cut-off has no candidates, but it must
+        # still appear (with its excluded counts) instead of vanishing from the report.
+        present = {r["species"] for r in rows}
+        for sp in exclusions["species"]:
+            if sp not in present:
+                rows.append(build_row(sp, new_acc()))
     if rows:
         rows.append(build_row("TOTAL", total))
     df = pd.DataFrame(rows)
@@ -2566,11 +2601,14 @@ def build_species_effort(
             df.loc[i, "review_est_full_seconds"] = est
             df.loc[i, "review_est_saved_seconds"] = round(est - d["seconds"]) if est is not None else None
     cols = ["excluded_photos", "excluded_events", "excluded_cells"]
+    df["min_score"] = None
     if exclusions is not None and not df.empty:
-        ex = exclusions.set_index("species")[cols]
+        ex = exclusions.set_index("species")
         for c in cols:
             df[c] = df["species"].map(ex[c])
             df.loc[df["species"] == "TOTAL", c] = int(ex[c].sum())
+        if "min_score" in ex.columns:                       # absent in sessions made before the report had it
+            df["min_score"] = df["species"].map(ex["min_score"])
     else:
         for c in cols:
             df[c] = None

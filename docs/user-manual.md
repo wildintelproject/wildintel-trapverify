@@ -313,6 +313,7 @@ These control how the data is segmented into reviewable units.
 | **Sampling occasion duration** (days or hours) | 5 days | Groups images at a location into consecutive windows of N days, or of N **hours** if you choose *Hours* (for example 1 hour, for activity patterns). The windows start at 00:00 of the first day of the study; the last one is shorter if the study period is not a multiple of the window. The number of occasions adapts automatically to the study duration. See [Occasions shorter than a day](#occasions-shorter-than-a-day). |
 | **Gap between detection events (seconds)** | 60 | Images less than N seconds apart at the same site belong to the same detection event. |
 | **Minimum detection score** | 0.5 | Detections scoring **below** this threshold are excluded from the candidate set (a score equal to the threshold is kept, and a photo with no score is never excluded). See [When to use a minimum score](#when-to-use-a-minimum-score). |
+| **Minimum detection confidence per species** | none | Optional. Under the general score, a collapsible list gives each selected species a box for its own cut-off, which replaces the general one for that species. An empty box uses the general score and `0` turns the cut-off off for that species. See [When to use a minimum score](#when-to-use-a-minimum-score). |
 | **Random seed for tied detection events** | 42 | Detection events with the same score in a cell (all of them when the photos have no score) are shown in a pseudo-random order, not by date. The seed makes that order reproducible: the same data and seed always give the same order. It is stored in `config.json`; record it when you report your results. |
 
 #### When to use a minimum score
@@ -322,7 +323,9 @@ The cut-off trades completeness for effort. Photos below it are **never shown to
 - **Use a cut-off** when the classifier produces many very low-confidence labels that are almost always wrong, and the species is well recognised by the model (so true detections rarely score low).
 - **Avoid it, or set it to 0**, for species the classifier handles poorly (for example nocturnal or partly visible animals), because their true detections are the ones most likely to fall below the cut-off. Low-confidence labels are exactly the images most worth checking.
 
-When a cut-off is active, the Results page shows a notice and a table with, per species, the photos and detection events removed and the sampling-occasion cells left with no candidate at all (the same figures are in `effort_report.csv` as `excluded_photos`, `excluded_events` and `excluded_cells`). Report them alongside any claim about effort saved.
+You do not have to choose one value for everything: **a cut-off per species** lets you keep a cut-off for the species the classifier recognises well and lower it, or turn it off with `0`, for the ones it handles poorly. A species whose own cut-off is above all its scores is left with nothing to review; it does not appear in the species index, but it still appears in the table of excluded photos on Results, with its cut-off.
+
+When a cut-off is active, the Results page shows a notice and a table with, per species, the cut-off that applied to it and the photos and detection events removed and the sampling-occasion cells left with no candidate at all (the same figures are in `effort_report.csv` as `excluded_photos`, `excluded_events` and `excluded_cells`). Report them alongside any claim about effort saved.
 
 #### Confirmation parameters
 

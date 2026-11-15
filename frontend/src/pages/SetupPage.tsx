@@ -1,3 +1,4 @@
+import { cleanSpeciesCutoffs } from '../utils/minScore'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -21,6 +22,7 @@ const DEFAULT: WorkflowConfig = {
   total_iterations: 100000,
   gap_seconds: 60,
   min_score: 0.5,
+  min_score_by_species: {},
   include_burst_context: false,
   classified_by: 'expert_review',
   extended_confirmation: false,
@@ -58,6 +60,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [step, setStep] = useState(-1)
   const [form, setForm] = useState<WorkflowConfig>(DEFAULT)
   const hoursMode = (form.occasion_hours ?? 0) > 0     // occasions in hours instead of days
+  const cutoffs = form.min_score_by_species ?? {}      // per-species minimum detection confidence
   const [availableSpecies, setAvailableSpecies] = useState<string[]>([])
   const [selectedSpecies, setSelectedSpecies] = useState<Set<string>>(new Set())
   const [dataRange, setDataRange] = useState<{ min: string; max: string } | null>(null)
@@ -267,7 +270,11 @@ export default function SetupPage({ onSetup, ready }: Props) {
     setSubmitting(true)
     setStepError(null)
     try {
-      await api.setup({ ...form, target_species: [...selectedSpecies] })
+      await api.setup({
+        ...form,
+        target_species: [...selectedSpecies],
+        min_score_by_species: cleanSpeciesCutoffs(form.min_score_by_species, selectedSpecies),
+      })
       onSetup()
       navigate('/species')
     } catch (e) {
@@ -1103,6 +1110,38 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </span>
             </div>
             <p className={hintClass}>{t('setup.hint_min_score')}</p>
+            {selectedSpecies.size > 0 && (
+              <details className="mt-3 rounded border border-zinc-300 dark:border-zinc-700 px-3 py-2">
+                <summary className="cursor-pointer text-sm font-semibold text-zinc-700 dark:text-zinc-300 select-none">
+                  {t('setup.label_min_score_by_species')}
+                  {Object.keys(cleanSpeciesCutoffs(form.min_score_by_species, selectedSpecies)).length > 0 && (
+                    <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-blue-600 text-white">
+                      {Object.keys(cleanSpeciesCutoffs(form.min_score_by_species, selectedSpecies)).length}
+                    </span>
+                  )}
+                </summary>
+                <p className={hintClass}>{t('setup.hint_min_score_by_species')}</p>
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {[...selectedSpecies].sort().map((sp) => (
+                    <label key={sp} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="italic text-zinc-700 dark:text-zinc-300">{sp}</span>
+                      <input
+                        type="number" min={0} max={1} step={0.05} className={inputClass} style={{ width: 110 }}
+                        aria-label={`${t('setup.label_min_score')} — ${sp}`}
+                        placeholder={form.min_score.toFixed(2)}
+                        value={cutoffs[sp] ?? ''}
+                        onChange={(e) => {
+                          const next = { ...cutoffs }
+                          if (e.target.value === '') delete next[sp]
+                          else next[sp] = Number(e.target.value)
+                          set('min_score_by_species', next)
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
 
           <div className="mb-6">

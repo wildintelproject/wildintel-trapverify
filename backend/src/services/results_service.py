@@ -184,4 +184,7 @@ def compute_results() -> dict:
         "record_rejection_species": bool((session_service.get_config() or {}).get("record_rejection_species", False)),
         "false_positive_sources": false_positive_sources,
         "min_score":       float((session_service.get_config() or {}).get("min_score", 0) or 0),
+        "min_score_by_species": {
+            sp: float(v) for sp, v in ((session_service.get_config() or {}).get("min_score_by_species") or {}).items()
+        },
     }
