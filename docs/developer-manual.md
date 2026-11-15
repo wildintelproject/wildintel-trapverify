@@ -245,7 +245,7 @@ A multi-stage Docker build (`backend/Dockerfile.build`) runs PyInstaller inside 
 
 ## 8. CI/CD — GitHub Actions
 
-Two workflows live in `.github/workflows/`:
+Three workflows live in `.github/workflows/` (`ci.yml` runs the tests on every push and pull request):
 
 ### `docs.yml` — Documentation
 
@@ -257,6 +257,15 @@ Steps:
 3. Deploy to **GitHub Pages**.
 
 > Enable Pages in the repo settings: **Settings → Pages → Source: GitHub Actions**.
+
+### `scheduled.yml` — Weekly dependency check
+
+Runs every Monday (and on manual dispatch) against `development` with the **latest compatible dependencies**
+(`uv sync --upgrade`, `npm update`): backend tests, frontend lint, tests and build. If anything fails it opens (or
+comments on) an issue labelled `dependency-check`. Dependabot (`.github/dependabot.yml`) also proposes dependency,
+GitHub Actions and Docker image updates against `development`.
+
+> Scheduled workflows only run from the repository's default branch, so this file takes effect once it is on `main`.
 
 ### `release.yml` — Release
 
@@ -353,7 +362,11 @@ All HTTP calls go through `frontend/src/api.ts`. The base URL is `/api` in produ
 3. Run `uv run cli dev` and verify your changes work end-to-end.
 4. Run the backend tests: `uv run cli backend test`.
 5. Run the frontend linter: `uv run cli frontend lint`.
-6. Open a pull request against `main`.
+6. Open a pull request against `development` (releases are merged from `development` into `main`).
+
+See also [`CONTRIBUTING.md`](https://github.com/wildintelproject/wildintel-trapverify/blob/main/CONTRIBUTING.md), the
+[Code of Conduct](https://github.com/wildintelproject/wildintel-trapverify/blob/main/CODE_OF_CONDUCT.md) and
+[Maintenance and support](maintenance.md).
 
 ### Commit style
 
@@ -413,7 +426,13 @@ Pushing a `v*` tag triggers the `release.yml` workflow automatically. It will:
 - `development` received the automated `docs: promote Upcoming release to vX.Y.Z…`
   commit updating `CHANGELOG.md`.
 
-### 5. Update the GitHub Release notes for past releases *(first time only)*
+### 5. Archive the release on Zenodo *(recommended)*
+
+To get a DOI per release, enable the GitHub–Zenodo integration once for the repository (Zenodo → GitHub → toggle
+the repository on). Every GitHub Release is then archived automatically with its own DOI; add the DOI to the release
+notes and cite it together with the version.
+
+### 6. Update the GitHub Release notes for past releases *(first time only)*
 
 If you need to backfill release notes for releases published before the
 `CHANGELOG.md` automation was set up, edit each release manually on GitHub and

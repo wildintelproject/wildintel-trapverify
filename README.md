@@ -49,7 +49,7 @@ Once the review is complete, **CamTrap Verify** exports a verified CamtrapDP pac
 ## 📋 Requirements
 
 - Python 3.13+ with [uv](https://github.com/astral-sh/uv)
-- Node.js 18+ / npm 9+
+- Node.js 22 (LTS) / npm 10+
 - Docker + Compose (production only)
 
 ## 📚 Documentation
@@ -74,9 +74,28 @@ The browser will open at `http://localhost:5173`. See the [user manual](https://
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md).
+The [Developer Manual](https://wildintelproject.github.io/wildintel-trapverify/latest/developer-manual/) describes the
+architecture, the development setup, the tests and the release process to make it easy for other developers to
+contribute.
 
 To report a bug or request a new feature, please open an [issue](https://github.com/wildintelproject/wildintel-trapverify/issues).
+Security problems should be reported privately, see [SECURITY.md](SECURITY.md).
+
+## 🛠️ Maintenance and support
+
+CamTrap Verify is maintained within the [WildINTEL project](https://wildintel.eu/), which initially ends at the end
+of 2027. The code is open source and open to contributions on GitHub, so it can continue to be maintained by the
+community afterwards.
+
+- **Supported versions:** the latest release and the `development` branch.
+- **Support:** best effort through GitHub issues; no guaranteed response time.
+- **Staying compatible:** CI runs on every change, a weekly job tests against the latest compatible dependencies and
+  opens an issue if they break, and Dependabot proposes updates.
+- **Releases:** versioned with [Semantic Versioning](https://semver.org/), published as GitHub Releases and described in
+  the [CHANGELOG](CHANGELOG.md); the process is in the Developer Manual.
+
+Full details: [Maintenance and support](https://wildintelproject.github.io/wildintel-trapverify/latest/maintenance/).
 
 ## 📝 License
 

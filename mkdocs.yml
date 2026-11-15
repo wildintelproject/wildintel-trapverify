@@ -96,5 +96,6 @@ nav:
   - Home: index.md
   - User Manual: user-manual.md
   - Developer Manual: developer-manual.md
+  - Maintenance: maintenance.md
   - Features: features.md
   - About: about.md

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security problem
+    url: https://github.com/wildintelproject/wildintel-trapverify/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.
+  - name: Documentation
+    url: https://wildintelproject.github.io/wildintel-trapverify/
+    about: User and developer manuals.
