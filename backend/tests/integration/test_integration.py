@@ -6,9 +6,11 @@ disk I/O, FastAPI routing, workflow logic and file output generation.
 
 Run with:  uv run pytest tests/integration/ -v
 """
+import io
 import json
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 import httpx
@@ -245,6 +247,7 @@ def test_decisions_regenerate_verified_camtrapdp(http, camtrap_dir, tmp_path):
         "species": "Vulpes_vulpes", "iteration": 1, "confirmed": all_ids,
     })
 
+    http.get("/api/results")                       # opening the results brings the verified CamtrapDP up to date
     obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
     human_rows = obs[obs["classificationMethod"] == "human"]
     assert len(human_rows) == 3
@@ -415,6 +418,7 @@ def test_classified_by_custom_label_in_verified_camtrapdp(http, camtrap_dir, tmp
     rep_id = events[0]["repObsId"]
     http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rep_id]})
 
+    http.get("/api/results")                       # opening the results brings the verified CamtrapDP up to date
     obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
     assert obs[obs["observationID"] == rep_id].iloc[0]["classifiedBy"] == "wildlife_expert"
 
@@ -427,6 +431,7 @@ def test_classified_by_default_is_expert_review(http, camtrap_dir, tmp_path):
     rep_id = events[0]["repObsId"]
     http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rep_id]})
 
+    http.get("/api/results")                       # opening the results brings the verified CamtrapDP up to date
     obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
     assert obs[obs["observationID"] == rep_id].iloc[0]["classifiedBy"] == "expert_review"
 
@@ -455,6 +460,7 @@ def test_extended_confirmation_false_marks_only_rep(http, camtrap_dir, tmp_path)
     rank1_a = next(e for e in events if e["rank"] == 1 and "SITE_A" in e["key"])
     http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rank1_a["repObsId"]]})
 
+    http.get("/api/results")                       # opening the results brings the verified CamtrapDP up to date
     obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
     assert (obs["classificationMethod"] == "human").sum() == 1
 
@@ -483,6 +489,7 @@ def test_extended_confirmation_true_marks_all_burst_obs(http, camtrap_dir, tmp_p
     rank1_a = next(e for e in events if e["rank"] == 1 and "SITE_A" in e["key"])
     http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [rank1_a["repObsId"]]})
 
+    http.get("/api/results")                       # opening the results brings the verified CamtrapDP up to date
     obs = pd.read_csv(session_dir / "camtrap_dp_verified" / "observations.csv", dtype=str)
     human_rows = obs[obs["classificationMethod"] == "human"]
     assert len(human_rows) == 2  # o001 (rep) + o002 (burst mate)
@@ -513,3 +520,53 @@ def test_extended_confirmation_does_not_mark_other_bursts(http, camtrap_dir, tmp
     assert "o003" not in human_obs  # SITE_A occ2
     assert "o004" not in human_obs  # SITE_B occ1
     assert "o005" not in human_obs  # SITE_A occ1 burst1
+
+
+# ── Deferred verified CamtrapDP ───────────────────────────────────────────────
+
+def _confirm_all_round1(http):
+    events = http.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    http.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [e["repObsId"] for e in events]})
+
+
+def test_saving_a_round_does_not_rewrite_the_verified_camtrapdp_until_needed(http, camtrap_dir, tmp_path):
+    data = _do_setup(http, camtrap_dir, tmp_path / "session_defer")
+    sd = Path(data["session_dir"])
+    obs_file = sd / "camtrap_dp_verified" / "observations.csv"
+    before = obs_file.read_bytes()
+    _confirm_all_round1(http)
+    assert (sd / ".camtrap_dp_stale").exists()
+    assert obs_file.read_bytes() == before                     # not rewritten by the save
+    assert (sd / "occupancy_inputs" / "effort_report.csv").exists()   # the cheap outputs are still updated
+
+
+def test_opening_results_rebuilds_a_stale_verified_camtrapdp(http, camtrap_dir, tmp_path):
+    data = _do_setup(http, camtrap_dir, tmp_path / "session_defer2")
+    sd = Path(data["session_dir"])
+    _confirm_all_round1(http)
+    assert http.get("/api/results").status_code == 200
+    assert not (sd / ".camtrap_dp_stale").exists()
+    obs = pd.read_csv(sd / "camtrap_dp_verified" / "observations.csv", dtype=str)
+    assert len(obs[obs["classificationMethod"] == "human"]) == 3
+
+
+def test_download_rebuilds_a_stale_verified_camtrapdp(http, camtrap_dir, tmp_path):
+    data = _do_setup(http, camtrap_dir, tmp_path / "session_defer3")
+    sd = Path(data["session_dir"])
+    _confirm_all_round1(http)
+    r = http.get("/api/results/download")
+    assert r.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        obs = pd.read_csv(io.BytesIO(zf.read("camtrap_dp_verified/observations.csv")), dtype=str)
+    assert len(obs[obs["classificationMethod"] == "human"]) == 3
+    assert not (sd / ".camtrap_dp_stale").exists()
+
+
+def test_a_missing_verified_camtrapdp_is_rebuilt_too(http, camtrap_dir, tmp_path):
+    import shutil
+    data = _do_setup(http, camtrap_dir, tmp_path / "session_defer4")
+    sd = Path(data["session_dir"])
+    shutil.rmtree(sd / "camtrap_dp_verified")
+    http.get("/api/results")
+    assert (sd / "camtrap_dp_verified" / "observations.csv").exists()
+

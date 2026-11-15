@@ -617,11 +617,24 @@ Each session is saved in a timestamped subfolder inside the output directory (e.
 
 **`camtrap_dp_verified/`** — verified CamtrapDP package
 
+Saving a round does not rewrite this package (rewriting the whole observations table on every save is the slowest step on a large archive). It is brought up to date when you **open the Results page**, **download the results** or **open the session folder**, so it always reflects your latest decisions by the time you use it. If you read the files directly from the session folder right after saving, open Results first. The occupancy inputs and the effort report are updated on every save.
+
 | File | Description |
 |---|---|
 | `deployments.csv` | Original deployment table (unchanged). |
 | `media.csv` | Original media table (unchanged). |
-| `observations.csv` | Confirmed observations updated with `classificationMethod='human'`, `classificationProbability=1.0`, `classifiedBy=<configured value>` and `classificationTimestamp`. |
+| `observations.csv` | Confirmed observations updated with `classificationMethod='human'`, `classificationProbability=1.0`, `classifiedBy=<configured value>` and `classificationTimestamp`; the review is also recorded in `observationTags` (see below). |
+
+**Review tags in `observations.csv` (`observationTags`).** The review itself is recorded in the CamtrapDP `observationTags` column, as `key:value` pairs separated by `|` (the CamtrapDP convention); tags already present in your data are kept. Only the photos the reviewer looked at get a tag:
+
+| Tag | Meaning |
+|---|---|
+| `camtrapverify:confirmed` | Confirmed (the same photos that are marked `human`; with *extended confirmation*, every photo of the event). |
+| `camtrapverify:rejected` | The photo that represented an event that was inspected and rejected, including earlier events of a cell confirmed later. |
+| `camtrapverify:uncertain` | Same, but the reviewer marked it *Uncertain* (it behaves as a rejection in the detection histories and is reported apart). |
+| `camtrapverify-actual-species:<name>` | Added to a rejected event when *Record the actual species* was on and a species was typed. |
+
+Events that were never inspected (because a cell was already confirmed or no round reached them) get no tag. Example: `travelDirection:left|camtrapverify:rejected|camtrapverify-actual-species:Canis lupus`.
 
 **`occupancy_inputs/`** — ready-to-use files for occupancy models
 

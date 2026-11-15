@@ -202,6 +202,9 @@ def load_camtrapdp(camtrap_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
     return dep, med, obs
 
 
+VALIDATION_ROW_LIMIT = 50_000
+
+
 def validate_camtrapdp_datapackage(datapackage_path: Path) -> list[str]:
     """Validate a ``datapackage.json`` with ``frictionless``, as its own CLI does.
 
@@ -215,7 +218,9 @@ def validate_camtrapdp_datapackage(datapackage_path: Path) -> list[str]:
     """
     import frictionless
 
-    report = frictionless.validate(str(datapackage_path))
+    # Only the first rows of each table are checked: validation runs at about 25 k rows/s, so the
+    # whole observations table of a large archive would take minutes for no extra information.
+    report = frictionless.validate(str(datapackage_path), limit_rows=VALIDATION_ROW_LIMIT)
     if report.valid:
         return []
 
@@ -984,6 +989,14 @@ def _sort_frames(df: pd.DataFrame, by: list[str]) -> pd.DataFrame:
               .drop(columns="_seq"))
 
 
+def _frame_times(df: pd.DataFrame) -> pd.Series:
+    """Vectorised :func:`_frame_time`: time to the second from ``ts``, else the stored text, else ''."""
+    shown = df["ts"].dt.strftime("%Y-%m-%d %H:%M:%S") if "ts" in df.columns else pd.Series(index=df.index, dtype=object)
+    if "timestamp_display" in df.columns:
+        shown = shown.where(df["ts"].notna(), df["timestamp_display"])
+    return shown.fillna("")
+
+
 def _frame_time(row) -> str:
     """Time shown for a frame, to the second (from ``ts``; the stored text is the fallback)."""
     ts = row.get("ts")
@@ -1089,6 +1102,22 @@ def count_boxes(value) -> int:
 
 
 # ─── Build candidate manifest ─────────────────────────────────────────────────
+
+def _assign_burst_ids(joined: pd.DataFrame, gap_seconds: int) -> pd.DataFrame:
+    """Add ``burst_id``: within each ``site_occasion_key`` (rows sorted by time), a new burst
+    starts at every gap longer than ``gap_seconds`` (or around a missing time)."""
+    if joined.empty:
+        return joined
+    joined = joined.reset_index(drop=True)
+    key = joined["site_occasion_key"]
+    ts = joined["ts"]
+    gap = ts.groupby(key, sort=False).diff()
+    same_cell = key.eq(key.shift())
+    new_burst = ~same_cell | ts.isna() | ts.shift().isna() | gap.gt(pd.Timedelta(seconds=gap_seconds))
+    # the first row of a cell starts burst 0, so only later rows count as a new burst
+    joined["burst_id"] = (new_burst & same_cell).groupby(key, sort=False).cumsum().astype(int)
+    return joined
+
 
 def build_candidates(
     dep: pd.DataFrame,
@@ -1254,23 +1283,9 @@ def build_candidates(
     joined = _sort_frames(joined, ["site_occasion_key", "ts"])
 
     # Assign burst IDs (consecutive frames within gap_seconds form one burst)
-    records = []
-    for _, group in joined.groupby("site_occasion_key", sort=False):
-        group = group.copy().reset_index(drop=True)
-        burst_id = 0
-        bids = [0]
-        for i in range(1, len(group)):
-            prev, curr = group["ts"].iloc[i - 1], group["ts"].iloc[i]
-            if pd.isna(prev) or pd.isna(curr) or (curr - prev).total_seconds() > gap_seconds:
-                burst_id += 1
-            bids.append(burst_id)
-        group["burst_id"] = bids
-        records.append(group)
-
-    if not records:
+    joined = _assign_burst_ids(joined, gap_seconds)
+    if joined.empty:
         return pd.DataFrame()
-
-    joined = pd.concat(records, ignore_index=True)
 
     # Rank bursts by max prob within each cell (highest prob = rank 1). Bursts with
     # the same score -- all of them when no frame has a score -- are put in a
@@ -1794,15 +1809,21 @@ def get_events(
     all_sp = candidates[candidates["species_safe"] == species_safe]
     total_seqs_by_key = all_sp.groupby("site_occasion_key")["rank"].max().to_dict()
 
-    events = []
-    for key, group in _sort_frames(sp_cands, ["burst_id", "ts"]).groupby(
-        "site_occasion_key", sort=False
-    ):
-        group = _sort_frames(group, ["burst_id", "ts"])
+    # Per-frame display values for the whole selection at once (not row by row).
+    sp_cands = _sort_frames(sp_cands, ["burst_id", "ts"])
+    sp_cands["_ts_shown"] = _frame_times(sp_cands)
+    sp_cands["_p"] = pd.to_numeric(sp_cands["classificationProbability"], errors="coerce")
+    sp_cands["_ctx"] = (sp_cands["is_context"].fillna(False).astype(bool)
+                        if "is_context" in sp_cands.columns else False)
+    has_deployment = "deploymentID" in sp_cands.columns
+    has_file_name = "fileName" in sp_cands.columns
+    has_boxes = "bboxes" in sp_cands.columns
 
+    events = []
+    for key, group in sp_cands.groupby("site_occasion_key", sort=False):
+        # (``group`` keeps the order of the frames sorted above.)
         # Context frames (is_context=True) are not used for repObsId / maxProb
-        is_ctx = group.get("is_context", pd.Series(False, index=group.index)).fillna(False)
-        decision_rows = group[~is_ctx]
+        decision_rows = group[~group["_ctx"]]
 
         prob_col = pd.to_numeric(
             decision_rows["classificationProbability"], errors="coerce"
@@ -1812,23 +1833,26 @@ def get_events(
         max_prob = float(prob_col.max())
 
         frames = []
-        for _, row in group.iterrows():
-            fp = str(row["filePath"])
+        for obs_id, media_id, fp, dep_id, fname, ts_shown, prob, is_ctx_row, bboxes in zip(
+            group["observationID"], group["mediaID"], group["filePath"],
+            group["deploymentID"] if has_deployment else [""] * len(group),
+            group["fileName"] if has_file_name else [""] * len(group),
+            group["_ts_shown"], group["_p"], group["_ctx"],
+            group["bboxes"] if has_boxes else [None] * len(group),
+        ):
             img_url = gallery_frame_img_url(
-                fp, str(row["mediaID"]), str(row.get("deploymentID", "")), str(row.get("fileName", "")),
+                str(fp), str(media_id), str(dep_id), str(fname),
                 image_base_dir, fallback_base, flat_search=flat_search, extra_bases=extra_bases,
             )
-            row_is_ctx = bool(row.get("is_context", False))
-            row_prob = pd.to_numeric(row.get("classificationProbability"), errors="coerce")
             frames.append({
-                "obsId":     row["observationID"],
-                "mediaId":   str(row["mediaID"]),
+                "obsId":     obs_id,
+                "mediaId":   str(media_id),
                 "img":       img_url,
-                "ts":        _frame_time(row),
-                "prob":      round(float(row_prob), 3) if pd.notna(row_prob) else None,
-                "isContext": row_is_ctx,
+                "ts":        ts_shown,
+                "prob":      round(float(prob), 3) if pd.notna(prob) else None,
+                "isContext": bool(is_ctx_row),
                 # Boxes can only be drawn on images the app serves itself, not on remote ones.
-                "boxes":     count_boxes(row.get("bboxes")) if img_url.startswith("/api/image/") else 0,
+                "boxes":     count_boxes(bboxes) if img_url.startswith("/api/image/") else 0,
             })
 
         events.append({
@@ -1901,7 +1925,7 @@ def get_review_events(
     for key, group in _sort_frames(shown, ["burst_id", "ts"]).groupby(
         "site_occasion_key", sort=False
     ):
-        group = _sort_frames(group, ["burst_id", "ts"])
+        # (already sorted above; ``group`` keeps that order)
 
         is_ctx = group.get("is_context", pd.Series(False, index=group.index)).fillna(False)
         decision_rows = group[~is_ctx]
@@ -1951,6 +1975,65 @@ def get_review_events(
 
 # ─── Export verified CamtrapDP ────────────────────────────────────────────────
 
+TAG_CONFIRMED = "camtrapverify:confirmed"
+TAG_REJECTED = "camtrapverify:rejected"
+TAG_UNCERTAIN = "camtrapverify:uncertain"
+TAG_ACTUAL_SPECIES = "camtrapverify-actual-species:"
+
+
+def _rep_confirmed(decisions_dir: Path) -> set:
+    """``observationID`` of the confirmed representative of every confirmed event (decision files)."""
+    ids: set = set()
+    if decisions_dir.exists():
+        for f in decisions_dir.glob("decisions_*_iter*.csv"):
+            df = pd.read_csv(f, dtype=str)
+            if "observationID" in df.columns:
+                ids.update(df["observationID"].dropna())
+    return ids
+
+
+def reviewed_event_tags(
+    candidates: pd.DataFrame,
+    conf_ids: set,
+    unc_ids: set,
+    rounds_done: dict[str, int],
+    corrections: Optional[dict[str, str]] = None,
+) -> dict[str, list[str]]:
+    """Tags for the events the reviewer rejected, by the ``observationID`` that represents each event.
+
+    An event was *inspected and not confirmed* when its cell has a confirmation at a later rank,
+    or has none and the species finished a round at that rank or later. Such an event is tagged
+    ``camtrapverify:rejected``, or ``camtrapverify:uncertain`` when it was marked uncertain (which
+    behaves as a rejection in the histories). With a recorded actual species the event also gets
+    ``camtrapverify-actual-species:<name>``. Events never inspected get no tag.
+    """
+    cand = candidates
+    if "is_context" in cand.columns:
+        cand = cand[~cand["is_context"].fillna(False).astype(bool)]
+    if cand.empty:
+        return {}
+    cell, burst = "site_occasion_key", "burst_id"
+    cr = cand.loc[cand["observationID"].isin(conf_ids)].groupby(cell)["rank"].min()
+    rows = cand.assign(
+        _p=pd.to_numeric(cand["classificationProbability"], errors="coerce").fillna(0),
+        _cr=cand[cell].map(cr),
+        _done=cand["species_safe"].map(rounds_done).fillna(0),
+    ).sort_values([cell, burst, "ts"], kind="stable")
+    limit = rows["_cr"].where(rows["_cr"].notna(), rows["_done"] + 1)       # exclusive: ranks below it were inspected
+    rows = rows[rows["rank"] < limit]
+    if rows.empty:
+        return {}
+    reps = rows.loc[rows.groupby([cell, burst], sort=False)["_p"].idxmax(), "observationID"]
+    tags: dict[str, list[str]] = {}
+    for oid in reps:
+        t = [TAG_UNCERTAIN if oid in unc_ids and oid not in conf_ids else TAG_REJECTED]
+        actual = (corrections or {}).get(oid, "").strip().replace("|", " ")
+        if actual:
+            t.append(TAG_ACTUAL_SPECIES + actual)
+        tags[str(oid)] = t
+    return tags
+
+
 def export_verified_camtrapdp(
     camtrap_dir: Path,
     out_dir: Path,
@@ -1959,6 +2042,7 @@ def export_verified_camtrapdp(
     classified_by_label: str = "expert_review",
     extended_confirmation: bool = False,
     candidates: Optional["pd.DataFrame"] = None,
+    corrections: Optional[dict[str, str]] = None,
 ) -> None:
     """Write ``camtrap_dp_verified/``, replicating R's ``update_metadata()`` + ``export_results()``.
 
@@ -2042,6 +2126,33 @@ def export_verified_camtrapdp(
         obs.loc[mask, "classificationProbability"] = "1.0"
         obs.loc[mask, "classifiedBy"] = classified_by_label
         obs.loc[mask, "classificationTimestamp"] = now_ts
+    else:
+        mask = pd.Series(False, index=obs.index)
+
+    # Record the review in observationTags (``key:value`` pairs separated by ``|``): confirmed,
+    # rejected, uncertain (a rejection that is counted apart) and, when recorded, the actual species.
+    # Only the observations the reviewer looked at get a tag; existing tags are kept.
+    tag_by_row: dict[int, list[str]] = {}
+    if mask.any():
+        for i in obs.index[mask]:
+            tag_by_row[i] = [TAG_CONFIRMED]
+    if candidates is not None and not candidates.empty:
+        unc = load_all_uncertain(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
+        unc_ids = set(unc["observationID"].dropna()) if not unc.empty else set()
+        rev = reviewed_event_tags(candidates, _rep_confirmed(decisions_dir), unc_ids, rounds_completed(decisions_dir), corrections)
+        if rev:
+            rep_rows = obs[obs["observationID"].isin(rev)]
+            by_pair = {(m, s): rev[str(o)] for o, m, s in zip(rep_rows["observationID"], rep_rows["mediaID"], rep_rows["scientificName"])}
+            pairs = pd.Series(list(zip(obs["mediaID"], obs["scientificName"])), index=obs.index)
+            for i, pair in pairs[pairs.isin(by_pair)].items():
+                if i not in tag_by_row:                       # a confirmed photo is not also "rejected"
+                    tag_by_row[i] = by_pair[pair]
+    if tag_by_row:
+        if "observationTags" not in obs.columns:
+            obs["observationTags"] = ""
+        new = pd.Series({i: "|".join(t) for i, t in tag_by_row.items()})
+        old = obs.loc[new.index, "observationTags"].fillna("").astype(str).str.strip()
+        obs.loc[new.index, "observationTags"] = (old + "|" + new).str.strip("|")
 
     obs.to_csv(out_dir / "observations.csv", index=False)
 
@@ -2389,24 +2500,27 @@ def build_review_effort(
 
     dec = load_all_decisions(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
 
-    conf_obs_by_key: dict[str, set[str]] = {}
-    if not dec.empty and "site_occasion_key" in dec.columns:
-        for key, grp in dec.groupby("site_occasion_key"):
-            conf_obs_by_key[str(key)] = set(grp["observationID"].dropna())
-
     keys = candidates["site_occasion_key"].unique()
-    n_conf = 0; n_rej = 0; ins_conf = 0; ins_rej = 0
-
-    for key in keys:
-        sub  = candidates[candidates["site_occasion_key"] == key]
-        conf = conf_obs_by_key.get(str(key), set())
-        if conf:
-            n_conf += 1
-            confirmed_ranks = sub[sub["observationID"].isin(conf)]["rank"]
-            ins_conf += int(confirmed_ranks.min()) if not confirmed_ranks.empty else 1
-        else:
-            n_rej += 1
-            ins_rej += int(sub["rank"].max())
+    rank = pd.to_numeric(candidates["rank"], errors="coerce")
+    key_str = candidates["site_occasion_key"].astype(str)
+    conf_pairs = pd.DataFrame(columns=["_key", "observationID"])
+    if not dec.empty and "site_occasion_key" in dec.columns:
+        conf_pairs = (dec[["site_occasion_key", "observationID"]].dropna(subset=["observationID"])
+                      .assign(_key=lambda d: d["site_occasion_key"].astype(str))[["_key", "observationID"]]
+                      .drop_duplicates())
+    conf_keys = set(conf_pairs["_key"])                    # cells with at least one confirmed event
+    key_set = set(key_str)
+    is_conf_cell = key_str.isin(conf_keys)
+    n_conf = len(conf_keys & key_set)
+    n_rej = len(key_set) - n_conf
+    # a confirmed cell costs the rank of its confirmed event (1 when that event is not in the candidates)
+    hit = pd.DataFrame({"_key": key_str, "observationID": candidates["observationID"], "rank": rank})
+    hit = hit.merge(conf_pairs, on=["_key", "observationID"])
+    ranks_of_conf = hit.groupby("_key")["rank"].min()
+    conf_cells_present = sorted(conf_keys & key_set)
+    ins_conf = int(ranks_of_conf.reindex(conf_cells_present).fillna(1).sum())
+    # a cell with no confirmation costs its highest rank (every event was inspected)
+    ins_rej = int(rank[~is_conf_cell].groupby(key_str[~is_conf_cell]).max().sum())
 
     inspected = ins_conf + ins_rej
     n_candidates = len(candidates)
@@ -2538,6 +2652,55 @@ def rounds_completed(decisions_dir: Path) -> dict[str, int]:
     return done
 
 
+def _effort_accumulate(sp_df: pd.DataFrame, conf_ids: set, unc_ids: set, done: Optional[int], acc: dict) -> dict:
+    """Effort counters of one species, computed for all its cells at once (no per-cell loop).
+
+    ``sp_df`` holds the species' candidate rows (context frames already removed) with a numeric
+    ``_score``. A cell is a *detection* when one of its photos is in ``conf_ids`` (its events up
+    to the confirmed rank were inspected), otherwise every event up to round ``done`` was
+    inspected (all of them when ``done`` is None). Same results as walking the cells one by one.
+    """
+    cell, burst = "site_occasion_key", "burst_id"
+    ev = sp_df.groupby([cell, burst], sort=False).agg(rank=("rank", "first"), score=("_score", "max")).reset_index()
+    cr = sp_df.loc[sp_df["observationID"].isin(conf_ids)].groupby(cell)["rank"].min()
+    n_unc = sp_df.loc[sp_df["observationID"].isin(unc_ids)].groupby(cell)[burst].nunique()
+
+    ev["cr"] = ev[cell].map(cr)
+    det_ev = ev["cr"].notna()
+    limit = ev["cr"].where(det_ev, float("inf") if done is None else float(done))
+    ev["seen"] = ev["rank"] <= limit
+
+    per_cell = ev.groupby(cell, sort=False).agg(n_ev=("rank", "size"), n_seen=("seen", "sum"))
+    det_cells = pd.Series(per_cell.index.isin(cr.index), index=per_cell.index)
+    unv_cells = ~det_cells & (per_cell["n_seen"] < per_cell["n_ev"])
+    non_cells = ~det_cells & ~unv_cells
+    unc_per_cell = n_unc.reindex(per_cell.index).fillna(0)
+
+    acc["events"] += len(ev)
+    acc["photos"] += len(sp_df)
+    acc["unc"] += int(unc_per_cell.sum())
+    acc["det"] += int(det_cells.sum())
+    acc["unv"] += int(unv_cells.sum())
+    acc["non"] += int(non_cells.sum())
+    acc["unc_cells"] += int((non_cells & (unc_per_cell > 0)).sum())
+    acc["insp"] += int(ev["seen"].sum())
+    acc["insp_det"] += int((ev["seen"] & det_ev).sum())
+    acc["insp_non"] += int((ev["seen"] & ~det_ev).sum())
+
+    before = det_ev & (ev["rank"] < ev["cr"])
+    acc["before"] += ev.loc[before].groupby(cell).size().reindex(per_cell.index[det_cells], fill_value=0).tolist()
+    acc["rej_scores"] += ev.loc[before | (~det_ev & ev["seen"]), "score"].dropna().tolist()
+    acc["conf_scores"] += ev.loc[det_ev & (ev["rank"] == ev["cr"]), "score"].dropna().tolist()
+
+    # photos of the inspected events: rows whose burst holds a photo at an inspected rank of its cell
+    seen_ranks = ev.loc[ev["seen"], [cell, "rank"]].drop_duplicates().assign(_hit=True)
+    rows = sp_df[[cell, burst, "rank"]].merge(seen_ranks, on=[cell, "rank"], how="left")
+    rows["_hit"] = rows["_hit"].fillna(False).astype(bool)
+    in_seen_burst = rows.groupby([cell, burst], sort=False)["_hit"].transform("max")
+    acc["photos_insp"] += int(in_seen_burst.sum())
+    return acc
+
+
 def build_species_effort(
     candidates: pd.DataFrame,
     decisions_dir: Path,
@@ -2648,36 +2811,8 @@ def build_species_effort(
     total = new_acc()
     rows = []
     for sp_safe, sp_df in cand.groupby("species_safe", sort=True):
-        acc = new_acc()
         done = None if rounds_done is None else rounds_done.get(str(sp_safe), 0)
-        for _, cell in sp_df.groupby("site_occasion_key"):
-            ev = cell.groupby("burst_id").agg(rank=("rank", "first"), score=("_score", "max"))
-            acc["events"] += len(ev)
-            acc["photos"] += len(cell)
-            n_unc = cell.loc[cell["observationID"].isin(unc_ids), "burst_id"].nunique()
-            acc["unc"] += n_unc
-            conf_rank = cell.loc[cell["observationID"].isin(conf_ids), "rank"]
-            if not conf_rank.empty:
-                cr = int(conf_rank.min())
-                seen = ev[ev["rank"] <= cr]
-                before = ev[ev["rank"] < cr]
-                acc["det"] += 1
-                acc["insp_det"] += len(seen)
-                acc["before"].append(len(before))
-                acc["rej_scores"] += before["score"].dropna().tolist()
-                acc["conf_scores"] += ev[ev["rank"] == cr]["score"].dropna().tolist()
-            else:
-                seen = ev if done is None else ev[ev["rank"] <= done]
-                if len(seen) < len(ev):
-                    acc["unv"] += 1
-                else:
-                    acc["non"] += 1
-                    acc["unc_cells"] += 1 if n_unc else 0
-                acc["insp_non"] += len(seen)
-                acc["rej_scores"] += seen["score"].dropna().tolist()
-            acc["insp"] += len(seen)
-            acc["photos_insp"] += int(cell["burst_id"].isin(
-                cell[cell["rank"].isin(seen["rank"])]["burst_id"]).sum())
+        acc = _effort_accumulate(sp_df, conf_ids, unc_ids, done, new_acc())
         rows.append(build_row(sp_df["scientificName"].iloc[0], acc))
         for k, v in acc.items():
             total[k] = total[k] + v
