@@ -276,7 +276,7 @@
     "time_none": "k. A.: Diese Sitzung hat keine Entscheidungszeiten (mit einer früheren Version erstellt).",
     "time_col_decisions": "Zeitlich erfasste Entscheidungen",
     "time_col_active": "Aktive Prüfzeit",
-    "time_col_rate": "Pro Entscheidung",
+    "time_col_rate": "Pro Entscheidung (Sitzungsmittel)",
     "time_col_full": "Gesch. Vollprüfung",
     "time_col_saved": "Gesch. Ersparnis",
     "fp_title": "Hauptquellen falsch-positiver Treffer",

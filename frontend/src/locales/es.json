@@ -276,7 +276,7 @@
     "time_none": "n/d: esta sesión no tiene tiempos de decisión (se hizo con una versión anterior).",
     "time_col_decisions": "Decisiones con tiempo",
     "time_col_active": "Tiempo de revisión activo",
-    "time_col_rate": "Por decisión",
+    "time_col_rate": "Por decisión (media de la sesión)",
     "time_col_full": "Rev. completa est.",
     "time_col_saved": "Ahorro est.",
     "fp_title": "Principales fuentes de falsos positivos",

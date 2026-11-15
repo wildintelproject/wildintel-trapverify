@@ -276,7 +276,7 @@
     "time_none": "b/d: ta sesja nie ma czasów decyzji (utworzono ją we wcześniejszej wersji).",
     "time_col_decisions": "Decyzje z czasem",
     "time_col_active": "Aktywny czas weryfikacji",
-    "time_col_rate": "Na decyzję",
+    "time_col_rate": "Na decyzję (średnia sesji)",
     "time_col_full": "Szac. pełny przegląd",
     "time_col_saved": "Szac. oszczędność",
     "fp_title": "Główne źródła fałszywych alarmów",

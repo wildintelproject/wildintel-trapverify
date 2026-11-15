@@ -276,7 +276,7 @@
     "time_none": "n/a: this session has no decision times (it was made with an earlier version).",
     "time_col_decisions": "Decisions timed",
     "time_col_active": "Active review time",
-    "time_col_rate": "Per decision",
+    "time_col_rate": "Per decision (session mean)",
     "time_col_full": "Est. full event review",
     "time_col_saved": "Est. time saved",
     "fp_title": "Main false-positive sources",
