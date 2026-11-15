@@ -361,5 +361,27 @@
     "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Wszelkie prawa zastrzeżone.",
     "website": "Strona WildINTEL",
     "github": "Repozytorium na GitHub"
+  },
+  "relink": {
+    "title": "Gdzie są dane na tym komputerze?",
+    "desc": "Ta sesja powstała na innym komputerze lub foldery zostały przeniesione. Wskaż tutaj dane i zdjęcia; Twoje decyzje zostaną zachowane.",
+    "data_dir": "Folder CamtrapDP",
+    "images_dir": "Folder ze zdjęciami (opcjonalnie)",
+    "images_placeholder": "Zostaw puste, jeśli zdjęcia są obok danych",
+    "was": "Było: {{path}}",
+    "browse": "Przeglądaj…",
+    "flat_search": "Szukaj zdjęć po nazwie pliku w całym folderze",
+    "later": "Później",
+    "save": "Połącz foldery",
+    "saving": "Łączenie…",
+    "open": "Napraw łącza",
+    "banner_data": "Nie znaleziono folderu z danymi tej sesji na tym komputerze.",
+    "banner_images": "Nie znaleziono zdjęć tej sesji na tym komputerze."
+  },
+  "transfer": {
+    "export": "Eksportuj sesję",
+    "export_hint": "Pobierz tę sesję jako ZIP, aby kontynuować na innym komputerze (tylko decyzje, bez zdjęć)",
+    "import": "Importuj sesję…",
+    "import_title": "Wybierz ZIP sesji"
   }
 }

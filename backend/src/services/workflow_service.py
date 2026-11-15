@@ -20,6 +20,7 @@ from camtrap_workflow import (
     build_false_positive_sources,
     build_species_effort,
     compute_min_score_exclusions,
+    dataset_fingerprint,
     confirmed_observations,
     load_review_log,
     rounds_completed,
@@ -125,6 +126,7 @@ def run_setup(req: SetupRequest) -> dict:
 
     config = req.model_dump()
     config["session_name"] = session_service.clean_session_name(req.session_name)
+    config["dataset_fingerprint"] = dataset_fingerprint(camtrap_dir)     # recognises the same data on another computer
     config["camtrap_dir"] = str(camtrap_dir.resolve())
     config["output_dir"] = str(base_out)
     config["session_dir"] = str(sd)

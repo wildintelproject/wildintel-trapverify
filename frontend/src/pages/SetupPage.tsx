@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import DirectoryPicker from '../components/DirectoryPicker'
 import CsvImportForm from '../components/CsvImportForm'
-import type { RecentSession, WorkflowConfig } from '../types'
+import RelinkDialog from '../components/RelinkDialog'
+import type { RecentSession, RelinkStatus, WorkflowConfig } from '../types'
 
 interface Props { onSetup: () => void; ready: boolean }
 
@@ -90,6 +91,8 @@ export default function SetupPage({ onSetup, ready }: Props) {
   const [sessionSummary, setSessionSummary] = useState<{
     speciesCount: number; resolved: number; total: number; pct: number
   } | null>(null)
+  const [importPickerOpen, setImportPickerOpen] = useState(false)
+  const [pendingRelink, setPendingRelink] = useState<RelinkStatus | null>(null)
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
   const [renamingDir, setRenamingDir] = useState<string | null>(null)
   const [imageCheck, setImageCheck] = useState<{ total: number; missing: number; permission_denied: number; ambiguous: { fileName: string }[] } | null>(null)
@@ -292,9 +295,28 @@ export default function SetupPage({ onSetup, ready }: Props) {
     setLoadingSession(true)
     setSessionError(null)
     try {
-      await api.loadSession(path)
+      const r = await api.loadSession(path)
       onSetup()
-      navigate('/species')
+      if (r.relink?.needs_relink) setPendingRelink(r.relink)
+      else navigate('/species')
+    } catch (e) {
+      setSessionError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoadingSession(false)
+    }
+  }
+
+  // A session exported on another computer ("Export session" on the species index).
+  // Its folders usually need pointing at this computer's.
+  async function handleImportSession(path: string) {
+    setImportPickerOpen(false)
+    setLoadingSession(true)
+    setSessionError(null)
+    try {
+      const r = await api.importSession(path)
+      onSetup()
+      if (r.relink.needs_relink) setPendingRelink(r.relink)
+      else navigate('/species')
     } catch (e) {
       setSessionError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -439,6 +461,13 @@ export default function SetupPage({ onSetup, ready }: Props) {
             )}
           </button>
           <button
+            className="px-6 py-2.5 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-base disabled:opacity-50"
+            onClick={() => setImportPickerOpen(true)}
+            disabled={loadingSession}
+          >
+            {t('transfer.import')}
+          </button>
+          <button
             className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-base flex items-center gap-2"
             onClick={() => setStep(0)}
           >
@@ -529,6 +558,22 @@ export default function SetupPage({ onSetup, ready }: Props) {
       <DirectoryPicker
         onSelect={handleLoadSession}
         onClose={() => { setSessionPickerOpen(false); setSessionError(null) }}
+      />
+    )}
+    {importPickerOpen && (
+      <DirectoryPicker
+        showFiles
+        fileExt=".zip"
+        title={t('transfer.import_title')}
+        onSelect={handleImportSession}
+        onClose={() => { setImportPickerOpen(false); setSessionError(null) }}
+      />
+    )}
+    {pendingRelink && (
+      <RelinkDialog
+        status={pendingRelink}
+        onClose={() => { setPendingRelink(null); navigate('/species') }}
+        onDone={() => { setPendingRelink(null); navigate('/species') }}
       />
     )}
     </>

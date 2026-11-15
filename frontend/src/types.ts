@@ -77,6 +77,15 @@ export interface OccupancyRow {
   degenerate_verified: boolean
 }
 
+export interface RelinkStatus {
+  camtrap_dir_ok: boolean
+  images_ok: boolean
+  needs_relink: boolean
+  camtrap_dir: string
+  image_base_dir: string
+  flat_search: boolean
+}
+
 export interface RecentSession {
   session_dir: string
   last_opened: string

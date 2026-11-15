@@ -12,6 +12,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 from fastapi import HTTPException
@@ -105,6 +106,99 @@ def clean_session_name(name: str) -> str:
     return " ".join((name or "").split())
 
 
+def write_config_file(cfg_file: Path, config: dict) -> None:
+    """Write ``config.json`` whole or not at all (temp file, then replace)."""
+    tmp = cfg_file.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(config, indent=2))
+    tmp.replace(cfg_file)
+
+
+def update_paths(camtrap_dir: str, image_base_dir: str, flat_search: bool) -> None:
+    """Point the active session at its data and image folders on this computer."""
+    config = get_config()
+    sd = session_dir()
+    if config is None or sd is None:
+        raise HTTPException(400, "No hay sesión activa.")
+    config["camtrap_dir"] = camtrap_dir
+    config["image_base_dir"] = image_base_dir
+    config["flat_search"] = flat_search
+    write_config_file(sd / "config.json", config)
+    from camtrap_workflow import clear_media_caches
+    clear_media_caches()                                    # listings of the old folders are stale
+    logger.info("Session relinked: camtrap_dir=%s image_base_dir=%s flat=%s", camtrap_dir, image_base_dir, flat_search)
+
+
+def relink_status() -> dict:
+    """Whether the session's data and image folders are reachable on this computer.
+
+    A session opened on another computer (or after moving the data) keeps the original absolute
+    paths; the frontend uses this to ask for the right folders before anything needs them.
+    """
+    from camtrap_workflow import (
+        is_remote_path, media_extra_bases, resolve_camtrapdp_resource, resolve_media_path,
+    )
+
+    config = get_config() or {}
+    camtrap_dir = config.get("camtrap_dir", "")
+    image_base_dir = config.get("image_base_dir", "") or ""
+    camtrap_ok = bool(camtrap_dir) and resolve_camtrapdp_resource(Path(camtrap_dir), "observations") is not None
+    image_dir_ok = (not image_base_dir) or Path(image_base_dir).is_dir()
+
+    # A few candidate photos: catches absolute filePaths from another computer even when no
+    # images folder is configured. Remote addresses are skipped (they are fetched on demand).
+    sample_ok: Optional[bool] = None
+    candidates = _state.get("candidates")
+    if candidates is not None and not candidates.empty and camtrap_ok and image_dir_ok:
+        sample = candidates.drop_duplicates("mediaID")
+        sample = sample[~sample["filePath"].astype(str).map(is_remote_path)].head(10)
+        if len(sample):
+            fallback = Path(image_base_dir) if image_base_dir else Path(camtrap_dir)
+            extra = media_extra_bases(camtrap_dir, image_base_dir)
+            found = 0
+            for r in sample.itertuples():
+                path = resolve_media_path(
+                    str(r.filePath), str(getattr(r, "deploymentID", "")), str(getattr(r, "fileName", "")),
+                    image_base_dir, fallback, flat_search=bool(config.get("flat_search", False)), extra_bases=extra,
+                )
+                if path.is_file():
+                    found += 1
+            sample_ok = found > 0
+    images_ok = image_dir_ok and sample_ok is not False
+    return {
+        "camtrap_dir_ok": camtrap_ok,
+        "images_ok": images_ok,
+        "needs_relink": not (camtrap_ok and images_ok),
+        "camtrap_dir": camtrap_dir,
+        "image_base_dir": image_base_dir,
+        "flat_search": bool(config.get("flat_search", False)),
+    }
+
+
+def auto_relink() -> dict:
+    """If the active session's data is missing, reuse the folder of another local session on the same dataset."""
+    status = relink_status()
+    config = get_config() or {}
+    fp = config.get("dataset_fingerprint")
+    if not status["needs_relink"] or not fp:
+        return status
+    from camtrap_workflow import dataset_fingerprint
+
+    current = session_dir()
+    for entry in _read_recent():
+        other = Path(entry.get("session_dir", ""))
+        if current is not None and other == current:
+            continue
+        try:
+            other_cfg = json.loads((other / "config.json").read_text())
+        except (OSError, ValueError):
+            continue
+        cdir = other_cfg.get("camtrap_dir", "")
+        if cdir and Path(cdir).is_dir() and dataset_fingerprint(Path(cdir)) == fp:
+            update_paths(cdir, other_cfg.get("image_base_dir", "") or "", bool(other_cfg.get("flat_search", False)))
+            return relink_status()
+    return status
+
+
 def rename_session(session_dir: str, name: str) -> dict:
     """Set (or clear, with an empty name) the name of a session.
 
@@ -128,9 +222,7 @@ def rename_session(session_dir: str, name: str) -> dict:
         raise HTTPException(400, f"No se puede leer {cfg_file}: {exc}") from exc
     clean = clean_session_name(name)
     config["session_name"] = clean
-    tmp = cfg_file.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(config, indent=2))
-    tmp.replace(cfg_file)                                   # written whole or not at all
+    write_config_file(cfg_file, config)
     if active is not None and os.path.normcase(str(Path(active))) == os.path.normcase(str(Path(target))):
         current = _state.get("config")
         if current is not None:

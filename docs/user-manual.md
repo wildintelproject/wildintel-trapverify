@@ -356,6 +356,12 @@ A session can have a **name** so you can tell it apart from others, for example 
 
 An empty name removes it. In **Recent sessions** the name is shown in bold with the species below it; a session without a name shows its species as before. The name is stored in the session's `config.json` as `session_name`, so it stays with the session. Sessions made before names existed have none and work as before.
 
+### Continuing a session on another computer
+
+To move a session, open it on the species index and press **Export session**: your browser downloads a ZIP with your decisions and settings (no photos and no results files, so it is small). On the other computer, press **Import session…** on the welcome screen and choose the ZIP; it opens as a new session in the default output folder.
+
+The photos and the CamtrapDP are not in the ZIP, so the app must find them on the new computer. If it cannot, a **Fix links** notice appears (also after moving the data on the same computer): choose the CamtrapDP folder and, if needed, the photos folder. The folder must hold the same dataset (same `deployments.csv`) or the app refuses it. If you already used that dataset on this computer, the folders are found automatically. The results files are regenerated from your decisions.
+
 ## 6. Species Index
 
 After setup (or when resuming a session), you arrive at the **Species Index** — an overview of all target species and their review progress.
