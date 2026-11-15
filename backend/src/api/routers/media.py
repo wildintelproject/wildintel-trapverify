@@ -27,7 +27,7 @@ def serve_image(media_id: str, obs: str | None = None, boxes: bool = False) -> R
         logger.warning("Image not found: mediaId=%s", media_id)
         raise HTTPException(404, f"Media {media_id} not found")
 
-    from camtrap_workflow import resolve_media_path
+    from camtrap_workflow import media_extra_bases, resolve_media_path
 
     config = session_service.get_config()
     image_base_dir = config.get("image_base_dir", "")
@@ -39,6 +39,7 @@ def serve_image(media_id: str, obs: str | None = None, boxes: bool = False) -> R
         image_base_dir,
         fallback_base,
         flat_search=bool(config.get("flat_search", False)),
+        extra_bases=media_extra_bases(config["camtrap_dir"], image_base_dir),
     )
     try:
         stat_result = file_path.stat()

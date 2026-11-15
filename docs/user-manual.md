@@ -182,9 +182,16 @@ CamTrap Verify requires you to specify where the information to be verified (ima
 
 > **Note:** CamTrap Verify provides a dynamic mechanism for resolving where each image is physically located. This mechanism is based on whether you provide a directory where the images are locally stored.
 >
-> If you do indicate it, the resolution procedure is the following: CamTrap Verify first looks for the image at `Images directory/deploymentID/fileName`. If that exact file is not found and **Search subfolders by file name**{: #search-subfolders-by-file-name } is enabled, it instead searches the whole Images directory recursively for a file with that name (useful when photos are all loose in one folder). Only if neither of those finds the image does CamTrap Verify fall back to the `filePath` column in `media.csv` itself: absolute paths are used as-is, relative paths are resolved against the Images directory, and remote `http://`/`https://` URLs are fetched directly, through the application's built-in proxy (so no CORS configuration is needed on your end) — but only as a last resort, after the local lookups above have already failed.
+> If you do indicate it, the resolution procedure is the following. CamTrap Verify tries these places in order and uses the first that has the photo:
 >
-> If you do not indicate it, there is no separate images root to look in first, so resolution relies entirely on the `filePath` column: absolute paths are used as-is, relative paths are resolved against the CamtrapDP directory itself, and remote URLs are always fetched over the network, since there is nowhere local left to check.
+> 1. `Images directory/deploymentID/fileName`.
+> 2. **The end of `filePath`** under the Images directory. This finds photos whose `filePath` points at another computer: a `media.csv` exported on a Mac with `/Volumes/Disk/2023/R0025/dep_0011/x.jpg` works on Windows if the Images directory is the folder that holds `R0025/`. Both `/` and `\` are accepted.
+> 3. **A folder named like the `deploymentID`**, anywhere up to three levels below the Images directory (for example `Images directory/R0025/dep_0011/`), with the file matched ignoring upper and lower case and equivalent extensions (`x.JPEG` is found as `x.jpg`). This is the usual layout of Trapper exports, whose `filePath` is a web address. A photo found in two such folders is ambiguous and is not used.
+> 4. If **Search subfolders by file name**{: #search-subfolders-by-file-name } is enabled, a recursive search of the whole Images directory for a file with that name (useful when photos are all loose in one folder), also ignoring equivalent extensions.
+> 5. The end of `filePath` under the **data directory** and under the **parent of the Images directory**, so choosing the wrong level (for example the `camtrapDP` folder itself) does not hide every photo.
+> 6. Finally the `filePath` column in `media.csv` itself: absolute paths are used as-is, relative paths are resolved against the Images directory, and remote `http://`/`https://` URLs are fetched directly, through the application's built-in proxy (so no CORS configuration is needed on your end) — but only as a last resort, after the local lookups above have already failed.
+>
+> If you do not indicate it, there is no separate images root to look in first, so resolution relies on the `filePath` column: absolute paths are used as-is and relative paths are resolved against the CamtrapDP directory itself. If the file is not there, the end of `filePath` is tried under the data directory too, so photos stored below it are found. Remote URLs are always fetched over the network, since there is nowhere local left to check.
 
 First choose where your data comes from: **Local filesystem** or a **Trapper instance**.
 

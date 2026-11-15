@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends
 
 from api.deps import require_candidates
-from camtrap_workflow import get_events, get_review_events, species_stats
+from camtrap_workflow import get_events, get_review_events, media_extra_bases, species_stats
 from schemas.requests import ReviewDecisionsRequest
 from services import session_service, workflow_service
 
@@ -16,13 +16,14 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
-def _media_resolution_config() -> tuple[str, Path, bool]:
-    """Return (image_base_dir, fallback_base, flat_search) for the active
+def _media_resolution_config() -> tuple[str, Path, bool, tuple]:
+    """Return (image_base_dir, fallback_base, flat_search, extra_bases) for the active
     session, matching how /api/image/{mediaID} resolves the same fields."""
     config = session_service.get_config()
     image_base_dir = config.get("image_base_dir", "")
     fallback_base = Path(image_base_dir) if image_base_dir else Path(config["camtrap_dir"])
-    return image_base_dir, fallback_base, bool(config.get("flat_search", False))
+    return (image_base_dir, fallback_base, bool(config.get("flat_search", False)),
+            media_extra_bases(config["camtrap_dir"], image_base_dir))
 
 
 @router.get("")
@@ -53,7 +54,7 @@ def get_species_events(species_safe: str, iteration: int = 1) -> list[dict]:
     logger.info("Events requested: species=%s iteration=%d", species_safe, iteration)
     p = session_service.paths()
     p["decisions"].mkdir(parents=True, exist_ok=True)
-    image_base_dir, fallback_base, flat_search = _media_resolution_config()
+    image_base_dir, fallback_base, flat_search, extra_bases = _media_resolution_config()
     return get_events(
         session_service.get_candidates(),
         p["decisions"],
@@ -63,6 +64,7 @@ def get_species_events(species_safe: str, iteration: int = 1) -> list[dict]:
         image_base_dir,
         fallback_base,
         flat_search,
+        extra_bases,
     )
 
 
@@ -74,8 +76,8 @@ def get_species_review(species_safe: str) -> list[dict]:
     sp_cands = candidates[candidates["species_safe"] == species_safe]
     if sp_cands.empty:
         return []
-    image_base_dir, fallback_base, flat_search = _media_resolution_config()
-    return get_review_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search)
+    image_base_dir, fallback_base, flat_search, extra_bases = _media_resolution_config()
+    return get_review_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases)
 
 
 @router.put("/{species_safe}/decisions")

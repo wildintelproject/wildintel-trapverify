@@ -97,6 +97,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
     from camtrap_workflow import (
         find_flat_search_ambiguities,
         is_remote_path,
+        media_extra_bases,
         resolve_camtrapdp_resource,
         resolve_media_path,
     )
@@ -117,6 +118,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
     dep_ids = med.get("deploymentID", pd.Series(dtype=str)).fillna("")
     file_paths = med.get("filePath", pd.Series(dtype=str))
     fallback_base = Path(image_base_dir) if image_base_dir else p
+    extra_bases = media_extra_bases(camtrap_dir, image_base_dir)
 
     total = 0
     missing = 0
@@ -131,7 +133,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
         total += 1
         file_path = resolve_media_path(
             fp, str(dep_id), str(file_name), image_base_dir, fallback_base,
-            flat_search=flat_search,
+            flat_search=flat_search, extra_bases=extra_bases,
         )
         try:
             exists = file_path.exists()
