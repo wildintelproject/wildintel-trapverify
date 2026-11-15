@@ -36,6 +36,16 @@ class SetupRequest(BaseModel):
     review_idle_seconds: int = 120
 
 
+class CrossRequest(BaseModel):
+    """A photo shown while reviewing ``source_species`` that confirms ``species`` at the same cell."""
+    species: str
+    site_id: str
+    occasion: int
+    media_id: str = ""
+    observation_id: str = ""
+    source_species: str = ""
+
+
 class PendingDecisionsRequest(BaseModel):
     """An expert's verdict on cells pending expert review; cells not mentioned stay pending."""
     confirmed: list[str] = []          # observationID of the detection event confirmed for each cell

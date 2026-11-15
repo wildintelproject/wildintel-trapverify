@@ -9,8 +9,9 @@ import 'yet-another-react-lightbox/plugins/captions.css'
 import { api } from '../api'
 import EventCard, { type Decision } from '../components/EventCard'
 import { frameSrc } from '../utils/frameImage'
+import { crossButtonState } from '../crossState'
 import { effectiveMinScore } from '../utils/minScore'
-import type { DetectionEvent, SpeciesStats } from '../types'
+import type { CrossSpecies, DetectionEvent, SpeciesStats } from '../types'
 
 interface EventSlide extends SlideImage {
   eventKey: string
@@ -93,7 +94,7 @@ export default function GalleryPage() {
   const [taxa, setTaxa] = useState<string[]>([])
   const [locked, setLocked] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' | 'warning' } | null>(null)
   // Progress of the unfinished round, kept in the session folder ("Save progress").
   const [progressAt, setProgressAt] = useState<string | null>(null)
   const [progressState, setProgressState] = useState<'idle' | 'dirty' | 'saving' | 'error'>('idle')
@@ -109,6 +110,11 @@ export default function GalleryPage() {
   completedRef.current = completed
   const decideInLbRef = useRef<(d: Decision) => void>(() => {})
   const lbBackRef = useRef<() => void>(() => {})
+  const toggleCrossRef = useRef<(i: number) => void>(() => {})
+  // Another species seen in a photo can be confirmed from the large view (see the lightbox panel).
+  const [targetSpecies, setTargetSpecies] = useState<string[]>([])
+  const [crossByCell, setCrossByCell] = useState<Record<string, CrossSpecies[]>>({})
+  const [crossBusy, setCrossBusy] = useState(false)
   const lbControllerRef = useRef<ControllerRef>(null)
 
   function iterationColor(iter: number, total: number): string {
@@ -117,9 +123,9 @@ export default function GalleryPage() {
     return `hsl(${hue}, 70%, 40%)`
   }
 
-  function showToast(msg: string, type: 'success' | 'danger') {
+  function showToast(msg: string, type: 'success' | 'danger' | 'warning', ms = 3000) {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
+    setTimeout(() => setToast(null), ms)
   }
 
   const loadEvents = useCallback(async (iter: number) => {
@@ -137,6 +143,7 @@ export default function GalleryPage() {
       if (recording) {
         api.getTaxa().then((r) => setTaxa(Array.from(new Set([...r.taxa, ...r.extra])))).catch(() => {})
       }
+      setTargetSpecies(state.config?.target_species ?? [])
       if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, occasion_hours: state.config.occasion_hours ?? 0, min_score: state.config.min_score, min_score_by_species: state.config.min_score_by_species, review_order: state.config.review_order })
 
       setPendingMode(false)
@@ -296,6 +303,7 @@ export default function GalleryPage() {
       if (e.key === 'n' || e.key === 'N') decideInLbRef.current('rejected')
       if ((e.key === 'u' || e.key === 'U') && !completedRef.current) decideInLbRef.current('unsure')
       if (e.key === 'Backspace') { e.preventDefault(); lbBackRef.current() }
+      if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) toggleCrossRef.current(Number(e.key) - 1)
       if (e.key === 'ArrowUp') {
         e.preventDefault()
         e.stopPropagation()
@@ -358,15 +366,79 @@ export default function GalleryPage() {
     setLbInverted(false)
   }
 
+  // ── Other target species seen in the photo ───────────────────────────────
+  const otherSpecies = useMemo(
+    () => targetSpecies.filter((sp) => sp !== spStats?.species_name),
+    [targetSpecies, spStats?.species_name],
+  )
+  const crossReadOnly = completed && locked
+
+  const refreshCross = useCallback(async (siteId: string, occasion: number) => {
+    try {
+      const r = await api.getCross(siteId, occasion)
+      setCrossByCell((prev) => ({ ...prev, [`${siteId}|${occasion}`]: r.species }))
+    } catch { /* the panel just stays as it was */ }
+  }, [])
+
+  useEffect(() => {
+    const ev = events[lbEvIdx]
+    if (!lbOpen || !ev || otherSpecies.length === 0) return
+    refreshCross(ev.siteId, ev.occasion)
+  }, [lbOpen, lbEvIdx, events, otherSpecies.length, refreshCross])
+
+  async function toggleCross(i: number) {
+    const sp = otherSpecies[i]
+    const ev = events[lbEvIdx]
+    const frame = ev?.frames[lbIndex]
+    if (!sp || !ev || !frame || crossBusy || crossReadOnly) return
+    const cur = crossByCell[`${ev.siteId}|${ev.occasion}`]?.find((c) => c.scientificName === sp)
+    // Already confirmed in this occasion (in its own review, or from a photo of another detection
+    // event): nothing to do here, and it cannot be undone by mistake from a photo that may not show it.
+    const state = crossButtonState(cur, ev.frames)
+    if (state === 'confirmed' || state === 'elsewhere') return
+    setCrossBusy(true)
+    try {
+      if (cur?.status === 'cross') {
+        await api.removeCross(sp, ev.siteId, ev.occasion)
+        showToast(t('gallery.cross_removed', { species: sp, site: ev.siteId, occasion: ev.occasion }), 'success')
+      } else {
+        await api.addCross({
+          species: sp, site_id: ev.siteId, occasion: ev.occasion,
+          media_id: frame.mediaId, observation_id: frame.isContext ? '' : frame.obsId,
+          source_species: spStats?.species_name ?? '',
+        })
+        showToast(t('gallery.cross_added', { species: sp, site: ev.siteId, occasion: ev.occasion }), 'success')
+      }
+      await refreshCross(ev.siteId, ev.occasion)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : t('gallery.toast_error'), 'danger')
+    } finally {
+      setCrossBusy(false)
+    }
+  }
+  toggleCrossRef.current = (i) => { toggleCross(i) }
+
   function decideInLb(d: Decision) {
     if (completed && locked) return
     const ev = events[lbEvIdx]
     if (!ev) return
     if (d === 'confirmed') chosenRepRef.current[ev.key] = ev.frames[lbIndex]?.burstRepObsId ?? ev.repObsId
+    // Confirmed or unsure here while another species was confirmed from a photo of this event: right
+    // only with animals of both species. The decision is recorded but the large view stays on the
+    // card; pressing the same decision again moves on.
+    const crossHere = (crossByCell[`${ev.siteId}|${ev.occasion}`] ?? [])
+      .filter((c) => c.status === 'cross' && ev.frames.some((f) => f.mediaId === c.mediaID))
+      .map((c) => c.scientificName)
+    const conflict = !completed && d !== 'rejected' && crossHere.length > 0
+    const repeated = decisionsRef.current[ev.key] === d
     setDecisions((prev) => ({ ...prev, [ev.key]: d }))
     decidedAtRef.current[ev.key] = Date.now()
     if (d !== 'rejected') dropCorrection(ev.key)
     setNeedsDecision((prev) => { const s = new Set(prev); s.delete(ev.key); return s })
+    if (conflict && !repeated) {
+      showToast(t('gallery.cross_conflict_toast', { species: crossHere.join(', ') }), 'warning', 7000)
+      return
+    }
     if (!completed) {
       // decisionsRef mirrors state as of the last render, so it doesn't
       // include the decision just made above (setDecisions hasn't
@@ -629,6 +701,57 @@ export default function GalleryPage() {
       )}
     </div>
   )
+  const crossCellKey = lbCurrentEv ? `${lbCurrentEv.siteId}|${lbCurrentEv.occasion}` : ''
+  const crossHere = lbCurrentEv
+    ? (crossByCell[crossCellKey] ?? [])
+        .filter((c) => c.status === 'cross' && lbCurrentEv.frames.some((f) => f.mediaId === c.mediaID))
+        .map((c) => c.scientificName)
+    : []
+  const lbCrossPanel = otherSpecies.length > 0 && lbCurrentEv ? (
+    <div className="flex flex-col gap-1.5" data-testid="lb-cross">
+      <span className="text-[11px] leading-tight text-white/70 mb-0.5">{t('gallery.cross_title')}</span>
+      {otherSpecies.map((sp, i) => {
+        const st = crossByCell[crossCellKey]?.find((c) => c.scientificName === sp)
+        const status = crossButtonState(st, lbCurrentEv.frames)
+        const already = status === 'confirmed' || status === 'elsewhere'
+        return (
+          <button
+            key={sp}
+            className={`px-2 py-1.5 text-left text-sm rounded transition-colors flex items-center gap-1.5 disabled:opacity-50 ${
+              status === 'cross'
+                ? 'bg-sky-600 text-white hover:bg-sky-700'
+                : already
+                ? 'border border-white/20 bg-white/10 text-white/60 cursor-default'
+                : 'border border-white/40 bg-black/40 text-white/90 hover:bg-sky-600 hover:border-sky-600 hover:text-white'
+            }`}
+            onClick={() => toggleCross(i)}
+            disabled={crossReadOnly || already}
+            title={status === 'confirmed'
+              ? t('gallery.cross_already', { species: sp })
+              : status === 'elsewhere'
+              ? t('gallery.cross_elsewhere_tooltip', { species: sp })
+              : status === 'cross'
+              ? t('gallery.cross_undo_tooltip', { species: sp })
+              : t('gallery.cross_tooltip', { species: sp, site: lbCurrentEv.siteId, occasion: lbCurrentEv.occasion })}
+          >
+            {i < 9 && <span className="text-[10px] opacity-60 font-mono w-3">{i + 1}</span>}
+            <span className="flex-1 leading-tight break-words">
+              <span className="italic">{sp}</span>
+              {already && <span className="block text-[10px] not-italic">{t('gallery.cross_elsewhere')}</span>}
+            </span>
+            {status === 'cross' && <span aria-hidden="true">✓</span>}
+          </button>
+        )
+      })}
+      {lbDecision !== 'rejected' && crossHere.length > 0 && (
+        <p role="note" className="mt-1 text-[11px] leading-snug text-amber-300">
+          {t(lbDecision === 'unsure' ? 'gallery.cross_unsure_note' : lbDecision === 'confirmed' ? 'gallery.cross_confirmed_note' : 'gallery.cross_pending_note',
+             { species: crossHere.join(', ') })}
+        </p>
+      )}
+    </div>
+  ) : null
+  const lbPanelWidth = otherSpecies.length > 0 ? 240 : 168
   const lbDecisionButtons = (wrapClass: string, btnClass: string) => (
     <div className={wrapClass}>
       <button
@@ -1007,7 +1130,7 @@ export default function GalleryPage() {
         // leaves room for the title above and the decision buttons below.
         styles={lbNarrow
           ? { slide: { padding: '48px 56px 150px' } }
-          : { slide: { padding: '48px 56px 56px 224px' }, navigationPrev: { left: 212 } }}
+          : { slide: { padding: `48px 56px 56px ${lbPanelWidth + 56}px` }, navigationPrev: { left: lbPanelWidth + 44 } }}
         controller={{ ref: lbControllerRef }}
         on={{ view: ({ index }) => { setLbIndex(index); resetLbFilters() } }}
         zoom={{ maxZoomPixelRatio: 8, scrollToZoom: true }}
@@ -1018,10 +1141,11 @@ export default function GalleryPage() {
               {!lbNarrow && (
                 <div
                   className="absolute left-6 top-14 bottom-6 flex flex-col gap-3 overflow-y-auto"
-                  style={{ zIndex: 10000, width: 168 }}
+                  style={{ zIndex: 10000, width: lbPanelWidth }}
                   data-testid="lb-panel"
                 >
                   {lbProgress}
+                  {lbCrossPanel}
                   <div className="flex flex-col gap-2">
                     <span className="text-[11px] leading-tight text-white/70">{t('gallery.lb_decision_title')}</span>
                     {lbDecisionButtons('flex flex-col gap-2', 'w-full py-3')}
@@ -1041,7 +1165,7 @@ export default function GalleryPage() {
               )}
               <div
                 className="absolute bottom-0 right-0 flex flex-col items-center gap-3 px-4 pb-3"
-                style={{ zIndex: 10000, left: lbNarrow ? 0 : 208 }}
+                style={{ zIndex: 10000, left: lbNarrow ? 0 : lbPanelWidth + 40 }}
               >
                 {lbCurrentEv.frames.length > 1 && (
                   <div className="flex gap-1">
@@ -1071,6 +1195,7 @@ export default function GalleryPage() {
                 {lbNarrow && (
                   <>
                     <div className="w-full text-center text-[11px] text-white/70">{lbProgressLine}</div>
+                    {lbCrossPanel && <div className="w-full" style={{ maxWidth: 480 }}>{lbCrossPanel}</div>}
                     <div className="flex gap-2 w-full" style={{ maxWidth: 480 }}>
                       {lbDecisionButtons('flex gap-3 flex-1', 'flex-1 py-2.5')}
                       <button
@@ -1158,7 +1283,7 @@ export default function GalleryPage() {
 
       {toast && (
         <div className={`fixed bottom-0 right-0 m-3 z-[2000] px-4 py-3 rounded-lg text-white shadow-lg ${
-          toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'
+          toast.type === 'success' ? 'bg-emerald-600' : toast.type === 'warning' ? 'bg-amber-600' : 'bg-red-600'
         }`}>
           {toast.msg}
         </div>

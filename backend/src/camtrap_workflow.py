@@ -1484,6 +1484,158 @@ def confirmed_observations(decisions_dir: Path, species_cands: pd.DataFrame) -> 
     return dict(zip(dec["site_occasion_key"], dec["observationID"].astype(str)))
 
 
+# ─── Confirmations made from another species' gallery ───────────────────────
+#
+# While reviewing species A, the expert may see species B in a photo (e.g. a
+# fallow deer in a red deer sequence). That photo confirms B at the same site
+# and occasion. These confirmations live in ``cross_{species_safe}.csv`` (one
+# file per confirmed species B), separate from the rounds of B: they are not
+# named ``decisions_*`` because their observationID belongs to the species the
+# classifier assigned (A), so they must never be read as a confirmation of an
+# A observation.
+
+CROSS_COLUMNS = [
+    "site_occasion_key", "scientificName", "siteID", "occasion",
+    "mediaID", "observationID", "source_scientificName", "saved_at",
+]
+
+
+def load_cross(decisions_dir: Path, species_safe: Optional[str] = None) -> pd.DataFrame:
+    """Cross-species confirmations (``cross_*.csv``), optionally for one species."""
+    frames = []
+    if decisions_dir.exists():
+        pattern = f"cross_{species_safe}.csv" if species_safe else "cross_*.csv"
+        for f in sorted(decisions_dir.glob(pattern)):
+            df = pd.read_csv(f, dtype=str, keep_default_na=False)
+            if "site_occasion_key" in df.columns:
+                frames.append(df)
+    if not frames:
+        return pd.DataFrame(columns=CROSS_COLUMNS)
+    return pd.concat(frames, ignore_index=True)
+
+
+def cross_keys_set(decisions_dir: Path) -> set[str]:
+    """Cells confirmed from another species' gallery."""
+    cross = load_cross(decisions_dir)
+    return set(cross["site_occasion_key"].replace("", pd.NA).dropna())
+
+
+def cross_key(site_id: str, occasion: int, species_safe: str) -> str:
+    """``site_occasion_key`` of a cell, as built by :func:`build_candidates`."""
+    return f"{site_id}_occ{int(occasion)}_{species_safe}"
+
+
+def set_cross_confirmation(
+    decisions_dir: Path,
+    species: str,
+    site_id: str,
+    occasion: int,
+    media_id: str,
+    observation_id: str,
+    source_species: str,
+) -> str:
+    """Record that a photo shown for ``source_species`` confirms ``species``.
+
+    One confirmation per cell: a new one replaces the previous one.
+    Returns the cell key.
+    """
+    from datetime import datetime as _dt
+
+    sp_safe = sanitize(species)
+    key = cross_key(site_id, occasion, sp_safe)
+    path = decisions_dir / f"cross_{sp_safe}.csv"
+    existing = load_cross(decisions_dir, sp_safe)
+    existing = existing[existing["site_occasion_key"] != key]
+    row = pd.DataFrame([{
+        "site_occasion_key": key, "scientificName": species, "siteID": site_id,
+        "occasion": str(int(occasion)), "mediaID": media_id,
+        "observationID": observation_id or "", "source_scientificName": source_species,
+        "saved_at": _dt.now().astimezone().isoformat(timespec="seconds"),
+    }])
+    decisions_dir.mkdir(parents=True, exist_ok=True)
+    pd.concat([existing, row], ignore_index=True)[CROSS_COLUMNS].to_csv(path, index=False)
+    return key
+
+
+def remove_cross_confirmations(decisions_dir: Path, species_safe: str, keys: set[str]) -> int:
+    """Forget cross-species confirmations of ``species_safe`` for ``keys``."""
+    path = decisions_dir / f"cross_{species_safe}.csv"
+    if not path.exists() or not keys:
+        return 0
+    existing = load_cross(decisions_dir, species_safe)
+    keep = existing[~existing["site_occasion_key"].isin(keys)]
+    removed = len(existing) - len(keep)
+    if keep.empty:
+        path.unlink()
+    elif removed:
+        keep[CROSS_COLUMNS].to_csv(path, index=False)
+    return removed
+
+
+def _cross_observations(
+    obs: pd.DataFrame, med: pd.DataFrame, cross: pd.DataFrame,
+    classified_by_label: str, now_ts: str,
+) -> tuple[pd.Series, pd.DataFrame]:
+    """Observations for the cross-species confirmations of the verified export.
+
+    When the photo already has an observation of the confirmed species, that
+    observation is marked as human-confirmed (returned mask). Otherwise a new
+    observation is added (returned rows), copied from another observation of
+    the same photo (or built from media.csv) with the confirmed species, no
+    bounding box and the human classification fields.
+    """
+    mask = pd.Series(False, index=obs.index)
+    new_rows = []
+    if cross.empty:
+        return mask, pd.DataFrame(columns=obs.columns)
+    pair_index = pd.Series(list(zip(obs["mediaID"].astype(str), obs["scientificName"].astype(str))), index=obs.index)
+    med_by_id = med.drop_duplicates("mediaID").set_index("mediaID") if "mediaID" in med.columns else pd.DataFrame()
+    for row in cross.itertuples(index=False):
+        media_id, species = str(row.mediaID), str(row.scientificName)
+        same = pair_index == (media_id, species)
+        if same.any():
+            mask |= same
+            continue
+        template = obs[obs["mediaID"].astype(str) == media_id]
+        if not template.empty:
+            new = template.iloc[0].copy()
+        else:
+            new = pd.Series({c: "" for c in obs.columns})
+            new["mediaID"] = media_id
+            if media_id in med_by_id.index:
+                m = med_by_id.loc[media_id]
+                for col in ("deploymentID",):
+                    if col in m.index and col in obs.columns:
+                        new[col] = m[col]
+                ts = m.get("timestamp", "")
+                for col in ("eventStart", "eventEnd"):
+                    if col in obs.columns:
+                        new[col] = ts
+            if "observationLevel" in obs.columns:
+                new["observationLevel"] = "media"
+        for col in ("bboxX", "bboxY", "bboxWidth", "bboxHeight", "count", "lifeStage",
+                    "sex", "behavior", "individualID", "individualPositionRadius",
+                    "individualPositionAngle", "individualSpeed", "taxonID"):
+            if col in new.index:
+                new[col] = ""
+        sp_safe = sanitize(species)
+        new["observationID"] = f"{media_id}_{sp_safe}_expert"
+        new["scientificName"] = species
+        if "observationType" in obs.columns:
+            new["observationType"] = "animal"
+        if "observationComments" in obs.columns:
+            new["observationComments"] = (
+                f"Added by expert review (photo classified as {row.source_scientificName})"
+            )
+        new["classificationMethod"] = "human"
+        new["classificationProbability"] = "1.0"
+        new["classifiedBy"] = classified_by_label
+        new["classificationTimestamp"] = now_ts
+        new_rows.append(new)
+    added = pd.DataFrame(new_rows, columns=obs.columns) if new_rows else pd.DataFrame(columns=obs.columns)
+    return mask, added
+
+
 def confirmed_keys_set(decisions_dir: Path) -> set[str]:
     """Return the set of confirmed ``site_occasion_key`` values across all decision files.
 
@@ -1491,12 +1643,12 @@ def confirmed_keys_set(decisions_dir: Path) -> set[str]:
         decisions_dir: Directory containing decision CSVs.
 
     Returns:
-        Set of confirmed keys, empty if no decisions exist.
+        Set of confirmed keys, empty if no decisions exist. Cells confirmed from another species'
+        gallery (``cross_*.csv``) are confirmed too.
     """
     dec = load_all_decisions(decisions_dir)
-    if dec.empty:
-        return set()
-    return set(dec["site_occasion_key"].dropna().unique())
+    keys = set() if dec.empty else set(dec["site_occasion_key"].dropna().unique())
+    return keys | cross_keys_set(decisions_dir)
 
 
 def save_decisions(
@@ -2214,6 +2366,17 @@ TAG_UNSURE = "camtrapverify:unsure"
 TAG_ACTUAL_SPECIES = "camtrapverify-actual-species:"
 
 
+def _confirmed_tags(tags: pd.Series) -> pd.Series:
+    """``observationTags`` with this review's rejected / unsure / actual-species tags replaced by
+    ``camtrapverify:confirmed`` (other tags are kept)."""
+    def fix(t: str) -> str:
+        keep = [x for x in str(t).split("|")
+                if x.strip() and x.strip() not in (TAG_REJECTED, TAG_UNSURE) and not x.strip().startswith(TAG_ACTUAL_SPECIES)
+                and x.strip() != TAG_CONFIRMED]
+        return "|".join([*keep, TAG_CONFIRMED])
+    return tags.fillna("").astype(str).map(fix)
+
+
 def _rep_confirmed(decisions_dir: Path) -> set:
     """``observationID`` of the confirmed representative of every confirmed event (decision files)."""
     ids: set = set()
@@ -2391,6 +2554,25 @@ def export_verified_camtrapdp(
         old = obs.loc[new.index, "observationTags"].fillna("").astype(str).str.strip()
         obs.loc[new.index, "observationTags"] = (old + "|" + new).str.strip("|")
 
+    # Species confirmed from another species' photo (see load_cross): that photo's observation of the
+    # species is marked human-confirmed, or one is added when the classifier never assigned it.
+    cross = load_cross(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
+    if not cross.empty:
+        now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        for col in ("classificationMethod", "classificationProbability", "classifiedBy", "classificationTimestamp", "observationTags"):
+            if col not in obs.columns:
+                obs[col] = ""
+        cmask, added = _cross_observations(obs, med, cross, classified_by_label, now_ts)
+        obs.loc[cmask, "classificationMethod"] = "human"
+        obs.loc[cmask, "classificationProbability"] = "1.0"
+        obs.loc[cmask, "classifiedBy"] = classified_by_label
+        obs.loc[cmask, "classificationTimestamp"] = now_ts
+        obs.loc[cmask, "observationTags"] = _confirmed_tags(obs.loc[cmask, "observationTags"])
+        if not added.empty:
+            added = added.copy()
+            added["observationTags"] = TAG_CONFIRMED
+            obs = pd.concat([obs, added], ignore_index=True)
+
     obs = restore_observation_ids(obs)
     obs.to_csv(out_dir / "observations.csv", index=False)
 
@@ -2465,6 +2647,8 @@ def _time_to_detection(
     verif_keys: set,
     rounds_done: int,
     pending_keys: Optional[set] = None,
+    cross: Optional[pd.DataFrame] = None,
+    media_ts: Optional[dict] = None,
 ):
     """Time to first detection per site x occasion, in hours from the start of the occasion.
 
@@ -2497,6 +2681,13 @@ def _time_to_detection(
         for key, burst in zip(conf_rows["site_occasion_key"], conf_rows["burst_id"]):
             t = events.get((key, burst))
             if t is not None and (key not in first_verified or t < first_verified[key]):
+                first_verified[key] = t
+
+    # confirmed from another species' photo: the time of that photo
+    if cross is not None and not cross.empty:
+        for key, mid in zip(cross["site_occasion_key"], cross["mediaID"]):
+            t = (media_ts or {}).get(mid)
+            if key and t is not None and pd.notna(t) and (key not in first_verified or t < first_verified[key]):
                 first_verified[key] = t
 
     for i, site in enumerate(sites):
@@ -2641,6 +2832,15 @@ def build_occupancy_inputs(
     summary_rows = []
     states = cell_states(candidates, decisions_dir)
     status_by_key = dict(zip(states["site_occasion_key"], states["status"]))
+    # Cells confirmed from another species' gallery are detections too, also where the classifier
+    # never assigned the species (a missed detection).
+    cross_all = cross_keys_set(decisions_dir)
+    for key in cross_all:
+        status_by_key[key] = "confirmed"
+    cross_media_ts: dict = {}
+    if cross_all:
+        real_all = candidates[~candidates["is_context"].fillna(False).astype(bool)] if "is_context" in candidates.columns else candidates
+        cross_media_ts = real_all.drop_duplicates("mediaID").set_index("mediaID")["ts"].to_dict()
 
     for sp in target_species:
         sp_safe   = sanitize(sp)
@@ -2654,6 +2854,7 @@ def build_occupancy_inputs(
         else:
             verif_keys = {k for k in (dec["site_occasion_key"].dropna() if not dec.empty else [])
                           if k.endswith(f"_{sp_safe}")}
+        verif_keys |= {k for k in cross_all if k.endswith(f"_{sp_safe}")}      # confirmed from another species' photo
 
         # Verified history: 1 confirmed; NA where the camera was inactive OR the cell is pending
         # expert review (unknown, not a true zero); 0 otherwise. cell_status_<sp>.csv keeps those
@@ -2703,6 +2904,7 @@ def build_occupancy_inputs(
                 study_start, study_end, config_occasion_hours(config)), op, naive_keys, verif_keys,
             rounds_completed(decisions_dir).get(sp_safe, 0),
             pending_keys={k for k, v in status_by_key.items() if v == "pending"},
+            cross=load_cross(decisions_dir, sp_safe), media_ts=cross_media_ts,
         )
         status_df = pd.DataFrame(status, columns=occ_cols)
         status_df.insert(0, "siteID", sites)
@@ -2713,6 +2915,7 @@ def build_occupancy_inputs(
         naive_det = int(np.nansum(yN == 1))
         verif_det = int(np.nansum(yV == 1))
         fp_cells  = int(np.nansum((yN == 1) & (yV == 0)))
+        fn_cells  = int(np.nansum((yN == 0) & (yV == 1)))               # missed by the classifier, found by the expert
         psi_naive = float(np.mean(
             [any(yN[i, j] == 1 for j in range(n_occ) if not np.isnan(yN[i, j]))
              for i in range(n_sites)]
@@ -2729,6 +2932,7 @@ def build_occupancy_inputs(
             "naive_detections":     naive_det,
             "verified_detections":  verif_det,
             "false_positive_cells": fp_cells,
+            "false_negative_cells": fn_cells,
             "pending_cells":        n_pending,
             "unreviewed_cells":     n_unverified,
             "psi_obs_naive":        round(psi_naive, 3),
@@ -2788,6 +2992,11 @@ def build_review_effort(
     ranks_of_conf = hit.groupby("_key")["rank"].min()
     conf_cells_present = sorted(conf_keys & key_set)
     ins_conf = int(ranks_of_conf.reindex(conf_cells_present).fillna(1).sum())
+    # cells confirmed from another species' gallery: none of this species' events had to be inspected
+    cross_only = (cross_keys_set(decisions_dir) & key_set) - conf_keys
+    n_conf += len(cross_only)
+    n_rej -= len(cross_only)
+    is_conf_cell = is_conf_cell | key_str.isin(cross_only)
     # a cell with no confirmation costs its highest rank (every event was inspected)
     ins_rej = int(rank[~is_conf_cell].groupby(key_str[~is_conf_cell]).max().sum())
 
@@ -2933,6 +3142,7 @@ def has_tag(tags: pd.Series, tag: str) -> pd.Series:
 
 def _effort_accumulate(
     sp_df: pd.DataFrame, conf_ids: set, unc_ids: set, done: Optional[int], acc: dict, cleared: Optional[set] = None,
+    cross_cells: Optional[set] = None,
 ) -> dict:
     """Effort counters of one species, computed for all its cells at once (no per-cell loop).
 
@@ -2946,6 +3156,10 @@ def _effort_accumulate(
     cell, burst = "site_occasion_key", "burst_id"
     ev = sp_df.groupby([cell, burst], sort=False).agg(rank=("rank", "first"), score=("_score", "max")).reset_index()
     cr = sp_df.loc[sp_df["observationID"].isin(conf_ids)].groupby(cell)["rank"].min()
+    # confirmed from another species' gallery: a detection that cost none of this species' events
+    cross_only = (set(cross_cells or ()) & set(sp_df[cell])) - set(cr.index)
+    if cross_only:
+        cr = pd.concat([cr, pd.Series(0, index=sorted(cross_only))])
     n_unc = sp_df.loc[sp_df["observationID"].isin(unc_ids)].groupby(cell)[burst].nunique()
 
     ev["cr"] = ev[cell].map(cr)
@@ -3104,7 +3318,7 @@ def build_species_effort(
     rows = []
     for sp_safe, sp_df in cand.groupby("species_safe", sort=True):
         done = None if rounds_done is None else rounds_done.get(str(sp_safe), 0)
-        acc = _effort_accumulate(sp_df, conf_ids, unc_ids, done, new_acc(), cleared)
+        acc = _effort_accumulate(sp_df, conf_ids, unc_ids, done, new_acc(), cleared, cross_keys_set(decisions_dir))
         rows.append(build_row(sp_df["scientificName"].iloc[0], acc))
         for k, v in acc.items():
             total[k] = total[k] + v

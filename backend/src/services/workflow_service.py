@@ -23,6 +23,12 @@ from camtrap_workflow import (
     dataset_fingerprint,
     cell_states,
     cleared_keys_set,
+    cross_key,
+    load_cross,
+    load_all_decisions,
+    remove_cross_confirmations,
+    sanitize,
+    set_cross_confirmation,
     load_all_unsure,
     confirmed_observations,
     resolve_pending,
@@ -43,6 +49,7 @@ from services import progress_service, session_service
 
 
 EXPORT_STALE_MARKER = ".camtrap_dp_stale"
+OUTPUTS_STALE_MARKER = ".outputs_stale"          # the histories, reports and fits too (a click that must answer at once)
 
 
 def export_is_stale() -> bool:
@@ -71,6 +78,19 @@ def write_verified_export() -> None:
     (session_service.session_dir() / EXPORT_STALE_MARKER).unlink(missing_ok=True)
 
 
+def mark_outputs_stale() -> None:
+    """Mark every output (not only the verified CamtrapDP) as out of date, without rebuilding.
+
+    For actions that must answer at once, like confirming another species from a photo: rebuilding the
+    histories and fits of every species takes seconds on a long study. Saving a round or opening
+    Results / downloading rebuilds them (:func:`ensure_export_fresh`).
+    """
+    sd = session_service.session_dir()
+    if sd is not None:
+        (sd / OUTPUTS_STALE_MARKER).write_text(datetime.now().isoformat())
+        (sd / EXPORT_STALE_MARKER).write_text("")
+
+
 def ensure_export_fresh() -> None:
     """Bring ``camtrap_dp_verified/`` up to date if saving a round left it stale.
 
@@ -81,7 +101,10 @@ def ensure_export_fresh() -> None:
     sd = session_service.session_dir()
     if sd is None or session_service.get_config() is None:
         return
-    if export_is_stale() or not session_service.paths()["camtrap_out"].exists():
+    if (sd / OUTPUTS_STALE_MARKER).exists():
+        logger.info("Rebuilding every output (stale)")
+        rebuild_outputs(export=True)
+    elif export_is_stale() or not session_service.paths()["camtrap_out"].exists():
         logger.info("Rebuilding the verified CamtrapDP (stale)")
         write_verified_export()
 
@@ -100,6 +123,7 @@ def rebuild_outputs(export: bool = True) -> None:
         write_verified_export()
     else:
         (session_service.session_dir() / EXPORT_STALE_MARKER).write_text("")
+    (session_service.session_dir() / OUTPUTS_STALE_MARKER).unlink(missing_ok=True)
     build_occupancy_inputs(candidates, p["decisions"], config, p["occupancy_out"])
     build_review_effort(candidates, p["decisions"], config, p["occupancy_out"])
     exclusions = pd.read_csv(p["exclusions"]) if p["exclusions"].exists() else None
@@ -286,6 +310,11 @@ def replace_species_decisions(species_safe: str, confirmed_keys: list[str]) -> i
         existing = pd.read_csv(cleared, dtype=str) if cleared.exists() else pd.DataFrame(columns=["site_occasion_key"])
         pd.concat([existing, pd.DataFrame({"site_occasion_key": settled})]).drop_duplicates("site_occasion_key").to_csv(cleared, index=False)
 
+    # Cells of this species confirmed from another species' gallery that the expert has now left
+    # unconfirmed in this review are dropped too.
+    shown = set(sp_cands["site_occasion_key"])
+    remove_cross_confirmations(p["decisions"], species_safe, shown - set(confirmed_keys))
+
     # Remember the species was edited as a whole: the rounds no longer describe what was decided
     # in each, so the last one cannot be reopened any more.
     pd.DataFrame({"edited_at": [datetime.now().isoformat(timespec="seconds")]}).to_csv(
@@ -304,6 +333,63 @@ def settle_pending(species_safe: str, confirmed_ids: list[str], rejected_keys: l
     rebuild_outputs(export=False)
     logger.info("Pending cells settled for %s: confirmed=%d rejected=%d", species_safe, n_conf, n_rej)
     return {"success": True, "confirmed": n_conf, "rejected": n_rej}
+
+
+# ─── Confirming another species from a photo ─────────────────────────────────
+
+def _target_species() -> list[str]:
+    return list((session_service.get_config() or {}).get("target_species", []))
+
+
+def cross_status(site_id: str, occasion: int) -> list[dict]:
+    """State of every target species at one site and occasion.
+
+    ``status`` is ``cross`` (confirmed from a photo of another species, with that photo's mediaID),
+    ``confirmed`` (confirmed in its own review) or ``none``.
+    """
+    d = session_service.paths()["decisions"]
+    dec = load_all_decisions(d) if d.exists() else pd.DataFrame()
+    own = set(dec["site_occasion_key"].dropna()) if "site_occasion_key" in dec.columns else set()
+    cross = load_cross(d).set_index("site_occasion_key") if d.exists() else pd.DataFrame()
+    out = []
+    for sp in _target_species():
+        sp_safe = sanitize(sp)
+        key = cross_key(site_id, occasion, sp_safe)
+        item = {"scientificName": sp, "species_safe": sp_safe, "status": "none"}
+        if key in own:
+            item["status"] = "confirmed"
+        elif not cross.empty and key in cross.index:
+            row = cross.loc[key]
+            if isinstance(row, pd.DataFrame):
+                row = row.iloc[-1]
+            item.update(status="cross", mediaID=row["mediaID"], observationID=row["observationID"],
+                        source=row["source_scientificName"])
+        out.append(item)
+    return out
+
+
+def add_cross(species: str, site_id: str, occasion: int, media_id: str,
+              observation_id: str, source_species: str) -> dict:
+    if species not in _target_species():
+        raise HTTPException(400, f"{species} no es una especie objetivo de esta sesión.")
+    if species == source_species:
+        raise HTTPException(400, "Para la especie que se está revisando usa Confirmada.")
+    key = set_cross_confirmation(
+        session_service.paths()["decisions"], species, site_id, occasion, media_id, observation_id, source_species,
+    )
+    mark_outputs_stale()
+    logger.info("Cross-species confirmation: %s from a photo of %s (%s)", key, source_species, media_id)
+    return {"success": True, "key": key}
+
+
+def remove_cross(species: str, site_id: str, occasion: int) -> dict:
+    sp_safe = sanitize(species)
+    n = remove_cross_confirmations(
+        session_service.paths()["decisions"], sp_safe, {cross_key(site_id, occasion, sp_safe)},
+    )
+    if n:
+        mark_outputs_stale()
+    return {"success": True, "removed": n}
 
 
 def reopen_last_round(species_safe: str) -> dict:

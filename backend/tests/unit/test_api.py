@@ -2483,3 +2483,101 @@ def test_editing_a_species_settles_its_pending_cells(client, camtrap_dir, tmp_pa
     client.put("/api/species/Vulpes_vulpes/decisions", json={"confirmed_keys": ["SITE_A_occ2_Vulpes_vulpes"]})
     sp = client.get("/api/species").json()[0]
     assert sp["n_pending"] == 0 and sp["n_confirmed_combos"] == 1 and sp["phase"] == "complete"
+
+
+# ─── Another species in the photo (cross-species confirmation) ────────────────
+
+def _two_species_session(client, camtrap_dir, tmp_path):
+    """m004 (SITE_B occ1) becomes a wild boar, so there are two target species."""
+    f = camtrap_dir / "observations.csv"
+    df = pd.read_csv(f, dtype=str)
+    df.loc[df["mediaID"] == "m004", "scientificName"] = "Sus scrofa"
+    df.to_csv(f, index=False)
+    r = client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"), "target_species": ["Vulpes vulpes", "Sus scrofa"],
+        "study_start": "2025-11-01", "study_end": "2025-11-10", "occasion_days": 5, "gap_seconds": 60, "min_score": 0.5,
+        "record_rejection_species": True,
+    })
+    assert r.status_code == 200, r.text
+    return Path(r.json()["session_dir"])
+
+
+def _cross(client, species="Sus scrofa", site="SITE_A", occ=1, media="m001", obs="o001", source="Vulpes vulpes"):
+    return client.post("/api/cross", json={"species": species, "site_id": site, "occasion": occ, "media_id": media,
+                                           "observation_id": obs, "source_species": source})
+
+
+def test_every_target_species_is_listed_for_a_cell(client, camtrap_dir, tmp_path):
+    _two_species_session(client, camtrap_dir, tmp_path)
+    r = client.get("/api/cross", params={"site_id": "SITE_A", "occasion": 1}).json()["species"]
+    assert {s["scientificName"]: s["status"] for s in r} == {"Vulpes vulpes": "none", "Sus scrofa": "none"}
+
+
+def test_confirming_a_species_the_classifier_missed_is_a_detection_and_a_false_negative(client, camtrap_dir, tmp_path):
+    sd = _two_species_session(client, camtrap_dir, tmp_path)
+    assert _cross(client).json()["success"] is True
+    st = {s["scientificName"]: s for s in client.get("/api/cross", params={"site_id": "SITE_A", "occasion": 1}).json()["species"]}
+    assert st["Sus scrofa"]["status"] == "cross" and st["Sus scrofa"]["mediaID"] == "m001"
+    client.get("/api/results")                                            # opening Results rebuilds the stale outputs
+    v = pd.read_csv(sd / "occupancy_inputs" / "dethist_verified_Sus_scrofa.csv", dtype=str).fillna("").set_index("siteID")
+    n = pd.read_csv(sd / "occupancy_inputs" / "dethist_naive_Sus_scrofa.csv", dtype=str).fillna("").set_index("siteID")
+    assert v.loc["SITE_A", "occ1"] == "1" and n.loc["SITE_A", "occ1"] == "0"
+    summary = pd.read_csv(sd / "occupancy_inputs" / "verification_summary.csv").set_index("species")
+    assert summary.loc["Sus scrofa", "false_negative_cells"] == 1
+    obs = _verified_observations(sd)
+    added = obs[(obs["mediaID"] == "m001") & (obs["scientificName"] == "Sus scrofa")]
+    assert len(added) == 1 and added.iloc[0]["classificationMethod"] == "human"
+    assert added.iloc[0]["observationTags"] == "camtrapverify:confirmed" and added.iloc[0]["observationID"] == "m001_Sus_scrofa_expert"
+
+
+def test_a_cell_confirmed_from_another_photo_leaves_that_species_rounds(client, camtrap_dir, tmp_path):
+    sd = _two_species_session(client, camtrap_dir, tmp_path)
+    assert [e["key"] for e in client.get("/api/species/Sus_scrofa/events", params={"iteration": 1}).json()] == ["SITE_B_occ1_Sus_scrofa"]
+    _cross(client, site="SITE_B", occ=1, media="m001", obs="o001")
+    assert client.get("/api/species/Sus_scrofa/events", params={"iteration": 1}).json() == []      # no event to inspect
+    sp = {s["species_safe"]: s for s in client.get("/api/species").json()}
+    assert sp["Sus_scrofa"]["n_confirmed_combos"] == 1 and sp["Sus_scrofa"]["n_resolved"] == sp["Sus_scrofa"]["n_total_combos"]
+    res = client.get("/api/results").json()
+    row = next(r for r in res["effort_by_species"] if r["species"] == "Sus scrofa")
+    assert row["cells_detection"] == 1 and row["events_inspected"] == 0                         # it cost no events
+
+
+def test_undoing_it_leaves_no_trace(client, camtrap_dir, tmp_path):
+    sd = _two_species_session(client, camtrap_dir, tmp_path)
+    client.get("/api/results")
+    before = {f.name: f.read_bytes() for f in sorted((sd / "occupancy_inputs").glob("*.csv")) if f.name not in ("review_effort.csv",)}
+    obs_before = _verified_observations(sd).drop(columns=["classificationTimestamp"]).to_dict("records")
+    _cross(client)
+    r = client.delete("/api/cross", params={"species": "Sus scrofa", "site_id": "SITE_A", "occasion": 1})
+    assert r.json()["removed"] == 1
+    client.get("/api/results")
+    assert not list((sd / "decisions").glob("cross_*.csv"))
+    after = {f.name: f.read_bytes() for f in sorted((sd / "occupancy_inputs").glob("*.csv")) if f.name not in ("review_effort.csv",)}
+    assert after == before
+    assert _verified_observations(sd).drop(columns=["classificationTimestamp"]).to_dict("records") == obs_before
+
+
+def test_a_cross_confirmation_is_validated(client, camtrap_dir, tmp_path):
+    _two_species_session(client, camtrap_dir, tmp_path)
+    assert _cross(client, species="Canis lupus").status_code == 400                # not a target species
+    assert _cross(client, species="Vulpes vulpes", source="Vulpes vulpes").status_code == 400   # use Confirmed for that one
+
+
+def test_confirming_from_another_photo_marks_an_existing_observation_of_the_species(client, camtrap_dir, tmp_path):
+    sd = _two_species_session(client, camtrap_dir, tmp_path)
+    _cross(client, site="SITE_B", occ=1, media="m004", obs="o004", source="Vulpes vulpes")   # m004 already has a Sus observation
+    client.get("/api/results")
+    obs = _verified_observations(sd)
+    boar = obs[(obs["mediaID"] == "m004") & (obs["scientificName"] == "Sus scrofa")]
+    assert len(boar) == 1 and boar.iloc[0]["classificationMethod"] == "human" and boar.iloc[0]["observationID"] == "o004"
+
+
+def test_editing_a_species_drops_the_cross_confirmations_it_leaves_unconfirmed(client, camtrap_dir, tmp_path):
+    _two_species_session(client, camtrap_dir, tmp_path)
+    ev = client.get("/api/species/Sus_scrofa/events", params={"iteration": 1}).json()
+    client.post("/api/decisions", json={"species": "Sus_scrofa", "iteration": 1, "confirmed": []})
+    _cross(client, site="SITE_B", occ=1, media="m001", obs="o001")
+    assert client.get("/api/species").json()  # sanity
+    client.put("/api/species/Sus_scrofa/decisions", json={"confirmed_keys": []})
+    st = {s["scientificName"]: s["status"] for s in client.get("/api/cross", params={"site_id": "SITE_B", "occasion": 1}).json()["species"]}
+    assert st["Sus scrofa"] == "none" and ev
