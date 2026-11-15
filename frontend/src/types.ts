@@ -40,6 +40,8 @@ export interface WorkflowConfig {
   study_start: string
   study_end: string
   occasion_days: number
+  /** Occasion length in hours when shorter than a day; 0 or missing means use occasion_days. */
+  occasion_hours?: number
   total_iterations: number
   gap_seconds: number
   min_score: number

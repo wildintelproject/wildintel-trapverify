@@ -1468,3 +1468,32 @@ def test_event_frames_report_how_many_boxes_they_have(client, boxed_session):
     ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
     boxes = {f["obsId"]: f["boxes"] for e in ev for f in e["frames"]}
     assert boxes["o001"] == 1 and all(v == 0 for k, v in boxes.items() if k != "o001")
+
+
+# ─── occasions shorter than a day ─────────────────────────────────────────────
+
+def _hourly_setup(client, camtrap_dir, tmp_path, hours):
+    return client.post("/api/setup", json={
+        "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / "out"), "target_species": ["Vulpes vulpes"],
+        "study_start": "2025-11-02", "study_end": "2025-11-03", "occasion_days": 1, "occasion_hours": hours,
+        "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.0})
+
+
+def test_one_hour_session_skips_the_occupancy_fit_and_says_so(client, camtrap_dir, tmp_path):
+    r = _hourly_setup(client, camtrap_dir, tmp_path, 1)
+    assert r.status_code == 200
+    from pathlib import Path
+    occ = Path(r.json()["session_dir"]) / "occupancy_inputs"
+    assert (occ / "dethist_naive_Vulpes_vulpes.csv").exists()                       # histories are written
+    assert not (occ / "occupancy_fit.csv").exists()                                 # but no model is fitted
+    assert client.get("/api/results/occupancy").json() == []
+    assert client.get("/api/results").json()["occasion_hours"] == 1
+
+
+def test_day_session_still_fits_the_model_and_reports_no_hours(client, setup_session):
+    data = client.get("/api/results").json()
+    assert data["occasion_hours"] == 0
+
+
+def test_negative_occasion_hours_is_rejected(client, camtrap_dir, tmp_path):
+    assert _hourly_setup(client, camtrap_dir, tmp_path, -1).status_code == 422

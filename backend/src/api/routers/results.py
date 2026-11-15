@@ -36,6 +36,8 @@ def get_occupancy() -> list[dict]:
     Reads occupancy_fit.csv if it already exists; otherwise runs the fit on demand.
     """
     p = session_service.paths()
+    if (session_service.get_config() or {}).get("occasion_hours"):
+        return []                       # occasions shorter than a day: no occupancy fit (see the manual)
     fit_csv = p["occupancy_out"] / "occupancy_fit.csv"
 
     if fit_csv.exists():

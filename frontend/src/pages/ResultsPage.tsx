@@ -65,6 +65,7 @@ interface Results {
   min_score: number
   record_rejection_species: boolean
   review_idle_seconds: number
+  occasion_hours: number
   false_positive_sources: FalsePositiveRow[]
   datapackage_generated: boolean
   datapackage_fabricated_fields: string[]
@@ -545,6 +546,12 @@ export default function ResultsPage() {
             )}
           </div>
         </>
+      )}
+
+      {results.occasion_hours > 0 && (
+        <div className="mb-10 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" role="note">
+          {t('results.occupancy_skipped')}
+        </div>
       )}
 
       {/* Occupancy */}

@@ -32,7 +32,7 @@ export default function GalleryPage() {
 
   const [events, setEvents] = useState<DetectionEvent[]>([])
   const [spStats, setSpStats] = useState<{ species_name: string; n_total_combos: number; n_confirmed_combos: number; n_resolved: number } | null>(null)
-  const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; min_score: number } | null>(null)
+  const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; occasion_hours: number; min_score: number } | null>(null)
   const [iteration, setIteration] = useState(1)
   const [totalIterations, setTotalIterations] = useState(1)
   const [decisions, setDecisions] = useState<Record<string, Decision>>({})
@@ -99,7 +99,7 @@ export default function GalleryPage() {
       if (recording) {
         api.getTaxa().then((r) => setTaxa(Array.from(new Set([...r.taxa, ...r.extra])))).catch(() => {})
       }
-      if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, min_score: state.config.min_score })
+      if (state.config) setReviewParams({ gap_seconds: state.config.gap_seconds, occasion_days: state.config.occasion_days, occasion_hours: state.config.occasion_hours ?? 0, min_score: state.config.min_score })
 
       if (sp && sp.n_resolved >= sp.n_total_combos) {
         setCompleted(true)
@@ -400,9 +400,10 @@ export default function GalleryPage() {
           <p
             className="text-zinc-500 dark:text-zinc-400 text-sm mb-3"
             dangerouslySetInnerHTML={{
-              __html: t('gallery.intro_hint', {
+              __html: t(reviewParams.occasion_hours > 0 ? 'gallery.intro_hint_hours' : 'gallery.intro_hint', {
                 gap: reviewParams.gap_seconds,
                 days: reviewParams.occasion_days,
+                count: reviewParams.occasion_hours > 0 ? reviewParams.occasion_hours : undefined,
                 minScore: reviewParams.min_score,
                 species: spStats?.species_name ?? species?.replace(/_/g, ' '),
               }),

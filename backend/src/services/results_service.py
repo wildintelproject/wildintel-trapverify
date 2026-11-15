@@ -179,6 +179,7 @@ def compute_results() -> dict:
         "seq_unverified":  int(s_counts.get("unverified", 0)),
         "by_species_seqs": by_species_seqs,
         "effort_by_species": effort_by_species,
+        "occasion_hours": int((session_service.get_config() or {}).get("occasion_hours", 0) or 0),
         "review_idle_seconds": int((session_service.get_config() or {}).get("review_idle_seconds", 120)),
         "record_rejection_species": bool((session_service.get_config() or {}).get("record_rejection_species", False)),
         "false_positive_sources": false_positive_sources,

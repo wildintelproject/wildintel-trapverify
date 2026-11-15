@@ -13,7 +13,7 @@
 
 ## Sampling occasion and detection event construction
 
-- **Configurable sampling occasions** — divides the study window into fixed-length windows (`occasion_days`, default 5 days) per deployment. The number of occasions adapts automatically to the study duration.
+- **Configurable sampling occasions** — divides the study window into fixed-length windows (`occasion_days`, default 5 days; or `occasion_hours` for occasions shorter than a day, e.g. 1 h for activity patterns, in which case camera operation is given in hours and the occupancy estimate is not computed) per deployment. The number of occasions adapts automatically to the study duration.
 - **Detection event grouping** — consecutive frames at the same location separated by less than `gap_seconds` (default 60 s) are grouped into a single reviewable detection event.
 - **Confidence ranking** — within each site × occasion × species cell, detection events are ranked by the maximum `classificationProbability` across their frames, so round 1 always shows the most likely true detection. Events with the same score (all of them when no photo has a score) are shown in a seeded random order (`random_seed`, default 42), so the order is reproducible and not chronological.
 - **Score filtering** — frames below `min_score` (default 0.5) are excluded from the candidate manifest, avoiding the lowest-confidence noise.

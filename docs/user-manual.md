@@ -303,7 +303,7 @@ These control how the data is segmented into reviewable units.
 
 | Parameter | Default | Description |
 |---|---|---|
-| **Sampling occasion duration (days)** | 5 | Groups images at a location into windows of N days. The number of occasions adapts automatically to the study duration. |
+| **Sampling occasion duration** (days or hours) | 5 days | Groups images at a location into consecutive windows of N days, or of N **hours** if you choose *Hours* (for example 1 hour, for activity patterns). The windows start at 00:00 of the first day of the study; the last one is shorter if the study period is not a multiple of the window. The number of occasions adapts automatically to the study duration. See [Occasions shorter than a day](#occasions-shorter-than-a-day). |
 | **Gap between detection events (seconds)** | 60 | Images less than N seconds apart at the same site belong to the same detection event. |
 | **Minimum detection score** | 0.5 | Detections scoring **below** this threshold are excluded from the candidate set (a score equal to the threshold is kept, and a photo with no score is never excluded). See [When to use a minimum score](#when-to-use-a-minimum-score). |
 | **Random seed for tied detection events** | 42 | Detection events with the same score in a cell (all of them when the photos have no score) are shown in a pseudo-random order, not by date. The seed makes that order reproducible: the same data and seed always give the same order. It is stored in `config.json`; record it when you report your results. |
@@ -349,7 +349,7 @@ An information panel at the top shows the session parameters:
 *Info panel showing overall progress, the study period and the sampling occasion length.*
 
 - **Overall progress** — how many sampling occasions have been reviewed out of the total, how many are confirmed, and the percentage complete.
-- **Study period and sampling occasion length** — the date range being reviewed and the N-day window each sampling occasion spans.
+- **Study period and sampling occasion length** — the date range being reviewed and the N-day (or N-hour) window each sampling occasion spans.
 - **← Back** — return to the Welcome Screen.
 - **See results** — navigate to the Results page (only active when all species are complete).
 
@@ -572,7 +572,7 @@ Each session is saved in a timestamped subfolder inside the output directory (e.
 
 | File | Description |
 |---|---|
-| `camera_operation.csv` | Camera operation matrix (sites × sampling occasions). |
+| `camera_operation.csv` | Camera operation matrix (sites × sampling occasions): days of operation per occasion, or **hours** of operation when the occasions are in hours. |
 | `dethist_naive_{sp}.csv` | Naive detection history per species (AI detections, not human-validated). One file per species. |
 | `dethist_verified_{sp}.csv` | Verified detection history per species (confirmed by expert). One file per species. |
 | `verification_summary.csv` | Per-species summary: confirmed, rejected and unreviewed counts. |
@@ -600,11 +600,21 @@ CamTrap Verify reads photos only; it does not open video files, and classifiers 
 
 Whether the tool will later read video directly depends on how common reliable video classifiers become; there is no plan at the moment.
 
+### Occasions shorter than a day
+
+In the setup you can give the sampling occasion length in **hours** instead of days. The main use is **activity patterns**: with occasions of 1 hour, the review confirms, for every species, location and hour, whether the species was really detected, so the verified detection histories say *when* during the day each species is active.
+
+- The windows start at 00:00 of the first day, so 1-hour occasions are the clock hours (00:00–01:00, 01:00–02:00, ...). The last window is shorter when the study period is not a multiple of the window.
+- `camera_operation.csv` then gives the **hours** each camera was working in each window (any operation inside the window counts as one hour, as any operation counts as one day with day occasions). The start and end of each deployment are used to the minute when they include a time; a date without a time covers the whole day. An occasion with the camera off is **NA** in the detection histories, not 0, as with days.
+- The **occupancy estimate is not computed**: occupancy and detection probability are not meaningful when the "occasions" are hours of the same day, so Results shows a notice instead of the table. Only the detection histories (`dethist_naive_*.csv`, `dethist_verified_*.csv`) are meant to be used, for activity analyses.
+- What the data represent is still *one verified record per species, location and sampling window*: the highest-scoring events of each hour are reviewed until one is confirmed. Use them for **when** a species is active, not for **how many** animals or events there were. As always, an animal that the classifier missed is not recovered (see [Missed detections are not corrected](#missed-detections-are-not-corrected)).
+- Sessions made before this option existed only have a number of days and work as before.
+
 ### Analyses other than occupancy
 
 The outputs are designed for **occupancy models**: a detection history per species and a camera-operation matrix (see [Output Files](#output-files)). Be careful with other uses:
 
-- **Only one detection event is verified per cell.** The review stops at the first event you confirm, so the verified data do not contain every detection. They cannot be used to count events or animals, or to describe daily activity patterns, because most detections are never looked at.
+- **Only one detection event is verified per cell.** The review stops at the first event you confirm, so the verified data do not contain every detection. They cannot be used to count events or animals, because most detections are never looked at. For **daily activity patterns**, use [occasions of one hour](#occasions-shorter-than-a-day), where each hour of each site has its own verified record.
 - **Abundance** methods that need every independent event (for example random-encounter models) or that need individuals to be told apart (spatial capture–recapture) are not supported.
 - **Time to first detection** needs the *earliest* detection in each period. The tool presents the highest-scoring event first, not the earliest, so a missed first detection is possible, and for this kind of analysis its effect is larger than for presence/absence, because the first detection itself is the measurement.
 

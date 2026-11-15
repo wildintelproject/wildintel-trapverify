@@ -16,7 +16,7 @@ export default function IndexPage() {
   const [species, setSpecies] = useState<SpeciesStats[]>([])
   const [sessionInfo, setSessionInfo] = useState<{
     start: string; end: string
-    occasion_days: number; gap_seconds: number; min_score: number
+    occasion_days: number; occasion_hours: number; gap_seconds: number; min_score: number
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,6 +29,7 @@ export default function IndexPage() {
           start: state.config.study_start,
           end: state.config.study_end,
           occasion_days: state.config.occasion_days,
+          occasion_hours: state.config.occasion_hours ?? 0,
           gap_seconds: state.config.gap_seconds,
           min_score: state.config.min_score,
         })
@@ -109,10 +110,11 @@ export default function IndexPage() {
         <p
           className="text-zinc-500 dark:text-zinc-400 mb-2 text-sm"
           dangerouslySetInnerHTML={{
-            __html: t('index.subtitle', {
+            __html: t(sessionInfo.occasion_hours > 0 ? 'index.subtitle_hours' : 'index.subtitle', {
               start: sessionInfo.start,
               end: sessionInfo.end,
               days: sessionInfo.occasion_days,
+              count: sessionInfo.occasion_hours > 0 ? sessionInfo.occasion_hours : undefined,
             }),
           }}
         />

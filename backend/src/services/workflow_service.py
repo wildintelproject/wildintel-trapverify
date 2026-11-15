@@ -58,7 +58,12 @@ def rebuild_outputs() -> None:
         idle_seconds=int(config.get("review_idle_seconds", 120)),
     )
     build_false_positive_sources(effort, p["decisions"], p["corrections"], p["occupancy_out"])
-    fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))
+    if config.get("occasion_hours"):
+        # With occasions shorter than a day the detection histories are not suitable for an
+        # occupancy model, so the fit is not computed (see the manual).
+        logger.info("Occasions of %s h: occupancy fit skipped", config["occasion_hours"])
+    else:
+        fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))
     logger.info("Output files rebuilt successfully")
 
 
@@ -102,6 +107,7 @@ def run_setup(req: SetupRequest) -> dict:
         include_burst_context=req.include_burst_context,
         min_score=req.min_score,
         seed=req.random_seed,
+        occasion_hours=req.occasion_hours or None,
     )
 
     base_out = Path(req.output_dir) if req.output_dir else session_service.DEFAULT_OUTPUT_DIR
@@ -125,6 +131,7 @@ def run_setup(req: SetupRequest) -> dict:
         gap_seconds=req.gap_seconds,
         min_score=req.min_score,
         seed=req.random_seed,
+        occasion_hours=req.occasion_hours or None,
     ).to_csv(sd / "min_score_exclusions.csv", index=False)
 
     session_service.APP_DIR.mkdir(parents=True, exist_ok=True)
