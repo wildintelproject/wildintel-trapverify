@@ -25,6 +25,7 @@ const DEFAULT: WorkflowConfig = {
   extended_confirmation: false,
   record_rejection_species: false,
   review_idle_seconds: 120,
+  random_seed: 42,
 }
 
 const inputClass = 'w-full px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono'
@@ -1083,6 +1084,13 @@ export default function SetupPage({ onSetup, ready }: Props) {
               </span>
             </div>
             <p className={hintClass}>{t('setup.hint_min_score')}</p>
+          </div>
+
+          <div className="mb-6">
+            <label className={labelClass}>{t('setup.label_random_seed')}</label>
+            <input type="number" className={inputClass} step={1} value={form.random_seed}
+              onChange={(e) => set('random_seed', Math.trunc(Number(e.target.value)) || 0)} />
+            <p className={hintClass}>{t('setup.hint_random_seed')}</p>
           </div>
 
           {/* ── Confirmation parameters ── */}

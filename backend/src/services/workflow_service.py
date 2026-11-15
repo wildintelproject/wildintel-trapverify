@@ -101,6 +101,7 @@ def run_setup(req: SetupRequest) -> dict:
         gap_seconds=req.gap_seconds,
         include_burst_context=req.include_burst_context,
         min_score=req.min_score,
+        seed=req.random_seed,
     )
 
     base_out = Path(req.output_dir) if req.output_dir else session_service.DEFAULT_OUTPUT_DIR
@@ -123,6 +124,7 @@ def run_setup(req: SetupRequest) -> dict:
         total_iterations=req.total_iterations,
         gap_seconds=req.gap_seconds,
         min_score=req.min_score,
+        seed=req.random_seed,
     ).to_csv(sd / "min_score_exclusions.csv", index=False)
 
     session_service.APP_DIR.mkdir(parents=True, exist_ok=True)

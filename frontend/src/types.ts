@@ -46,6 +46,7 @@ export interface WorkflowConfig {
   extended_confirmation: boolean
   record_rejection_species: boolean
   review_idle_seconds: number
+  random_seed: number
 }
 
 export type Decision = 'confirmed' | 'rejected' | null
