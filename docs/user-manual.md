@@ -530,6 +530,8 @@ The table has four estimates per species, each with its 95 % confidence interval
 
 **Confidence intervals.** Each 95 % interval is a *Wald interval on the logit scale*: the estimate on the logit scale plus or minus 1.96 times its standard error, converted back to a probability. This is why the intervals are not symmetric around the estimate and never go outside 0–1. The standard error comes from the curvature of the likelihood at its maximum (the inverse of the observed information, computed numerically). It is the same kind of interval as the default `confint()` of the R package `unmarked`; it is *not* a profile-likelihood interval and it does not use the delta method on the probability scale. Wald intervals can be unreliable with few sites or when an estimate is close to 0 or 1.
 
+When the data do not allow a standard error to be computed (the curvature of the likelihood is flat or ill-defined, typical when ψ is estimated at the edge of 0–1), the table shows the estimate **without** an interval rather than inventing one; in `occupancy_fit.csv` the `_lo` and `_hi` cells are then empty.
+
 **"Degenerate" estimates.** When the data cannot support the model, the table shows *Degenerate* instead of a ψ value: when there are no detections at all or only detections, when the fit does not converge, when ψ is essentially 0 or 1, or when the interval for ψ is wider than 0.9. In those cases report the result at the level of detections (confirmed detection events or cells) rather than as an occupancy estimate. The implementation is in `backend/src/occupancy_model.py`.
 
 ### Output Files
