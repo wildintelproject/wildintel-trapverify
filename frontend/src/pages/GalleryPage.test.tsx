@@ -136,4 +136,52 @@ describe('GalleryPage', () => {
     await screen.findByText('Round 1')
     expect(screen.queryByRole('button', { name: /Back to round/ })).toBeNull()
   })
+
+  describe('large view', () => {
+    const open = async () => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      api.getEvents.mockResolvedValue([event('a', 2), event('b', 2), event('c', 2)])
+      renderGallery()
+      await userEvent.click(await screen.findByRole('button', { name: 'Large view' }))
+      return await screen.findByTestId('lb-panel')
+    }
+
+    it('shows the progress of the round, the location and the species beside the photo', async () => {
+      const panel = await open()
+      expect(panel).toHaveTextContent('Round 2')
+      expect(panel).toHaveTextContent('0 of 3 cards decided')
+      expect(panel).toHaveTextContent('Location S1: 0 of 3')
+      expect(panel).toHaveTextContent('2 of 4 occasions resolved before this round')
+    })
+
+    it('moves to the next card after a decision and goes back with Backspace, keeping the decision', async () => {
+      await open()
+      const panel = () => screen.getByTestId('lb-panel')                   // the lightbox remounts per card
+      await userEvent.keyboard('y')
+      await waitFor(() => expect(panel()).toHaveTextContent('1 of 3 cards decided'))
+      const prev = screen.getByRole('button', { name: /Previous card/ })
+      expect(prev).toBeEnabled()
+      await userEvent.keyboard('{Backspace}')
+      // back on the card just decided, which still shows as confirmed
+      const confirm = screen.getAllByRole('button', { name: /Confirmed/ }).find((b) => b.className.includes('bg-emerald-600'))
+      expect(confirm).toBeTruthy()
+      expect(panel()).toHaveTextContent('1 of 3 cards decided')               // nothing was undone
+    })
+
+    it('has nothing to go back to on the first card', async () => {
+      await open()
+      expect(screen.getByRole('button', { name: /Previous card/ })).toBeDisabled()
+    })
+
+    it('uses the strip at the bottom on a narrow screen', async () => {
+      Object.defineProperty(window, 'innerWidth', { value: 500, configurable: true })
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      api.getEvents.mockResolvedValue([event('a', 2), event('b', 2)])
+      renderGallery()
+      await userEvent.click(await screen.findByRole('button', { name: 'Large view' }))
+      expect(await screen.findByRole('button', { name: 'Previous card' })).toBeInTheDocument()
+      expect(screen.queryByTestId('lb-panel')).toBeNull()
+      Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true })
+    })
+  })
 })
