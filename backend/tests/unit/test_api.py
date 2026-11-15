@@ -1788,3 +1788,158 @@ def test_sessions_saved_before_names_existed_still_list(client, setup_session):
     data.pop("session_name", None)
     cfg.write_text(json.dumps(data))
     assert client.get("/api/session/recent").json()[0]["session_name"] == ""
+
+
+# ─── Session export / import / relink ─────────────────────────────────────────
+
+@pytest.fixture
+def import_root(monkeypatch, tmp_path):
+    import services.session_service as ss
+    root = tmp_path / "imports"
+    root.mkdir()
+    monkeypatch.setattr(ss, "DEFAULT_OUTPUT_DIR", root)
+    return root
+
+
+@pytest.fixture(autouse=False)
+def photos(camtrap_dir):
+    """The fixture's photos (img/frameN.jpg next to the CamtrapDP), so image links resolve."""
+    (camtrap_dir / "img").mkdir(exist_ok=True)
+    for i in range(5):
+        (camtrap_dir / "img" / f"frame{i}.jpg").write_bytes(b"\xff\xd8\xff\xe0")
+
+
+def _export_to(client, tmp_path, name="exp.zip"):
+    r = client.get("/api/session/export")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    zp = tmp_path / name
+    zp.write_bytes(r.content)
+    return zp
+
+
+def test_setup_stores_the_dataset_fingerprint(client, setup_session):
+    fp = client.get("/api/state").json()["config"]["dataset_fingerprint"]
+    assert isinstance(fp, str) and len(fp) == 40
+
+
+def test_export_contains_only_review_state(client, setup_session, tmp_path):
+    import zipfile
+    sd = __import__("pathlib").Path(setup_session["session_dir"])
+    (sd / "decisions").mkdir(exist_ok=True)
+    (sd / "decisions" / "decisions_x_iter1.csv").write_text("a\n1\n")
+    (sd / "secret.txt").write_text("no")
+    names = set(zipfile.ZipFile(_export_to(client, tmp_path)).namelist())
+    assert {"config.json", "candidate_manifest.csv", "decisions/decisions_x_iter1.csv"} <= names
+    assert "secret.txt" not in names
+
+
+def test_export_without_session_is_an_error(client):
+    assert client.get("/api/session/export").status_code == 400
+
+
+def test_import_opens_the_session_in_a_new_folder(client, setup_session, tmp_path, import_root):
+    from pathlib import Path
+    sd = Path(setup_session["session_dir"])
+    (sd / "decisions").mkdir(exist_ok=True)
+    (sd / "decisions" / "decisions_x_iter1.csv").write_text("a\n1\n")
+    zp = _export_to(client, tmp_path)
+    r = client.post("/api/session/import", json={"zip_path": str(zp)})
+    assert r.status_code == 200
+    dest = Path(r.json()["session_dir"])
+    assert dest.parent == import_root and dest != sd
+    assert (dest / "decisions" / "decisions_x_iter1.csv").read_text() == "a\n1\n"
+    cfg = r.json()["config"]
+    assert cfg["session_dir"] == str(dest) and cfg["output_dir"] == str(dest / "camtrap_dp_verified")
+    assert client.get("/api/state").json()["session_dir"] == str(dest)
+
+
+def test_import_ignores_unsafe_members(client, tmp_path, import_root):
+    import zipfile
+    zp = tmp_path / "evil.zip"
+    with zipfile.ZipFile(zp, "w") as zf:
+        zf.writestr("config.json", "{}")
+        zf.writestr("candidate_manifest.csv", "mediaID\n")
+        zf.writestr("../escape.csv", "x")
+        zf.writestr("/abs.json", "x")
+        zf.writestr("decisions/../../up.csv", "x")
+        zf.writestr("C:/win.json", "x")
+        zf.writestr("other.txt", "x")
+    from services import session_transfer
+    dest = session_transfer.import_zip(str(zp))
+    assert sorted(p.name for p in dest.rglob("*") if p.is_file()) == ["candidate_manifest.csv", "config.json"]
+    assert not (import_root.parent / "escape.csv").exists()
+
+
+def test_import_rejects_non_sessions(client, tmp_path, import_root):
+    import zipfile
+    bad = tmp_path / "bad.zip"
+    bad.write_text("not a zip")
+    assert client.post("/api/session/import", json={"zip_path": str(bad)}).status_code == 400
+    nocfg = tmp_path / "nocfg.zip"
+    with zipfile.ZipFile(nocfg, "w") as zf:
+        zf.writestr("review_log.csv", "x")
+    assert client.post("/api/session/import", json={"zip_path": str(nocfg)}).status_code == 400
+    assert client.post("/api/session/import", json={"zip_path": str(tmp_path / "missing.zip")}).status_code == 400
+
+
+def _break_link(sd, new_dir):
+    import json
+    cfg = sd / "config.json"
+    data = json.loads(cfg.read_text())
+    data["camtrap_dir"] = str(new_dir)
+    cfg.write_text(json.dumps(data))
+
+
+def test_state_reports_relink_ok_for_a_healthy_session(client, setup_session, photos):
+    rl = client.get("/api/state").json()["relink"]
+    assert rl["camtrap_dir_ok"] and not rl["needs_relink"]
+
+
+def test_relink_needed_when_data_folder_is_missing(client, setup_session, tmp_path):
+    from pathlib import Path
+    _break_link(Path(setup_session["session_dir"]), tmp_path / "gone")
+    client.post("/api/session/load", json={"session_dir": setup_session["session_dir"]})
+    assert client.get("/api/state").json()["relink"]["needs_relink"] is True
+
+
+def test_relink_endpoint_repoints_the_session(client, setup_session, camtrap_dir, tmp_path, photos):
+    from pathlib import Path
+    sd = Path(setup_session["session_dir"])
+    _break_link(sd, tmp_path / "gone")
+    client.post("/api/session/load", json={"session_dir": str(sd)})
+    r = client.post("/api/session/relink", json={"camtrap_dir": str(camtrap_dir)})
+    assert r.status_code == 200 and r.json()["relink"]["needs_relink"] is False
+    import json
+    assert json.loads((sd / "config.json").read_text())["camtrap_dir"] == str(camtrap_dir)
+
+
+def test_relink_refuses_a_different_dataset(client, setup_session, camtrap_dir, tmp_path):
+    import shutil
+    other = tmp_path / "other"
+    shutil.copytree(camtrap_dir, other)
+    dep = next(other.glob("deployments*"))
+    dep.write_text(dep.read_text() + "\n")
+    r = client.post("/api/session/relink", json={"camtrap_dir": str(other)})
+    assert r.status_code == 400
+    assert client.post("/api/session/relink", json={"camtrap_dir": str(tmp_path / "nope")}).status_code == 400
+
+
+def test_import_auto_relinks_when_the_dataset_is_known_locally(client, setup_session, tmp_path, import_root, photos):
+    import json
+    from pathlib import Path
+    zp = _export_to(client, tmp_path)
+    # Simulate another computer: the exported config points to a path that does not exist here.
+    import zipfile
+    moved = tmp_path / "moved.zip"
+    with zipfile.ZipFile(zp) as zin, zipfile.ZipFile(moved, "w") as zout:
+        for n in zin.namelist():
+            data = zin.read(n)
+            if n == "config.json":
+                cfg = json.loads(data)
+                cfg["camtrap_dir"] = "/other/computer/data"
+                data = json.dumps(cfg).encode()
+            zout.writestr(n, data)
+    r = client.post("/api/session/import", json={"zip_path": str(moved)})
+    assert r.status_code == 200
+    assert r.json()["relink"]["needs_relink"] is False
+    assert r.json()["config"]["camtrap_dir"] == json.loads((Path(setup_session["session_dir"]) / "config.json").read_text())["camtrap_dir"]

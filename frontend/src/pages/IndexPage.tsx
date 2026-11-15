@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api'
-import type { SpeciesStats } from '../types'
+import RelinkDialog from '../components/RelinkDialog'
+import type { RelinkStatus, SpeciesStats } from '../types'
+import { downloadFromServer } from '../utils/download'
 import { isPermissionDenied } from '../utils/imageError'
 
 function Spinner() {
@@ -20,6 +22,10 @@ export default function IndexPage() {
     occasion_days: number; occasion_hours: number; gap_seconds: number; min_score: number
   } | null>(null)
   const [sessionName, setSessionName] = useState('')
+  const [relink, setRelink] = useState<RelinkStatus | null>(null)
+  const [relinkOpen, setRelinkOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,6 +33,7 @@ export default function IndexPage() {
     Promise.all([api.getSpecies(), api.getState()])
       .then(([sp, state]) => {
         setSpecies(sp)
+        setRelink(state.relink ?? null)
         if (state.config) {
           setSessionName(state.config.session_name ?? '')
           setSessionInfo({
@@ -68,7 +75,33 @@ export default function IndexPage() {
         <span className="text-zinc-500 dark:text-zinc-400 flex-shrink-0">{t('session_name.session')}</span>
         <SessionNameEditor sessionDir="" name={sessionName} fallback={t('session_name.none')}
           onRenamed={setSessionName} className="text-zinc-800 dark:text-zinc-200 font-medium" />
+        <button
+          className="ml-auto px-3 py-1 text-xs border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+          title={t('transfer.export_hint')}
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true); setExportError(null)
+            try { await downloadFromServer('/api/session/export', 'session.zip') }
+            catch (e) { setExportError(e instanceof Error ? e.message : String(e)) }
+            finally { setExporting(false) }
+          }}
+        >
+          {t('transfer.export')}
+        </button>
       </div>
+      {exportError && (
+        <div className="mb-2 px-3 py-2 rounded bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{exportError}</div>
+      )}
+      {relink?.needs_relink && (
+        <div className="mb-3 px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm flex flex-wrap items-center gap-3">
+          <span className="flex-1 min-w-0">
+            {relink.camtrap_dir_ok ? t('relink.banner_images') : t('relink.banner_data')}
+          </span>
+          <button className="px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700" onClick={() => setRelinkOpen(true)}>
+            {t('relink.open')}
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-baseline gap-3">
           <h2 className="text-2xl font-semibold mb-0">{t('index.title')}</h2>
@@ -197,6 +230,14 @@ export default function IndexPage() {
           )
         })}
       </div>
+
+      {relinkOpen && relink && (
+        <RelinkDialog
+          status={relink}
+          onClose={() => setRelinkOpen(false)}
+          onDone={(status) => { setRelink(status); setRelinkOpen(false) }}
+        />
+      )}
 
       {species.length === 0 && (
         <div className="mt-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">

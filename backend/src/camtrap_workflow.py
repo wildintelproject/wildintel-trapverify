@@ -509,6 +509,24 @@ def _by_deployment_folder(image_base_dir: str, deployment_id: str, file_name: st
     return None
 
 
+def dataset_fingerprint(camtrap_dir: Path) -> Optional[str]:
+    """Content hash of a CamtrapDP's deployments table, or None if it cannot be read.
+
+    It identifies "the same dataset" across computers regardless of where it is stored, so a
+    session imported from another computer can find the data folder automatically when this
+    computer already used the same dataset in another session.
+    """
+    import hashlib
+
+    dep = resolve_camtrapdp_resource(Path(camtrap_dir), "deployments")
+    if dep is None:
+        return None
+    try:
+        return hashlib.sha1(dep.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def media_extra_bases(camtrap_dir: str, image_base_dir: str) -> tuple[Path, ...]:
     """Folders also searched by the end of ``filePath`` when a photo is not under the images folder.
 

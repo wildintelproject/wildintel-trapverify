@@ -5,6 +5,7 @@ import { api } from '../api'
 import type { OccupancyRow } from '../types'
 import { formatP, formatPsi } from '../utils/occupancy'
 import { anyCutoff } from '../utils/minScore'
+import { downloadFromServer } from '../utils/download'
 
 interface SpeciesRow {
   species: string
@@ -100,18 +101,7 @@ export default function ResultsPage() {
   async function handleDownload() {
     setDownloading(true)
     try {
-      const res = await fetch('/api/results/download')
-      if (!res.ok) throw new Error(await res.text())
-      const blob = await res.blob()
-      const cd = res.headers.get('content-disposition') ?? ''
-      const match = cd.match(/filename="?([^"]+)"?/)
-      const filename = match ? match[1] : 'results.zip'
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
+      await downloadFromServer('/api/results/download', 'results.zip')
     } catch (e) {
       console.error('Download failed', e)
     } finally {

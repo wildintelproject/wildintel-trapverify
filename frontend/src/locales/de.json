@@ -357,5 +357,27 @@
     "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Alle Rechte vorbehalten.",
     "website": "WildINTEL-Website",
     "github": "GitHub-Repository"
+  },
+  "relink": {
+    "title": "Wo liegen die Daten auf diesem Computer?",
+    "desc": "Diese Sitzung wurde auf einem anderen Computer erstellt oder die Ordner wurden verschoben. Gib hier Daten und Fotos an; deine Entscheidungen bleiben erhalten.",
+    "data_dir": "CamtrapDP-Ordner",
+    "images_dir": "Fotoordner (optional)",
+    "images_placeholder": "Leer lassen, wenn die Fotos neben den Daten liegen",
+    "was": "Vorher: {{path}}",
+    "browse": "Durchsuchen…",
+    "flat_search": "Fotos im ganzen Ordner nach Dateiname suchen",
+    "later": "Später",
+    "save": "Ordner verknüpfen",
+    "saving": "Verknüpfe…",
+    "open": "Verknüpfung beheben",
+    "banner_data": "Der Datenordner dieser Sitzung wurde auf diesem Computer nicht gefunden.",
+    "banner_images": "Die Fotos dieser Sitzung wurden auf diesem Computer nicht gefunden."
+  },
+  "transfer": {
+    "export": "Sitzung exportieren",
+    "export_hint": "Diese Sitzung als ZIP herunterladen, um sie auf einem anderen Computer fortzusetzen (nur Entscheidungen, keine Fotos)",
+    "import": "Sitzung importieren…",
+    "import_title": "ZIP einer Sitzung wählen"
   }
 }

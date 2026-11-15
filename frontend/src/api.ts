@@ -1,4 +1,4 @@
-import type { DetectionEvent, OccupancyRow, RecentSession, SpeciesStats, WorkflowConfig } from './types'
+import type { DetectionEvent, OccupancyRow, RecentSession, RelinkStatus, SpeciesStats, WorkflowConfig } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch(url, options)
@@ -29,7 +29,7 @@ function put<T>(url: string, body: unknown): Promise<T> {
 
 export const api = {
   getState: () =>
-    req<{ ready: boolean; config?: WorkflowConfig; default_output_dir?: string }>('/api/state'),
+    req<{ ready: boolean; config?: WorkflowConfig; default_output_dir?: string; relink?: RelinkStatus }>('/api/state'),
 
   setup: (config: WorkflowConfig) =>
     post<{ ok: boolean; n_candidates: number; n_combos: number }>('/api/setup', config),
@@ -105,7 +105,15 @@ export const api = {
     req<OccupancyRow[]>('/api/results/occupancy'),
 
   loadSession: (session_dir: string) =>
-    post<{ ok: boolean; session_dir: string; config: unknown }>('/api/session/load', { session_dir }),
+    post<{ ok: boolean; session_dir: string; config: unknown; relink: RelinkStatus }>('/api/session/load', { session_dir }),
+
+  importSession: (zipPath: string) =>
+    post<{ ok: boolean; session_dir: string; relink: RelinkStatus }>('/api/session/import', { zip_path: zipPath }),
+
+  relinkSession: (camtrapDir: string, imageBaseDir: string, flatSearch: boolean) =>
+    post<{ ok: boolean; relink: RelinkStatus }>('/api/session/relink', {
+      camtrap_dir: camtrapDir, image_base_dir: imageBaseDir, flat_search: flatSearch,
+    }),
 
   renameSession: (session_dir: string, name: string) =>
     put<{ session_dir: string; session_name: string }>('/api/session/name', { session_dir, name }),

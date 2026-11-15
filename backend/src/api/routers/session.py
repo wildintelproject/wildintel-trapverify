@@ -2,9 +2,13 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 
-from schemas.requests import LoadSessionRequest, RenameSessionRequest, SetupRequest
-from services import session_service, workflow_service
+from camtrap_workflow import dataset_fingerprint
+from schemas.requests import (
+    ImportSessionRequest, LoadSessionRequest, RelinkRequest, RenameSessionRequest, SetupRequest,
+)
+from services import session_service, session_transfer, workflow_service
 
 router = APIRouter(prefix="/api", tags=["session"])
 logger = logging.getLogger(__name__)
@@ -24,6 +28,7 @@ def get_state() -> dict:
         "config": config,
         "default_output_dir": str(session_service.DEFAULT_OUTPUT_DIR),
         "session_dir": str(session_service.session_dir()),
+        "relink": session_service.relink_status(),
     }
 
 
@@ -48,11 +53,58 @@ def load_session(req: LoadSessionRequest) -> dict:
         logger.warning("Session directory not found: %s", sd)
         raise HTTPException(400, f"Directorio no encontrado: {sd}")
     session_service.load_from_dir(sd)
+    relink = session_service.auto_relink()
     return {
         "ok": True,
         "session_dir": str(sd),
         "config": session_service.get_config(),
+        "relink": relink,
     }
+
+
+@router.get("/session/export")
+def export_session() -> Response:
+    """Download the active session as a ZIP (review state only, no photos)."""
+    sd = session_service.session_dir()
+    if sd is None:
+        raise HTTPException(400, "No hay sesión activa.")
+    name = session_service.clean_session_name((session_service.get_config() or {}).get("session_name")) or sd.name
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in name) or "session"
+    return Response(
+        session_transfer.export_zip(sd),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{safe}.zip"'},
+    )
+
+
+@router.post("/session/import")
+def import_session(req: ImportSessionRequest) -> dict:
+    """Import a session ZIP exported on another computer and open it."""
+    dest = session_transfer.import_zip(req.zip_path)
+    session_service.load_from_dir(dest)
+    relink = session_service.auto_relink()
+    return {"ok": True, "session_dir": str(dest), "config": session_service.get_config(), "relink": relink}
+
+
+@router.post("/session/relink")
+def relink_session(req: RelinkRequest) -> dict:
+    """Point the active session at its data/image folders on this computer."""
+    config = session_service.get_config()
+    if config is None:
+        raise HTTPException(400, "No hay sesión activa.")
+    camtrap_dir = Path(req.camtrap_dir)
+    if not camtrap_dir.is_dir():
+        raise HTTPException(400, f"Directorio no encontrado: {camtrap_dir}")
+    if req.image_base_dir and not Path(req.image_base_dir).is_dir():
+        raise HTTPException(400, f"Directorio de imágenes no encontrado: {req.image_base_dir}")
+    expected = config.get("dataset_fingerprint")
+    actual = dataset_fingerprint(camtrap_dir)
+    if actual is None:
+        raise HTTPException(400, "La carpeta no contiene un CamtrapDP válido (falta deployments).")
+    if expected and actual != expected:
+        raise HTTPException(400, "Esa carpeta contiene un dataset distinto al de la sesión (las deployments no coinciden).")
+    session_service.update_paths(str(camtrap_dir), req.image_base_dir, req.flat_search)
+    return {"ok": True, "relink": session_service.relink_status()}
 
 
 @router.post("/setup")

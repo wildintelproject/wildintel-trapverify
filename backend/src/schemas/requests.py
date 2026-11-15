@@ -60,6 +60,16 @@ class LoadSessionRequest(BaseModel):
     session_dir: str
 
 
+class ImportSessionRequest(BaseModel):
+    zip_path: str
+
+
+class RelinkRequest(BaseModel):
+    camtrap_dir: str
+    image_base_dir: str = ""
+    flat_search: bool = False
+
+
 class RenameSessionRequest(BaseModel):
     session_dir: str = ""          # empty: the active session
     name: str = Field("", max_length=120)
