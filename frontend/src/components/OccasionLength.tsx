@@ -24,7 +24,7 @@ export default function OccasionLength({ id, days, hours, disabled, inputClass, 
     <div className="flex gap-2">
       <input id={id} type="number" min={1} className={inputClass} value={value} disabled={disabled}
         onChange={(e) => {
-          const n = Math.max(1, Number(e.target.value) || 1)
+          const n = Math.max(1, Math.trunc(Number(e.target.value)) || 1)
           if (inHours) onChange(days, n)
           else onChange(n, 0)
         }} />

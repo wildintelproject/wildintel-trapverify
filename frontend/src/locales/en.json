@@ -105,8 +105,6 @@
     "label_occasion_days": "Duration of each sampling occasion in days",
     "hint_occasion_days": "A sampling occasion groups images taken at a location within a window of N days.",
     "label_occasion_length": "Duration of each sampling occasion",
-    "unit_days": "Days",
-    "unit_hours": "Hours",
     "hint_occasion_hours": "Hours: a sampling occasion groups images taken at a location within a window of N hours (for example 1 for activity patterns). Detection histories and camera operation are then given per hour.",
     "warn_occasion_hours": "With occasions shorter than a day the occupancy estimate is not computed (it is not meaningful at this resolution); the detection histories are written for other analyses, such as activity patterns.",
     "label_gap": "Gap between detection events (seconds)",

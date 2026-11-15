@@ -105,8 +105,6 @@
     "label_occasion_days": "Czas trwania każdej okazji próbkowania w dniach",
     "hint_occasion_days": "Okazja próbkowania grupuje zdjęcia wykonane w danej lokalizacji w oknie N dni.",
     "label_occasion_length": "Czas trwania każdej okazji próbkowania",
-    "unit_days": "Dni",
-    "unit_hours": "Godziny",
     "hint_occasion_hours": "Godziny: okazja próbkowania grupuje zdjęcia wykonane w danej lokalizacji w oknie N godzin (na przykład 1 dla wzorców aktywności). Historie detekcji i praca kamer są wtedy podawane na godzinę.",
     "warn_occasion_hours": "Przy okazjach krótszych niż doba nie liczy się oszacowania zajętości (przy tej rozdzielczości nie ma sensu); historie detekcji są zapisywane do innych analiz, np. wzorców aktywności.",
     "label_gap": "Przerwa między zdarzeniami detekcji (sekundy)",

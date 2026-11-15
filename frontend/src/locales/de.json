@@ -105,8 +105,6 @@
     "label_occasion_days": "Dauer jedes Stichprobenanlasses in Tagen",
     "hint_occasion_days": "Ein Stichprobenanlass gruppiert Bilder eines Standorts innerhalb eines N-Tage-Fensters.",
     "label_occasion_length": "Dauer jedes Stichprobenanlasses",
-    "unit_days": "Tage",
-    "unit_hours": "Stunden",
     "hint_occasion_hours": "Stunden: Ein Stichprobenanlass gruppiert Bilder eines Standorts innerhalb eines Fensters von N Stunden (zum Beispiel 1 für Aktivitätsmuster). Nachweishistorien und Kamerabetrieb werden dann pro Stunde angegeben.",
     "warn_occasion_hours": "Bei Stichprobenanlässen unter einem Tag wird keine Besetzungsschätzung berechnet (bei dieser Auflösung nicht aussagekräftig); die Nachweishistorien werden für andere Analysen geschrieben, etwa Aktivitätsmuster.",
     "label_gap": "Pause zwischen Detektionsereignissen (Sekunden)",

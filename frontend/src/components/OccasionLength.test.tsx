@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from '../i18n'
 import OccasionLength from './OccasionLength'
@@ -20,6 +20,16 @@ describe('OccasionLength', () => {
     expect(screen.getByRole('spinbutton')).toHaveValue(1)
     await user.selectOptions(screen.getByRole('combobox'), 'days')
     expect(onChange).toHaveBeenLastCalledWith(5, 0)
+  })
+
+  it('only accepts whole numbers of at least 1 (the API takes integers)', async () => {
+    await i18n.changeLanguage('en')
+    const onChange = vi.fn()
+    render(<OccasionLength id="o" days={5} hours={0} inputClass="" onChange={onChange} />)
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2.7' } })
+    expect(onChange).toHaveBeenLastCalledWith(2, 0)
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '0' } })
+    expect(onChange).toHaveBeenLastCalledWith(1, 0)
   })
 
   it('writes the duration in words, with plurals', async () => {

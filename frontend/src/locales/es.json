@@ -105,8 +105,6 @@
     "label_occasion_days": "Duración de cada ocasión de muestreo en días",
     "hint_occasion_days": "Una ocasión de muestreo agrupa las imágenes tomadas en una localización dentro de una ventana de N días.",
     "label_occasion_length": "Duración de cada ocasión de muestreo",
-    "unit_days": "Días",
-    "unit_hours": "Horas",
     "hint_occasion_hours": "Horas: una ocasión de muestreo agrupa las imágenes tomadas en una localización dentro de una ventana de N horas (por ejemplo 1 para patrones de actividad). Los historiales de detección y la operación de las cámaras se dan entonces por hora.",
     "warn_occasion_hours": "Con ocasiones más cortas que un día no se calcula la estimación de ocupación (no tiene sentido a esta resolución); los historiales de detección se escriben para otros análisis, como los patrones de actividad.",
     "label_gap": "Gap entre eventos de detección (segundos)",

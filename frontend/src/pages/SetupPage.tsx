@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import DirectoryPicker from '../components/DirectoryPicker'
 import MultiClassifierForm, { type McParams } from '../components/MultiClassifierForm'
+import OccasionLength from '../components/OccasionLength'
 import { occasionDuration } from '../utils/occasionDuration'
 import CsvImportForm from '../components/CsvImportForm'
 import RelinkDialog from '../components/RelinkDialog'
@@ -1225,21 +1226,9 @@ export default function SetupPage({ onSetup, ready }: Props) {
 
           {!mcLocked && (
           <div className="mb-6">
-            <label className={labelClass}>{t('setup.label_occasion_length')}</label>
-            <div className="flex gap-2">
-              <input type="number" className={inputClass} min={1}
-                value={hoursMode ? (form.occasion_hours ?? 1) : form.occasion_days}
-                onChange={(e) => {
-                  const n = Math.max(1, Math.trunc(Number(e.target.value)) || 1)
-                  set(hoursMode ? 'occasion_hours' : 'occasion_days', n)
-                }} />
-              <select className={inputClass} style={{ width: 'auto' }} aria-label={t('setup.label_occasion_length')}
-                value={hoursMode ? 'hours' : 'days'}
-                onChange={(e) => set('occasion_hours', e.target.value === 'hours' ? 1 : 0)}>
-                <option value="days">{t('setup.unit_days')}</option>
-                <option value="hours">{t('setup.unit_hours')}</option>
-              </select>
-            </div>
+            <label htmlFor="setup-occ" className={labelClass}>{t('setup.label_occasion_length')}</label>
+            <OccasionLength id="setup-occ" days={form.occasion_days} hours={form.occasion_hours} inputClass={inputClass}
+              onChange={(d, h) => setForm((f) => ({ ...f, occasion_days: d, occasion_hours: h }))} />
             <p className={hintClass}>{hoursMode ? t('setup.hint_occasion_hours') : t('setup.hint_occasion_days')}</p>
             {hoursMode && (
               <p className="mt-2 text-xs rounded border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" role="note">
