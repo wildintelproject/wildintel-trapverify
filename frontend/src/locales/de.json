@@ -113,8 +113,6 @@
     "hint_min_score": "Fotos, deren Erkennungskonfidenz für die Art unter diesem Wert liegt, werden nicht gezeigt.",
     "label_min_score_by_species": "Mindest-Detektionskonfidenz pro Art",
     "hint_min_score_by_species": "Optional. Eine Art mit eigenem Wert verwendet ihn statt des allgemeinen; lassen Sie das Feld leer, um den allgemeinen Wert zu verwenden, oder geben Sie 0 ein, um den Schwellenwert für diese Art abzuschalten. Nützlich für Arten, die der Klassifikator schlecht erkennt, etwa nachtaktive.",
-    "label_random_seed": "Zufalls-Seed für Detektionsereignisse mit gleicher Bewertung",
-    "hint_random_seed": "Detektionsereignisse mit gleicher Bewertung (alle, wenn die Fotos keine Bewertung haben) werden in zufälliger Reihenfolge angezeigt. Der Seed macht diese Reihenfolge reproduzierbar: gleiche Daten und gleicher Seed ergeben immer dieselbe Reihenfolge. Geben Sie ihn bei der Berichterstattung an.",
     "label_classified_by": "Klassifiziert von",
     "hint_classified_by": "Wert, der in das Feld classifiedBy des verifizierten CamtrapDP für bestätigte Beobachtungen geschrieben wird.",
     "label_extended_confirmation": "Erweiterte Bestätigung",

@@ -35,7 +35,6 @@ const DEFAULT: WorkflowConfig = {
   extended_confirmation: false,
   record_rejection_species: false,
   review_idle_seconds: 120,
-  random_seed: 42,
   review_order: 'score',
 }
 
@@ -1323,13 +1322,6 @@ export default function SetupPage({ onSetup, ready }: Props) {
             {form.review_order === 'time' && (form.min_score > 0 || Object.values(form.min_score_by_species ?? {}).some((v) => v > 0)) && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{t('setup.hint_review_order_cutoff')}</p>
             )}
-          </div>
-
-          <div className="mb-6">
-            <label className={labelClass}>{t('setup.label_random_seed')}</label>
-            <input type="number" className={inputClass} step={1} value={form.random_seed}
-              onChange={(e) => set('random_seed', Math.trunc(Number(e.target.value)) || 0)} />
-            <p className={hintClass}>{t('setup.hint_random_seed')}</p>
           </div>
 
           {/* ── Confirmation parameters ── */}

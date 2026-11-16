@@ -60,7 +60,6 @@ export interface WorkflowConfig {
   extended_confirmation: boolean
   record_rejection_species: boolean
   review_idle_seconds: number
-  random_seed: number
   /** Order of the detection events of each occasion: most confident first, or earliest first. */
   review_order?: 'score' | 'time'
 }

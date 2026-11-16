@@ -1924,12 +1924,12 @@ def _tie_tables(scores, shuffle_seed=None):
     return dep, med, obs
 
 
-def _review_order(scores, seed=42, shuffle_seed=None):
+def _review_order(scores, shuffle_seed=None):
     from camtrap_workflow import build_candidates
     dep, med, obs = _tie_tables(scores, shuffle_seed)
     c = build_candidates(dep, med, obs, target_species=["Vulpes vulpes"], study_start=date(2025, 11, 1),
                          study_end=date(2025, 11, 5), occasion_days=5, total_iterations=1000,
-                         gap_seconds=60, seed=seed)
+                         gap_seconds=60)
     return list(c.sort_values("rank")["mediaID"])
 
 
@@ -1937,16 +1937,9 @@ def test_scores_still_decide_the_order():
     assert _review_order([0.2, 0.9, 0.5, 0.7]) == ["m01", "m03", "m02", "m00"]
 
 
-def test_without_scores_order_is_random_not_chronological_and_complete():
+def test_without_scores_order_is_chronological_and_complete():
     order = _review_order([None] * 12)
-    assert sorted(order) == [f"m{i:02d}" for i in range(12)]          # every event, once
-    assert order != [f"m{i:02d}" for i in range(12)]                  # not chronological
-
-
-def test_tiebreak_is_reproducible_and_depends_on_the_seed():
-    a = _review_order([None] * 12, seed=7)
-    assert a == _review_order([None] * 12, seed=7)
-    assert a != _review_order([None] * 12, seed=8)
+    assert order == [f"m{i:02d}" for i in range(12)]                  # earliest event first
 
 
 def test_tiebreak_does_not_depend_on_row_order():
@@ -1954,10 +1947,9 @@ def test_tiebreak_does_not_depend_on_row_order():
         == _review_order([None] * 12, shuffle_seed=2)
 
 
-def test_only_equal_scores_are_shuffled():
+def test_equal_scores_keep_chronological_order():
     order = _review_order([0.9, 0.5, 0.5, 0.5, 0.5, 0.1])
-    assert order[0] == "m00" and order[-1] == "m05"                    # distinct scores keep their place
-    assert sorted(order[1:5]) == ["m01", "m02", "m03", "m04"]
+    assert order == ["m00", "m01", "m02", "m03", "m04", "m05"]
 
 
 # ─── occasions shorter than a day (occasion_hours) ────────────────────────────
