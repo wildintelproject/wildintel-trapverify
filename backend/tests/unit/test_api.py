@@ -2621,3 +2621,55 @@ def test_the_naive_ttd_is_the_same_in_either_order(client, camtrap_dir, tmp_path
     a = _setup_order(client, camtrap_dir, tmp_path, "score")
     b = _setup_order(client, camtrap_dir, tmp_path, "time")
     assert (a / "occupancy_inputs" / "ttd_naive_Vulpes_vulpes.csv").read_text() == (b / "occupancy_inputs" / "ttd_naive_Vulpes_vulpes.csv").read_text()
+
+
+# ─── Tags on every photo of a rejected or unsure event ────────────────────────
+
+def _event_media(ev):
+    return {f["mediaId"] for f in ev["frames"] if not f["isContext"]}
+
+
+def test_every_photo_of_a_rejected_event_carries_the_tag_and_the_actual_species(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev = {e["key"]: e for e in _round1_events(client)}
+    a1 = ev["SITE_A_occ1_Vulpes_vulpes"]
+    assert _event_media(a1) == {"m001", "m002"}                            # a two-photo event
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [],
+                                        "corrections": {a1["repObsId"]: "Canis lupus"}})
+    client.get("/api/results")
+    tags = _tags_by_media(sd)
+    for m in ("m001", "m002"):
+        assert tags[m].split("|") == ["camtrapverify:rejected", "camtrapverify-actual-species:Canis lupus"], m
+    assert tags["m005"] == ""                                              # second event of the cell: not inspected yet
+
+
+def test_every_photo_of_an_unsure_event_carries_the_unsure_tag(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    a1 = {e["key"]: e for e in _round1_events(client)}["SITE_A_occ1_Vulpes_vulpes"]
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [], "unsure": [a1["repObsId"]]})
+    client.get("/api/results")
+    tags = _tags_by_media(sd)
+    assert tags["m001"] == tags["m002"] == "camtrapverify:unsure"
+
+
+def test_the_earlier_rejected_event_of_a_confirmed_cell_is_tagged_on_all_its_photos(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": []})
+    ev2 = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 2}).json()
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": [ev2[0]["repObsId"]]})
+    client.get("/api/results")
+    tags = _tags_by_media(sd)
+    assert tags["m001"] == tags["m002"] == "camtrapverify:rejected"          # round 1, both photos
+    assert tags["m005"] == "camtrapverify:confirmed"                        # round 2
+
+
+def test_the_actual_species_goes_only_on_rejected_events(client, camtrap_dir, tmp_path):
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    ev = {e["key"]: e for e in _round1_events(client)}
+    a1, a2 = ev["SITE_A_occ1_Vulpes_vulpes"], ev["SITE_A_occ2_Vulpes_vulpes"]
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [a2["repObsId"]],
+                                        "corrections": {a1["repObsId"]: "Canis lupus", a2["repObsId"]: "Sus scrofa"}})
+    client.get("/api/results")
+    tags = _tags_by_media(sd)
+    assert "actual-species" not in tags["m003"]                              # confirmed: the typed species is ignored
+    assert "camtrapverify-actual-species:Canis lupus" in tags["m001"].split("|")

@@ -2406,15 +2406,16 @@ def reviewed_event_tags(
     rounds_done: dict[str, int],
     corrections: Optional[dict[str, str]] = None,
     cleared: Optional[set] = None,
-) -> dict[str, list[str]]:
-    """Tags for the events the reviewer rejected, by the ``observationID`` that represents each event.
+) -> dict[tuple, list[str]]:
+    """Tags for the events the reviewer rejected, for **every photo** of each event, keyed by ``(mediaID, scientificName)``.
 
     An event was *inspected and not confirmed* when its cell has a confirmation at a later rank,
     or has none and the species finished a round at that rank or later. Such an event is tagged
     ``camtrapverify:rejected``, or ``camtrapverify:unsure`` when it was marked unsure and its cell
     is still pending expert review (an expert who settled the cell as not detected makes it a
-    rejection; ``cleared`` holds those cells). With a recorded actual species the event also gets
-    ``camtrapverify-actual-species:<name>``. Events never inspected get no tag.
+    rejection; ``cleared`` holds those cells). With a recorded actual species (typed for the photo that
+    represents the event) every photo of the event also gets ``camtrapverify-actual-species:<name>``.
+    Events never inspected get no tag. Context frames are not part of the event.
     """
     cand = candidates
     if "is_context" in cand.columns:
@@ -2433,14 +2434,17 @@ def reviewed_event_tags(
     if rows.empty:
         return {}
     reps = rows.loc[rows.groupby([cell, burst], sort=False)["_p"].idxmax()]
-    tags: dict[str, list[str]] = {}
-    for oid, key in zip(reps["observationID"], reps[cell]):
+    event_tags: dict[tuple, list[str]] = {}
+    for oid, key, b in zip(reps["observationID"], reps[cell], reps[burst]):
         unsure = oid in unc_ids and oid not in conf_ids and key not in (cleared or ())
         t = [TAG_UNSURE if unsure else TAG_REJECTED]
         actual = (corrections or {}).get(oid, "").strip().replace("|", " ")
         if actual:
             t.append(TAG_ACTUAL_SPECIES + actual)
-        tags[str(oid)] = t
+        event_tags[(key, b)] = t
+    tags: dict[tuple, list[str]] = {}
+    for key, b, media, species in zip(rows[cell], rows[burst], rows["mediaID"], rows["scientificName"]):
+        tags[(media, species)] = event_tags[(key, b)]
     return tags
 
 
@@ -2552,12 +2556,10 @@ def export_verified_camtrapdp(
         rev = reviewed_event_tags(candidates, _rep_confirmed(decisions_dir), unc_ids, rounds_completed(decisions_dir), corrections,
                                   cleared_keys_set(decisions_dir))
         if rev:
-            rep_rows = obs[obs["observationID"].isin(rev)]
-            by_pair = {(m, s): rev[str(o)] for o, m, s in zip(rep_rows["observationID"], rep_rows["mediaID"], rep_rows["scientificName"])}
             pairs = pd.Series(list(zip(obs["mediaID"], obs["scientificName"])), index=obs.index)
-            for i, pair in pairs[pairs.isin(by_pair)].items():
+            for i, pair in pairs[pairs.isin(rev)].items():
                 if i not in tag_by_row:                       # a confirmed photo is not also "rejected"
-                    tag_by_row[i] = by_pair[pair]
+                    tag_by_row[i] = rev[pair]
     if tag_by_row:
         if "observationTags" not in obs.columns:
             obs["observationTags"] = ""

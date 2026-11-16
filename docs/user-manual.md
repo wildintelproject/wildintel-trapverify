@@ -679,11 +679,11 @@ Saving a round does not rewrite this package (rewriting the whole observations t
 | Tag | Meaning |
 |---|---|
 | `camtrapverify:confirmed` | Confirmed (the same photos that are marked `human`; with *extended confirmation*, every photo of the event). |
-| `camtrapverify:rejected` | The photo that represented an event that was inspected and rejected, including earlier events of a cell confirmed later. |
-| `camtrapverify:unsure` | Same, but the reviewer marked it *Unsure* and its occasion is still pending expert review (once an expert settles the occasion as not detected, it is tagged `rejected`). |
-| `camtrapverify-actual-species:<name>` | Added to a rejected event when *Record the actual species* was on and a species was typed. |
+| `camtrapverify:rejected` | **Every photo** of a detection event that was inspected and rejected, including earlier events of a cell confirmed later. |
+| `camtrapverify:unsure` | Same, on every photo of an event the reviewer marked *Unsure* while its occasion is still pending expert review (once an expert settles the occasion as not detected, its photos are tagged `rejected`). |
+| `camtrapverify-actual-species:<name>` | Added to **every photo** of a rejected event when *Record the actual species* was on and a species was typed for it. It is not added to confirmed or unsure events. |
 
-Events that were never inspected (because a cell was already confirmed or no round reached them) get no tag. Example: `travelDirection:left|camtrapverify:rejected|camtrapverify-actual-species:Canis lupus`.
+The tags are written per photo and species, so the other photos of a confirmed event (when *extended confirmation* is off) carry no review tag, and a photo that also has an observation of another species is tagged only for the species of the event. Events that were never inspected (because a cell was already confirmed or no round reached them) get no tag. Example: `travelDirection:left|camtrapverify:rejected|camtrapverify-actual-species:Canis lupus`.
 
 **`occupancy_inputs/`** — ready-to-use files for occupancy models
 
