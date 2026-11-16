@@ -77,6 +77,7 @@ def get_species_events(species_safe: str, iteration: int = 1) -> list[dict]:
         fallback_base,
         flat_search,
         extra_bases,
+        resolver=session_service.get_resolver(),
     )
     return _with_image_token(events)
 
@@ -91,7 +92,8 @@ def get_species_review(species_safe: str) -> list[dict]:
         return []
     image_base_dir, fallback_base, flat_search, extra_bases = _media_resolution_config()
     return _with_image_token(
-        get_review_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases))
+        get_review_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases,
+                          resolver=session_service.get_resolver()))
 
 
 @router.get("/{species_safe}/pending")
@@ -103,7 +105,8 @@ def get_species_pending(species_safe: str) -> list[dict]:
     if sp_cands.empty:
         return []
     image_base_dir, fallback_base, flat_search, extra_bases = _media_resolution_config()
-    return _with_image_token(get_pending_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases))
+    return _with_image_token(get_pending_events(sp_cands, p["decisions"], image_base_dir, fallback_base, flat_search, extra_bases,
+                                                      resolver=session_service.get_resolver()))
 
 
 @router.post("/{species_safe}/pending")

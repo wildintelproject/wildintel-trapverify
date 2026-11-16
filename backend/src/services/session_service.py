@@ -48,6 +48,40 @@ def get_rejected_media() -> set[str]:
     return _state.get("rejected_media", set())
 
 
+from camtrap_workflow import media_extra_bases  # noqa: E402,F401  (also the home of the helper the fork keeps here)
+
+
+def get_resolver():
+    """``MediaResolver`` of the active session: one listing per photo folder, kept while the session and
+    where its photos are looked up stay the same (opening another session or relinking the folders makes a new one)."""
+    config = get_config()
+    if config is None:
+        return None
+    from camtrap_workflow import MediaResolver
+    image_base_dir = config.get("image_base_dir", "") or ""
+    camtrap_dir = config.get("camtrap_dir", "")
+    flat_search = bool(config.get("flat_search", False))
+    key = (str(session_dir()), camtrap_dir, image_base_dir, flat_search)
+    cur = _state.get("_resolver")
+    if cur is None or cur[0] != key:
+        fallback = Path(image_base_dir) if image_base_dir else Path(camtrap_dir or ".")
+        cur = (key, MediaResolver(image_base_dir, fallback, flat_search, media_extra_bases(camtrap_dir, image_base_dir)), {})
+        _state["_resolver"] = cur
+    return cur[1]
+
+
+def resolve_image_path(media_id: str) -> Optional[Path]:
+    """Local path of a candidate image by mediaID (None when the ID is unknown), remembered per resolver."""
+    row = media_lookup(media_id)
+    if row is None:
+        return None
+    resolver = get_resolver()
+    cache = _state["_resolver"][2]
+    if media_id not in cache:
+        cache[media_id] = resolver.resolve(str(row["filePath"]), str(row.get("deploymentID", "")), str(row.get("fileName", "")))
+    return cache[media_id]
+
+
 def media_lookup(media_id: str) -> Optional[dict]:
     """``filePath`` / ``deploymentID`` / ``fileName`` of a media file, from an in-memory index.
 
@@ -169,6 +203,7 @@ def update_paths(camtrap_dir: str, image_base_dir: str, flat_search: bool) -> No
     write_config_file(sd / "config.json", config)
     from camtrap_workflow import clear_media_caches
     clear_media_caches()                                    # listings of the old folders are stale
+    _state.pop("_resolver", None)
     logger.info("Session relinked: camtrap_dir=%s image_base_dir=%s flat=%s", camtrap_dir, image_base_dir, flat_search)
 
 
@@ -179,7 +214,7 @@ def relink_status() -> dict:
     paths; the frontend uses this to ask for the right folders before anything needs them.
     """
     from camtrap_workflow import (
-        is_remote_path, media_extra_bases, resolve_camtrapdp_resource, resolve_media_path,
+        MediaResolver, is_remote_path, media_extra_bases, resolve_camtrapdp_resource,
     )
 
     config = get_config() or {}
@@ -197,13 +232,13 @@ def relink_status() -> dict:
         sample = sample[~sample["filePath"].astype(str).map(is_remote_path)].head(10)
         if len(sample):
             fallback = Path(image_base_dir) if image_base_dir else Path(camtrap_dir)
-            extra = media_extra_bases(camtrap_dir, image_base_dir)
+            resolver = MediaResolver(
+                image_base_dir, fallback, bool(config.get("flat_search", False)),
+                media_extra_bases(camtrap_dir, image_base_dir),
+            )
             found = 0
             for r in sample.itertuples():
-                path = resolve_media_path(
-                    str(r.filePath), str(getattr(r, "deploymentID", "")), str(getattr(r, "fileName", "")),
-                    image_base_dir, fallback, flat_search=bool(config.get("flat_search", False)), extra_bases=extra,
-                )
+                path = resolver.resolve(str(r.filePath), str(getattr(r, "deploymentID", "")), str(getattr(r, "fileName", "")))
                 if path.is_file():
                     found += 1
             sample_ok = found > 0
@@ -280,6 +315,7 @@ def init_session(sd: Path, config: dict, candidates: pd.DataFrame) -> None:
     _state["session_dir"] = sd
     _state["config"] = config
     _state["candidates"] = candidates
+    _state.pop("_resolver", None)                             # a new session: new listings of the photo folders
     _state["rejected_media"] = set()
     _record_recent(sd)
     logger.info("Session initialized: %s (%d candidates)", sd, len(candidates))
@@ -349,6 +385,7 @@ def load_from_dir(sd: Path) -> None:
 
     _state["session_dir"] = sd
     _state["config"] = json.loads(cfg_file.read_text())
+    _state.pop("_resolver", None)
     _state["candidates"] = pd.read_csv(
         manifest,
         dtype={"mediaID": str, "observationID": str},

@@ -107,21 +107,29 @@ def test_check_images_all_missing_by_default(client, camtrap_dir):
     assert len(data["examples"]) == 5
 
 def test_check_images_reports_permission_denied_separately_from_missing(client, camtrap_dir, monkeypatch):
-    """A PermissionError while checking a file must be counted as permission_denied,
-    not lumped in with genuinely missing files."""
+    """A folder the app may not read must count its images as permission_denied,
+    not lump them in with genuinely missing files. (Existence is checked from
+    one cached listing per folder, so access is denied at folder level.)"""
+    import os
+
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    med.loc[med["mediaID"] == "m001", "filePath"] = "locked/frame0.jpg"
+    med.to_csv(camtrap_dir / "media.csv", index=False)
+    (camtrap_dir / "locked").mkdir()
+    (camtrap_dir / "locked" / "frame0.jpg").write_bytes(b"\xff\xd8\xff\xe0")
     img_dir = camtrap_dir / "img"
     img_dir.mkdir()
-    for i in range(5):
+    for i in range(1, 5):
         (img_dir / f"frame{i}.jpg").write_bytes(b"\xff\xd8\xff\xe0")
 
-    real_exists = Path.exists
+    real_listdir = os.listdir
 
-    def fake_exists(self):
-        if self.name == "frame0.jpg":
+    def fake_listdir(path="."):
+        if Path(path).name == "locked":
             raise PermissionError("denied")
-        return real_exists(self)
+        return real_listdir(path)
 
-    monkeypatch.setattr(Path, "exists", fake_exists)
+    monkeypatch.setattr(os, "listdir", fake_listdir)
     resp = client.get("/api/fs/check-images", params={
         "camtrap_dir": str(camtrap_dir), "image_base_dir": str(camtrap_dir),
     })

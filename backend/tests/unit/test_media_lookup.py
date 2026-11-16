@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from camtrap_workflow import (
-    _DEPLOYMENT_TREES,
+    MediaResolver,
     _norm_name,
     _path_parts,
     _suffix_match,
@@ -29,9 +29,12 @@ def touch(path: Path) -> Path:
     return path
 
 
+def resolver_for(images, fallback=None, flat=False, extra=()):
+    return MediaResolver(str(images) if images else "", Path(fallback or images or "."), flat, extra)
+
+
 def resolve(file_path, dep, name, images, fallback=None, flat=False, extra=()):
-    return resolve_media_path(file_path, dep, name, str(images) if images else "", Path(fallback or images or "."),
-                              flat_search=flat, extra_bases=extra)
+    return resolver_for(images, fallback, flat, extra).resolve(file_path, dep, name)
 
 
 # ─── small helpers ────────────────────────────────────────────────────────────
@@ -104,9 +107,9 @@ def test_a_photo_in_two_deployment_folders_is_ambiguous_and_not_used(tmp_path, c
 def test_deployment_folder_only_looks_as_deep_as_needed(tmp_path):
     touch(tmp_path / "images" / "dep_1" / "deep" / "deeper" / "y.jpg")
     touch(tmp_path / "images" / "G" / "dep_2" / "x.jpg")
-    resolve("https://t/file/", "dep_2", "x.jpg", tmp_path / "images")
-    tree = _DEPLOYMENT_TREES[str(tmp_path / "images")]
-    assert tree.depth == 2                                                        # found at level 2: no third listing
+    r = resolver_for(tmp_path / "images")
+    r.resolve("https://t/file/", "dep_2", "x.jpg")
+    assert r._dep_depth == 2                                                        # found at level 2: no third listing
 
 
 # ─── flat search ──────────────────────────────────────────────────────────────
@@ -122,7 +125,7 @@ def test_images_folder_set_one_level_too_deep_still_finds_the_photos(tmp_path):
     photo = touch(tmp_path / "pics" / "R0025" / "dep" / "x.jpg")
     too_deep = tmp_path / "pics" / "R0025"                                        # the user picked R0025 itself
     extra = media_extra_bases(str(tmp_path / "data"), str(too_deep))
-    assert tmp_path / "pics" in extra                                             # the parent of the images folder
+    assert str(tmp_path / "pics") in extra                                             # the parent of the images folder
     assert resolve("R0025/dep/x.jpg", "dep_zz", "x.jpg", too_deep, extra=extra) == photo
 
 
@@ -150,18 +153,18 @@ def test_a_file_that_exists_as_written_is_not_replaced_by_the_extra_folders(tmp_
     assert resolve(str(written), "d", "x.jpg", images, extra=extra) == written
 
 
-def test_media_extra_bases_without_an_images_folder_is_empty(tmp_path):
-    assert media_extra_bases(str(tmp_path), "") == ()
+def test_media_extra_bases_without_an_images_folder_is_the_data_folder(tmp_path):
+    assert media_extra_bases(str(tmp_path), "") == (str(tmp_path),)
 
 
-def test_clear_media_caches_forgets_folder_listings(tmp_path):
+def test_a_resolver_keeps_its_folder_listings_and_a_new_one_sees_the_changes(tmp_path):
     images = tmp_path / "images"
     (images / "G" / "dep_1").mkdir(parents=True)
-    assert not resolve("https://t/file/", "dep_1", "x.jpg", images).exists()
+    r = resolver_for(images)
+    assert not r.exists(r.resolve("https://t/file/", "dep_1", "x.jpg"))
     touch(images / "G" / "dep_1" / "x.jpg")
-    assert not resolve("https://t/file/", "dep_1", "x.jpg", images).exists()      # still cached
-    clear_media_caches()
-    assert resolve("https://t/file/", "dep_1", "x.jpg", images).exists()
+    assert not r.exists(r.resolve("https://t/file/", "dep_1", "x.jpg"))            # still cached: the listing is from before
+    assert resolve("https://t/file/", "dep_1", "x.jpg", images).exists()           # a new resolver (new session or relink) sees it
 
 
 # ─── gallery URL ──────────────────────────────────────────────────────────────
