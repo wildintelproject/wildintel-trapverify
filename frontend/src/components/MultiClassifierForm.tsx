@@ -1,3 +1,4 @@
+import { wholeNumber } from '../utils/integer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api'
@@ -377,7 +378,7 @@ export default function MultiClassifierForm({ onConverted, onBack }: Props) {
               <div>
                 <label htmlFor="mc-gap" className={labelClass}>{t('mc.gap')}</label>
                 <input id="mc-gap" type="number" min={1} className={plainInput} value={gapSeconds}
-                  onChange={e => setGapSeconds(Math.max(1, Number(e.target.value) || 1))} />
+                  onChange={e => setGapSeconds(wholeNumber(e.target.value, 1))} />
               </div>
             </div>
             <p className={hintClass}>{t('mc.period_hint', { n: inv.n_photos.toLocaleString() })}</p>
