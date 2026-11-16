@@ -22,26 +22,30 @@ interface EventSlide extends SlideImage {
   frameTs: string
 }
 
-/** The unfinished round as the server stores it: decided events by their representative observationID. */
+/** The unfinished work as the server stores it: decided events by their cell key (as in the community fork). */
 function progressBody(
   events: DetectionEvent[],
   decisions: Record<string, Decision>,
   corrections: Record<string, string>,
   times: Record<string, number>,
   iteration: number,
+  mode: 'rounds' | 'pending' = 'rounds',
+  chosenRep: Record<string, string> = {},
 ) {
   const dec: Record<string, 'confirmed' | 'rejected' | 'unsure'> = {}
   const corr: Record<string, string> = {}
   const tm: Record<string, number> = {}
+  const rep: Record<string, string> = {}
   events.forEach((e) => {
     const d = decisions[e.key]
     if (!d) return
-    dec[e.repObsId] = d
+    dec[e.key] = d
     const text = (corrections[e.key] ?? '').trim()
-    if (d === 'rejected' && text) corr[e.repObsId] = text
-    if (times[e.key]) tm[e.repObsId] = times[e.key]
+    if (d === 'rejected' && text) corr[e.key] = text
+    if (times[e.key]) tm[e.key] = times[e.key]
+    if (mode === 'pending' && d === 'confirmed' && chosenRep[e.key]) rep[e.key] = chosenRep[e.key]
   })
-  return { iteration, decisions: dec, corrections: corr, decision_times: tm }
+  return { mode, iteration, decisions: dec, chosen_rep: rep, corrections: corr, decision_times: tm }
 }
 
 function Spinner({ sm }: { sm?: boolean }) {
@@ -153,11 +157,28 @@ export default function GalleryPage() {
         setPendingMode(true)
         setEvents(pend)
         setSiteIdx(0)
-        setDecisions({})
-        setCorrections({})
         setNeedsDecision(new Set())
         decidedAtRef.current = {}
         chosenRepRef.current = {}
+        // Verdicts given earlier in this view and not yet saved come back as they were left.
+        const prog = await api.getProgress(species, 'pending', 0).then((r) => r.progress).catch(() => null)
+        const restored: Record<string, Decision> = {}
+        const restoredCorr: Record<string, string> = {}
+        if (prog) {
+          pend.forEach((ev) => {
+            const d = prog.decisions[ev.key]
+            if (!d) return
+            restored[ev.key] = d
+            if (prog.chosen_rep[ev.key]) chosenRepRef.current[ev.key] = prog.chosen_rep[ev.key]
+            if (prog.corrections[ev.key]) restoredCorr[ev.key] = prog.corrections[ev.key]
+            if (prog.decision_times[ev.key]) decidedAtRef.current[ev.key] = prog.decision_times[ev.key]
+          })
+        }
+        setDecisions(restored)
+        setCorrections(restoredCorr)
+        setProgressAt(prog?.saved_at ?? null)
+        lastSavedRef.current = JSON.stringify(progressBody(pend, restored, restoredCorr, decidedAtRef.current, 0, 'pending', chosenRepRef.current))
+        setProgressState('idle')
         return
       }
       if (sp && sp.n_resolved >= sp.n_total_combos) {
@@ -198,17 +219,16 @@ export default function GalleryPage() {
 
       // Unfinished work from an earlier visit (any browser, or another computer through the
       // session export): the progress saved in the session folder wins over the round's files.
-      const prog = await api.getProgress(species, iter).then((r) => r.progress).catch(() => null)
+      const prog = await api.getProgress(species, 'rounds', iter).then((r) => r.progress).catch(() => null)
       if (prog) {
-        const find = (id: string) => evts.find((e) => e.repObsId === id || e.frames.some((f) => f.obsId === id))
         const restored: Record<string, Decision> = {}
         const restoredCorr: Record<string, string> = {}
-        Object.entries(prog.decisions).forEach(([id, d]) => {
-          const ev = find(id)
-          if (!ev) return
+        evts.forEach((ev) => {
+          const d = prog.decisions[ev.key]
+          if (!d) return
           restored[ev.key] = d
-          if (prog.corrections[id]) restoredCorr[ev.key] = prog.corrections[id]
-          if (prog.decision_times[id]) decidedAtRef.current[ev.key] = prog.decision_times[id]
+          if (prog.corrections[ev.key]) restoredCorr[ev.key] = prog.corrections[ev.key]
+          if (prog.decision_times[ev.key]) decidedAtRef.current[ev.key] = prog.decision_times[ev.key]
         })
         setDecisions(restored)
         setCorrections(restoredCorr)
@@ -247,8 +267,10 @@ export default function GalleryPage() {
   // Save the progress a couple of seconds after the last click, with the "Save progress"
   // button, and when the page is closed. Nothing counts as a result until the round is finished.
   const progressPayload = useCallback(() => {
-    if (!species || completed || pendingMode || loading || saving || finishedRef.current || events.length === 0) return null
-    const body = progressBody(events, decisions, corrections, decidedAtRef.current, iteration)
+    if (!species || completed || loading || saving || finishedRef.current || events.length === 0) return null
+    const body = pendingMode
+      ? progressBody(events, decisions, corrections, decidedAtRef.current, 0, 'pending', chosenRepRef.current)
+      : progressBody(events, decisions, corrections, decidedAtRef.current, iteration)
     const json = JSON.stringify(body)
     return json === lastSavedRef.current ? null : { body, json }
   }, [species, completed, pendingMode, loading, saving, events, decisions, corrections, iteration])
@@ -548,6 +570,7 @@ export default function GalleryPage() {
         return
       }
       const r = await api.settlePending(species, confirmedIds, rejectedKeys)
+      finishedRef.current = true                           // the server dropped the pending progress
       showToast(t('gallery.pending_saved', { confirmed: r.confirmed, rejected: r.rejected }), 'success')
       setLbOpen(false)
       setReloadKey((k) => k + 1)
@@ -994,7 +1017,6 @@ export default function GalleryPage() {
             </svg>
             {t('gallery.confirm_all_site')}
           </button>
-          {!pendingMode && (
           <button
             className="px-5 py-2.5 bg-blue-600 text-white rounded-lg shadow-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex flex-col items-center leading-tight"
             onClick={() => flushProgress({ announce: true })}
@@ -1010,7 +1032,6 @@ export default function GalleryPage() {
                 : t('gallery.progress_none')}
             </span>
           </button>
-          )}
           <button
             className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg shadow-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
             onClick={handleSave}

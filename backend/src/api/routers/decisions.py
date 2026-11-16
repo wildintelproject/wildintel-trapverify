@@ -78,7 +78,7 @@ def post_decisions(req: DecisionsRequest) -> dict:
     done = len(next_cands) == 0 or next_iter > config["total_iterations"]
     logger.info("Decisions saved: done=%s next_iteration=%s remaining=%d", done, next_iter if not done else None, int(next_cands["site_occasion_key"].nunique()) if not done else 0)
 
-    progress_service.clear_progress(p["decisions"], req.species, req.iteration)
+    progress_service.clear_progress(p["decisions"], req.species, "rounds", req.iteration)
     workflow_service.rebuild_outputs(export=False)       # camtrap_dp_verified/ is rebuilt when results are opened
 
     return {

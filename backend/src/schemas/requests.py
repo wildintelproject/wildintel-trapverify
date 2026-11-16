@@ -53,10 +53,14 @@ class PendingDecisionsRequest(BaseModel):
 
 
 class ProgressRequest(BaseModel):
-    """Unfinished decisions of one round, saved while the reviewer works."""
+    """Unfinished decisions of a round (``mode="rounds"``) or of the pending-review view (``"pending"``, iteration 0)."""
+    mode: str = "rounds"
     iteration: int
-    # observationID of the event's representative detection -> confirmed | rejected | unsure
+    # cell key (``site_occasion_key``) -> confirmed | rejected | unsure
     decisions: dict[str, str] = {}
+    # cell key -> the event confirmed in the pending view (the photo being looked at)
+    chosen_rep: dict[str, str] = {}
+    # cell key -> actual species typed for a rejection; cell key -> epoch ms of the click
     corrections: dict[str, str] = {}
     decision_times: dict[str, int] = {}
 

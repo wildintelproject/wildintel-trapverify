@@ -1479,15 +1479,15 @@ def _hourly_setup(client, camtrap_dir, tmp_path, hours):
         "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.0})
 
 
-def test_one_hour_session_skips_the_occupancy_fit_and_says_so(client, camtrap_dir, tmp_path):
+def test_one_hour_session_also_fits_the_occupancy_model_but_reports_the_hours(client, camtrap_dir, tmp_path):
     r = _hourly_setup(client, camtrap_dir, tmp_path, 1)
     assert r.status_code == 200
     from pathlib import Path
     occ = Path(r.json()["session_dir"]) / "occupancy_inputs"
     assert (occ / "dethist_naive_Vulpes_vulpes.csv").exists()                       # histories are written
-    assert not (occ / "occupancy_fit.csv").exists()                                 # but no model is fitted
-    assert client.get("/api/results/occupancy").json() == []
-    assert client.get("/api/results").json()["occasion_hours"] == 1
+    assert (occ / "occupancy_fit.csv").exists()                                     # and the model is fitted, as in the fork
+    assert client.get("/api/results/occupancy").status_code == 200
+    assert client.get("/api/results").json()["occasion_hours"] == 1                 # so the page can caution about it
 
 
 def test_day_session_still_fits_the_model_and_reports_no_hours(client, setup_session):
@@ -1962,63 +1962,110 @@ def _round1_events(client):
     return client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
 
 
+def _key(e):
+    return e["key"]
+
+
+def _progress(client, **params):
+    return client.get("/api/species/Vulpes_vulpes/progress", params=params).json()["progress"]
+
+
+def _put(client, body):
+    return client.put("/api/species/Vulpes_vulpes/progress", json={"mode": "rounds", **body})
+
+
 def test_no_progress_by_default(client, setup_session):
-    assert client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json() == {"progress": None}
+    assert client.get("/api/species/Vulpes_vulpes/progress", params={"mode": "rounds", "iteration": 1}).json() == {"progress": None}
+    assert _progress(client) is None                                           # nor "the latest saved one"
 
 
 def test_progress_is_saved_and_read_back(client, setup_session):
     ev = _round1_events(client)
     body = {"iteration": 1,
-            "decisions": {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "unsure", ev[2]["repObsId"]: "rejected"},
-            "corrections": {ev[2]["repObsId"]: " Canis lupus "},
-            "decision_times": {ev[0]["repObsId"]: 1700000000000}}
-    r = client.put("/api/species/Vulpes_vulpes/progress", json=body)
+            "decisions": {_key(ev[0]): "confirmed", _key(ev[1]): "unsure", _key(ev[2]): "rejected"},
+            "corrections": {_key(ev[2]): " Canis lupus "},
+            "decision_times": {_key(ev[0]): 1700000000000}}
+    r = _put(client, body)
     assert r.status_code == 200 and r.json()["n"] == 3
-    got = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
+    got = _progress(client, mode="rounds", iteration=1)
+    assert got["mode"] == "rounds" and got["iteration"] == 1
     assert got["decisions"] == body["decisions"]
-    assert got["corrections"] == {ev[2]["repObsId"]: "Canis lupus"}
-    assert got["decision_times"] == {ev[0]["repObsId"]: 1700000000000}
+    assert got["corrections"] == {_key(ev[2]): "Canis lupus"}
+    assert got["decision_times"] == {_key(ev[0]): 1700000000000}
     assert got["saved_at"]
+
+
+def test_the_latest_saved_progress_is_returned_without_parameters(client, setup_session):
+    ev = _round1_events(client)
+    _put(client, {"iteration": 1, "decisions": {_key(ev[0]): "confirmed"}})
+    assert _progress(client)["decisions"] == {_key(ev[0]): "confirmed"}
+
+
+def test_progress_is_one_file_per_species(client, setup_session):
+    from pathlib import Path
+    ev = _round1_events(client)
+    _put(client, {"iteration": 1, "decisions": {_key(ev[0]): "confirmed"}})
+    client.put("/api/species/Vulpes_vulpes/progress", json={"mode": "pending", "iteration": 0, "decisions": {_key(ev[1]): "rejected"}})
+    files = list((Path(setup_session["session_dir"]) / "decisions").glob("progress_*.csv"))
+    assert [f.name for f in files] == ["progress_Vulpes_vulpes.csv"]
+    assert _progress(client, mode="pending", iteration=0)["decisions"] == {_key(ev[1]): "rejected"}
+    assert _progress(client, mode="rounds", iteration=1)["decisions"] == {_key(ev[0]): "confirmed"}   # the other piece of work is kept
 
 
 def test_progress_changes_no_result(client, setup_session):
     ev = _round1_events(client)
     before = client.get("/api/species").json()
-    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed"}})
+    _put(client, {"iteration": 1, "decisions": {_key(ev[0]): "confirmed"}})
     assert client.get("/api/species").json() == before
 
 
 def test_progress_ignores_unknown_values_and_empty_removes_it(client, setup_session):
     ev = _round1_events(client)
-    r = client.put("/api/species/Vulpes_vulpes/progress",
-                   json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "maybe"}})
-    assert r.json()["n"] == 1
-    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {}})
-    assert client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"] is None
+    r = _put(client, {"iteration": 1, "decisions": {_key(ev[0]): "confirmed", _key(ev[1]): "maybe"}})
+    assert r.status_code == 200
+    assert list(_progress(client, mode="rounds", iteration=1)["decisions"]) == [_key(ev[0])]
+    _put(client, {"iteration": 1, "decisions": {}})
+    assert _progress(client, mode="rounds", iteration=1) is None
+
+
+def test_an_invalid_mode_is_refused(client, setup_session):
+    assert client.put("/api/species/Vulpes_vulpes/progress", json={"mode": "later", "iteration": 1, "decisions": {}}).status_code == 400
 
 
 def test_finishing_the_round_removes_its_progress(client, setup_session):
     ev = _round1_events(client)
-    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed"}})
+    _put(client, {"iteration": 1, "decisions": {_key(ev[0]): "confirmed"}})
     client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
-    assert client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"] is None
+    assert _progress(client, mode="rounds", iteration=1) is None
 
 
 def test_progress_of_a_finished_round_is_refused(client, setup_session):
     ev = _round1_events(client)
     client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
-    r = client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed"}})
-    assert r.status_code == 400
+    assert _put(client, {"iteration": 1, "decisions": {_key(ev[0]): "confirmed"}}).status_code == 400
 
 
 def test_progress_travels_in_the_session_export(client, setup_session, tmp_path, import_root):
     ev = _round1_events(client)
-    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 1, "decisions": {ev[0]["repObsId"]: "confirmed"}})
+    _put(client, {"iteration": 1, "decisions": {_key(ev[0]): "confirmed"}})
     zp = _export_to(client, tmp_path)
-    assert "decisions/progress_Vulpes_vulpes_iter1.csv" in zipfile.ZipFile(zp).namelist()
+    assert "decisions/progress_Vulpes_vulpes.csv" in zipfile.ZipFile(zp).namelist()
     client.post("/api/session/import", json={"zip_path": str(zp)})
-    got = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
-    assert got["decisions"] == {ev[0]["repObsId"]: "confirmed"}
+    assert _progress(client, mode="rounds", iteration=1)["decisions"] == {_key(ev[0]): "confirmed"}
+
+
+def test_pending_progress_keeps_the_event_being_looked_at(client, camtrap_dir, tmp_path):
+    _round1_with_two_unsure(client, camtrap_dir, tmp_path)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    pend = client.get("/api/species/Vulpes_vulpes/pending").json()
+    key, rep = pend[0]["key"], pend[0]["frames"][0]["burstRepObsId"]
+    r = client.put("/api/species/Vulpes_vulpes/progress", json={"mode": "pending", "iteration": 0,
+                                                                "decisions": {key: "confirmed"}, "chosen_rep": {key: rep}})
+    assert r.status_code == 200
+    got = _progress(client, mode="pending", iteration=0)
+    assert got["decisions"] == {key: "confirmed"} and got["chosen_rep"] == {key: rep}
+    client.post("/api/species/Vulpes_vulpes/pending", json={"confirmed": [rep], "rejected_keys": []})
+    assert _progress(client, mode="pending", iteration=0) is None              # settling it removes it
 
 
 def _finish_round1(client, ev, times=None):
@@ -2044,9 +2091,9 @@ def test_reopen_restores_every_decision_flag_and_correction(client, camtrap_dir,
     _finish_round1(client, ev)
     r = client.post("/api/species/Vulpes_vulpes/reopen")
     assert r.status_code == 200 and r.json()["iteration"] == 1 and r.json()["restored"] == 3
-    got = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
-    assert got["decisions"] == {ev[0]["repObsId"]: "confirmed", ev[1]["repObsId"]: "unsure", ev[2]["repObsId"]: "rejected"}
-    assert got["corrections"] == {ev[2]["repObsId"]: "Canis lupus"}
+    got = _progress(client, mode="rounds", iteration=1)
+    assert got["decisions"] == {_key(ev[0]): "confirmed", _key(ev[1]): "unsure", _key(ev[2]): "rejected"}
+    assert got["corrections"] == {_key(ev[2]): "Canis lupus"}
     assert len(got["decision_times"]) == 3
     assert not list((sd / "decisions").glob("decisions_Vulpes_vulpes_iter1.csv"))
     assert list((sd / "decisions" / "reopened").glob("decisions_Vulpes_vulpes_iter1.*.bak"))
@@ -2059,12 +2106,14 @@ def test_reopen_and_finish_again_gives_the_same_files(client, camtrap_dir, tmp_p
     _finish_round1(client, ev)
     before = _session_files(sd)
     client.post("/api/species/Vulpes_vulpes/reopen")
-    p = client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 1}).json()["progress"]
+    p = _progress(client, mode="rounds", iteration=1)
+    rep = {e["key"]: e["repObsId"] for e in ev}                                   # progress is by cell; the round is saved by event
     r = client.post("/api/decisions", json={
         "species": "Vulpes_vulpes", "iteration": 1,
-        "confirmed": [k for k, v in p["decisions"].items() if v == "confirmed"],
-        "unsure": [k for k, v in p["decisions"].items() if v == "unsure"],
-        "corrections": p["corrections"], "decision_times": p["decision_times"],
+        "confirmed": [rep[k] for k, v in p["decisions"].items() if v == "confirmed"],
+        "unsure": [rep[k] for k, v in p["decisions"].items() if v == "unsure"],
+        "corrections": {rep[k]: t for k, t in p["corrections"].items()},
+        "decision_times": {rep[k]: t for k, t in p["decision_times"].items()},
     })
     assert r.status_code == 200
     assert _session_files(sd) == before
@@ -2074,9 +2123,9 @@ def test_reopen_keeps_the_progress_of_the_later_round(client, camtrap_dir, tmp_p
     _setup_recording(client, camtrap_dir, tmp_path)
     ev = _round1_events(client)
     _finish_round1(client, ev)
-    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 2, "decisions": {ev[0]["repObsId"]: "rejected"}})
+    _put(client, {"iteration": 2, "decisions": {_key(ev[0]): "rejected"}})
     client.post("/api/species/Vulpes_vulpes/reopen")
-    assert client.get("/api/species/Vulpes_vulpes/progress", params={"iteration": 2}).json()["progress"] is not None
+    assert _progress(client, mode="rounds", iteration=2) is not None
 
 
 def test_cannot_reopen_without_a_finished_round(client, setup_session):
@@ -2298,7 +2347,7 @@ def test_tags_are_not_repeated_by_a_second_export(client, camtrap_dir, tmp_path)
     sd, ev = _review_round1(client, camtrap_dir, tmp_path)
     client.get("/api/results")
     first = _verified_observations(sd)["observationTags"].tolist()
-    client.put("/api/species/Vulpes_vulpes/progress", json={"iteration": 2, "decisions": {}})      # any other save
+    client.put("/api/species/Vulpes_vulpes/progress", json={"mode": "rounds", "iteration": 2, "decisions": {}})      # any other save
     from services import workflow_service
     workflow_service.write_verified_export() if hasattr(workflow_service, "write_verified_export") else workflow_service.rebuild_outputs()
     assert _verified_observations(sd)["observationTags"].tolist() == first

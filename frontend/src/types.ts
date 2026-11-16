@@ -86,10 +86,16 @@ export interface OccupancyRow {
 }
 
 export interface SavedProgress {
+  /** 'rounds' for an unfinished round, 'pending' for the pending-expert-review view (iteration 0) */
+  mode: 'rounds' | 'pending'
   iteration: number
-  /** repObsId of each decided event -> its decision */
+  /** cell key of each decided event -> its decision */
   decisions: Record<string, 'confirmed' | 'rejected' | 'unsure'>
+  /** cell key -> the event confirmed in the pending view (the photo being looked at) */
+  chosen_rep: Record<string, string>
+  /** cell key -> actual species typed for a rejection */
   corrections: Record<string, string>
+  /** cell key -> epoch ms of the click */
   decision_times: Record<string, number>
   saved_at: string
 }

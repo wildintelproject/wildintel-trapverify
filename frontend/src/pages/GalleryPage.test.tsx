@@ -98,7 +98,7 @@ describe('GalleryPage', () => {
   it('restores the progress saved in the session folder, so finishing the round uses it', async () => {
     api.getSpecies.mockResolvedValue([stats({ current_iteration: 3 })])
     api.getProgress.mockResolvedValue({ progress: {
-      iteration: 3, decisions: { 'obs-a': 'confirmed' }, corrections: {}, decision_times: { 'obs-a': 1700000000000 },
+      mode: 'rounds', iteration: 3, decisions: { a: 'confirmed' }, chosen_rep: {}, corrections: {}, decision_times: { a: 1700000000000 },
       saved_at: '2026-01-01T10:00:00+00:00',
     } })
     api.saveDecisions.mockResolvedValue({ success: true, done: true, next_iteration: null, remaining: 0 })
@@ -110,7 +110,7 @@ describe('GalleryPage', () => {
     expect(api.saveProgress).not.toHaveBeenCalled()                       // restoring is not a change to save
   })
 
-  it('saves the progress with the button, by the event\'s representative observation', async () => {
+  it('saves the progress with the button, by the cell key of each event', async () => {
     api.getSpecies.mockResolvedValue([stats({ current_iteration: 3 })])
     renderGallery()
     await userEvent.click(await screen.findByRole('button', { name: /Confirm all in this location/ }))
@@ -118,8 +118,9 @@ describe('GalleryPage', () => {
     await waitFor(() => expect(api.saveProgress).toHaveBeenCalled())
     const [sp, body] = api.saveProgress.mock.calls[0]
     expect(sp).toBe('Vulpes_vulpes')
+    expect(body.mode).toBe('rounds')
     expect(body.iteration).toBe(3)
-    expect(body.decisions).toEqual({ 'obs-a': 'confirmed' })
+    expect(body.decisions).toEqual({ a: 'confirmed' })
   })
 
   it('reopens the previous round and loads it', async () => {
@@ -258,7 +259,7 @@ describe('GalleryPage', () => {
       renderGallery()
       expect(await screen.findByText('Pending expert review')).toBeInTheDocument()
       expect(api.getEvents).not.toHaveBeenCalledWith('Vulpes_vulpes', 4)
-      expect(screen.queryByRole('button', { name: /Save progress/ })).toBeNull()      // no autosave for these
+      expect(screen.getByRole('button', { name: /Save progress/ })).toBeInTheDocument()   // the pending verdicts are autosaved too
       await userEvent.click(screen.getAllByRole('button', { name: /Confirmed/ })[0])
       await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
       await waitFor(() => expect(api.settlePending).toHaveBeenCalled())
@@ -275,6 +276,32 @@ describe('GalleryPage', () => {
       await userEvent.click(within(card).getByRole('button', { name: /Confirmed/ }))
       await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
       await waitFor(() => expect(api.settlePending).toHaveBeenCalledWith('Vulpes_vulpes', ['rep-a-1'], []))
+    })
+
+    it('saves the pending verdicts as progress, with the photo being looked at, and restores them', async () => {
+      renderGallery()
+      await screen.findByText('Pending expert review')
+      const card = document.querySelector('[data-key="a"]') as HTMLElement
+      await userEvent.click(within(card).getByRole('button', { name: /previous photo/i }))
+      await userEvent.click(within(card).getByRole('button', { name: /Confirmed/ }))
+      await userEvent.click(screen.getByRole('button', { name: /Save progress/ }))
+      await waitFor(() => expect(api.saveProgress).toHaveBeenCalled())
+      const [, body] = api.saveProgress.mock.calls[0]
+      expect(body).toMatchObject({ mode: 'pending', iteration: 0, decisions: { a: 'confirmed' }, chosen_rep: { a: 'rep-a-1' } })
+    })
+
+    it('restores unsaved pending verdicts when the view is opened again', async () => {
+      api.getProgress.mockResolvedValue({ progress: {
+        mode: 'pending', iteration: 0, decisions: { b: 'rejected' }, chosen_rep: {}, corrections: {}, decision_times: {},
+        saved_at: '2026-01-01T10:00:00+00:00',
+      } })
+      api.settlePending.mockResolvedValue({ success: true, confirmed: 0, rejected: 1 })
+      renderGallery()
+      await screen.findByText('Pending expert review')
+      expect(api.getProgress).toHaveBeenCalledWith('Vulpes_vulpes', 'pending', 0)
+      await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
+      await waitFor(() => expect(api.settlePending).toHaveBeenCalledWith('Vulpes_vulpes', [], ['b']))
+      expect(api.saveProgress).not.toHaveBeenCalled()
     })
 
     it('settles a cell as not detected when it is rejected', async () => {
