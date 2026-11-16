@@ -2483,7 +2483,7 @@ def test_pending_cells_list_their_unsure_events_and_can_be_settled(client, camtr
     assert all(e["status"] == "pending" and all("burstRepObsId" in f for f in e["frames"]) for e in pend)
     keep = pend[0]["frames"][0]["burstRepObsId"]
     r = client.post("/api/species/Vulpes_vulpes/pending", json={"confirmed": [keep], "rejected_keys": ["SITE_B_occ1_Vulpes_vulpes"]})
-    assert r.json() == {"success": True, "confirmed": 1, "rejected": 1}
+    assert r.json() == {"success": True, "confirmed": 1, "rejected": 1, "pending": 0}
     assert client.get("/api/species/Vulpes_vulpes/pending").json() == []
     sp = client.get("/api/species").json()[0]
     assert sp["n_pending"] == 0 and sp["phase"] == "complete" and sp["n_confirmed_combos"] == 1

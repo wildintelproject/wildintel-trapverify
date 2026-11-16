@@ -910,6 +910,7 @@ export default function GalleryPage() {
             ) : pendingMode ? (
               <span className="px-2 py-0.5 text-xs font-medium bg-amber-500 text-white rounded-full">
                 {t('gallery.pending_badge')}
+                {events.length > 0 && ` · ${t('gallery.round', { n: Math.min(...events.map((e) => e.pendingIndex ?? 1)) })}`}
               </span>
             ) : (
               <span className="flex items-center gap-2">
