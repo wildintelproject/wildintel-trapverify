@@ -543,6 +543,10 @@ export default function GalleryPage() {
     try {
       const confirmedIds = events.filter((e) => decisions[e.key] === 'confirmed').map((e) => chosenRepRef.current[e.key] ?? e.repObsId)
       const rejectedKeys = events.filter((e) => decisions[e.key] === 'rejected').map((e) => e.key)
+      if (confirmedIds.length === 0 && rejectedKeys.length === 0) {
+        showToast(t('gallery.pending_nothing_to_save'), 'danger')
+        return
+      }
       const r = await api.settlePending(species, confirmedIds, rejectedKeys)
       showToast(t('gallery.pending_saved', { confirmed: r.confirmed, rejected: r.rejected }), 'success')
       setLbOpen(false)
@@ -564,7 +568,7 @@ export default function GalleryPage() {
         document.querySelector(`[data-key="${CSS.escape(undecided[0].key)}"]`)
           ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
       }, 50)
-      showToast(t('gallery.needs_decision'), 'danger')
+      showToast(t('gallery.needs_decision_count', { n: undecided.length }), 'warning', 6000)
       return
     }
     if (!species) return
@@ -688,6 +692,7 @@ export default function GalleryPage() {
   ].filter(Boolean).join(' · ')
   const lbProgress = (
     <div className="rounded-lg bg-black/55 border border-white/15 px-3 py-2 text-[11px] leading-snug text-white/80" aria-label={t('gallery.lb_progress_label')}>
+      <div className="mb-1 text-white/70">{t('gallery.lb_reviewing')}: <span className="italic font-semibold text-white">{spStats?.species_name ?? (species ?? '').replace(/_/g, ' ')}</span></div>
       {!completed && <div className="font-semibold text-white">{pendingMode ? t('gallery.pending_badge') : t('gallery.round', { n: iteration })}</div>}
       <div>{t('gallery.decided_progress', { done: decidedCount, total: events.length })}</div>
       <div className="h-1.5 rounded bg-white/15 my-1 overflow-hidden">
@@ -965,6 +970,9 @@ export default function GalleryPage() {
                     : completed
                     ? (locked ? t('gallery.review_hint_locked') : t('gallery.review_hint_unlocked'))
                     : t(reviewParams?.review_order === 'time' ? 'gallery.round_hint_time' : 'gallery.round_hint', { n: iteration })}
+                  {!completed && !pendingMode && (
+                    <><br /><strong>{t('gallery.open_tip_title')}</strong> {t('gallery.open_tip')}</>
+                  )}
                 </span>
               </div>
             </>
@@ -1044,7 +1052,7 @@ export default function GalleryPage() {
         </div>
       ) : events.length === 0 ? (
         <div className="px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
-          No hay eventos pendientes para esta especie en esta ronda.
+          {t('gallery.no_events')}
         </div>
       ) : (
         <>

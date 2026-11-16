@@ -344,4 +344,45 @@ describe('GalleryPage', () => {
       expect(screen.getByText(/Image 1\/1/)).toBeInTheDocument()
     })
   })
+
+  describe('messages and hints', () => {
+    it('tells how many detection events still need a decision when finishing a round', async () => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      api.getEvents.mockResolvedValue([event('a', 2), event('b', 2), event('c', 2)])
+      renderGallery()
+      await userEvent.click(await screen.findByRole('button', { name: 'Finish round' }))
+      expect(await screen.findByText(/3 detection events still need a decision/)).toBeInTheDocument()
+      expect(api.saveDecisions).not.toHaveBeenCalled()
+    })
+
+    it('says so in the user\'s language when a round has no events', async () => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      api.getEvents.mockResolvedValue([])
+      renderGallery()
+      expect(await screen.findByText('No pending detection events for this species in this round.')).toBeInTheDocument()
+    })
+
+    it('points at the large view and its keys while a round is under review', async () => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      renderGallery()
+      expect(await screen.findByText('Tip:')).toBeInTheDocument()
+      expect(screen.getByText(/Y confirmed, U unsure, N rejected/)).toBeInTheDocument()
+    })
+
+    it('names the species being reviewed in the large view', async () => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      renderGallery()
+      await userEvent.click(await screen.findByRole('button', { name: 'Large view' }))
+      expect(await screen.findByTestId('lb-panel')).toHaveTextContent('Reviewing: Vulpes vulpes')
+    })
+
+    it('does not save pending verdicts when none was decided', async () => {
+      api.getSpecies.mockResolvedValue([stats({ phase: 'pending', n_pending: 1, n_resolved: 3, current_iteration: 4 })])
+      api.getPending.mockResolvedValue([{ ...event('a', 2), status: 'pending' }])
+      renderGallery()
+      await userEvent.click(await screen.findByRole('button', { name: 'Save verdicts' }))
+      expect(await screen.findByText('You have not confirmed or rejected any pending occasion.')).toBeInTheDocument()
+      expect(api.settlePending).not.toHaveBeenCalled()
+    })
+  })
 })

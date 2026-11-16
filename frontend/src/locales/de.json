@@ -190,7 +190,8 @@
     "review_order_mc_warning": "Dieser Datensatz wurde nach Zellen gefiltert; das erhält das Vorkommen, kann aber das früheste Detektionsereignis eines Anlasses entfernen. Für die Zeit bis zur Detektion die Klassifizierer erneut mit „None“ in den erweiterten Optionen kombinieren.",
     "mc_dataset_title": "Kombinierter Datensatz",
     "mc_dataset_desc": "Die Klassifizierer wurden zu diesem CamtrapDP kombiniert. Prüfen Sie nur, wo die Fotos liegen: Untersuchungszeitraum, Erfassungsperioden und Detektionsereignisse stammen aus der Kombination.",
-    "mc_sampling_summary": "Durch die Kombination der Klassifizierer festgelegt: Untersuchungszeitraum vom {{start}} bis {{end}}, Erfassungsperioden von {{duration}} und Detektionsereignisse aus Fotos mit höchstens {{gap}} s Abstand. Um sie zu ändern, die Klassifizierer erneut kombinieren."
+    "mc_sampling_summary": "Durch die Kombination der Klassifizierer festgelegt: Untersuchungszeitraum vom {{start}} bis {{end}}, Erfassungsperioden von {{duration}} und Detektionsereignisse aus Fotos mit höchstens {{gap}} s Abstand. Um sie zu ändern, die Klassifizierer erneut kombinieren.",
+    "reset_min_score_by_species": "Allgemeinen Schwellenwert für alle verwenden"
   },
   "index": {
     "title": "Erkennungsüberprüfung",
@@ -305,7 +306,13 @@
     "cross_pending_note": "Du hast {{species}} in diesem Ereignis bestätigt. Wenn es das einzige Tier ist, markiere dieses Detektionsereignis als Abgelehnt.",
     "cross_conflict_toast": "Du hast {{species}} in demselben Ereignis bestätigt: nur richtig, wenn Tiere beider Arten zu sehen sind. Drücke dieselbe Schaltfläche erneut, um weiterzugehen, oder ändere die Entscheidung.",
     "cross_elsewhere": "in dieser Periode bereits bestätigt",
-    "cross_elsewhere_tooltip": "{{species}} wurde an diesem Standort und in dieser Periode auf einem Foto eines anderen Detektionsereignisses bestätigt. Rückgängig machen geht nur von jenem Foto aus."
+    "cross_elsewhere_tooltip": "{{species}} wurde an diesem Standort und in dieser Periode auf einem Foto eines anderen Detektionsereignisses bestätigt. Rückgängig machen geht nur von jenem Foto aus.",
+    "lb_reviewing": "Geprüfte Art",
+    "pending_nothing_to_save": "Sie haben keinen offenen Stichprobenanlass bestätigt oder abgelehnt.",
+    "needs_decision_count": "Für {{n}} Erkennungsereignisse fehlt noch eine Entscheidung, bevor die Runde abgeschlossen werden kann. Ihr Fortschritt ist bereits gespeichert: Sie können schließen und später weitermachen.",
+    "no_events": "Keine offenen Detektionsereignisse für diese Art in dieser Runde.",
+    "open_tip_title": "Tipp:",
+    "open_tip": "in der Großansicht prüfen (auf ein Foto oder die Schaltfläche „Großansicht“ klicken). Dort sehen Sie jedes Foto des Detektionsereignisses, können zoomen und die Helligkeit ändern und per Tastatur entscheiden: Y bestätigt, U unsicher, N abgelehnt; Rücktaste geht zur vorherigen Karte zurück; ← → wechseln das Foto, ↑ ↓ das Detektionsereignis; 1–9 bestätigen eine andere Art."
   },
   "help": {
     "title": "Hilfe — CamTrap Verify",
@@ -418,7 +425,8 @@
     "pending_hint": "Sie erscheinen in <code>dethist_verified_*.csv</code> als NA, genau wie Stichprobenanlässe mit inaktiver Kamera. Zur Unterscheidung siehe <code>cell_status_*.csv</code> (Werte <code>pending</code> und <code>inactive</code>). Sie können die Sitzung im Artenindex exportieren, damit jemand anderes sie prüft.",
     "pending": "Ausstehende Expertenprüfung",
     "col_pending": "Ausstehend",
-    "effort_col_cells_pending": "Zellen ausstehend"
+    "effort_col_cells_pending": "Zellen ausstehend",
+    "pending_title": "{{n}} Stichprobenanlässe sind noch zur Expertenprüfung offen"
   },
   "footer": {
     "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Alle Rechte vorbehalten.",

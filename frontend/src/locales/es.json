@@ -190,7 +190,8 @@
     "review_order_mc_warning": "Este conjunto se filtró por celdas, que conserva la presencia pero puede quitar el evento de detección más temprano de una ocasión. Para el tiempo hasta la detección, combina de nuevo los clasificadores con «None» en las opciones avanzadas.",
     "mc_dataset_title": "Conjunto combinado",
     "mc_dataset_desc": "Los clasificadores se han combinado en este CamtrapDP. Solo comprueba dónde están las fotos: el periodo de estudio, las ocasiones de muestreo y los eventos de detección vienen de la combinación.",
-    "mc_sampling_summary": "Fijado por la combinación de clasificadores: periodo de estudio del {{start}} al {{end}}, ocasiones de muestreo de {{duration}} y eventos de detección formados por fotos separadas como máximo {{gap}} s. Para cambiarlos, vuelve a combinar los clasificadores."
+    "mc_sampling_summary": "Fijado por la combinación de clasificadores: periodo de estudio del {{start}} al {{end}}, ocasiones de muestreo de {{duration}} y eventos de detección formados por fotos separadas como máximo {{gap}} s. Para cambiarlos, vuelve a combinar los clasificadores.",
+    "reset_min_score_by_species": "Usar el umbral general para todas"
   },
   "index": {
     "title": "Verificación de detecciones",
@@ -305,7 +306,13 @@
     "cross_pending_note": "Has confirmado {{species}} en este evento. Si es el único animal, marca este evento de detección como No confirmado.",
     "cross_conflict_toast": "Has confirmado {{species}} en este mismo evento: solo es correcto si hay animales de las dos especies. Pulsa otra vez el mismo botón para seguir, o cambia la decisión.",
     "cross_elsewhere": "ya confirmada en esta ocasión",
-    "cross_elsewhere_tooltip": "{{species}} se confirmó en esta localización y ocasión desde una foto de otro evento de detección. Solo se puede deshacer desde esa foto."
+    "cross_elsewhere_tooltip": "{{species}} se confirmó en esta localización y ocasión desde una foto de otro evento de detección. Solo se puede deshacer desde esa foto.",
+    "lb_reviewing": "Revisando",
+    "pending_nothing_to_save": "No has confirmado ni rechazado ninguna ocasión pendiente.",
+    "needs_decision_count": "Faltan {{n}} eventos de detección por marcar antes de terminar la ronda. Lo que llevas ya está guardado: puedes cerrar y seguir más tarde.",
+    "no_events": "No hay eventos pendientes para esta especie en esta ronda.",
+    "open_tip_title": "Consejo:",
+    "open_tip": "revisa en la vista grande (haz clic en una foto o en el botón «Vista grande»). Ahí ves todas las fotos del evento de detección, puedes ampliar y cambiar el brillo, y decidir con el teclado: Y confirmada, U dudosa, N no confirmada; Retroceso vuelve a la tarjeta anterior; ← → cambian de foto, ↑ ↓ cambian de evento de detección; 1–9 confirman otra especie."
   },
   "help": {
     "title": "Ayuda — CamTrap Verify",
@@ -418,7 +425,8 @@
     "pending_hint": "Aparecen como NA en <code>dethist_verified_*.csv</code>, igual que las ocasiones con la cámara inactiva. Para distinguirlas, consulta <code>cell_status_*.csv</code> (valores <code>pending</code> e <code>inactive</code>). Puedes exportar la sesión desde el índice de especies para que otra persona las revise.",
     "pending": "Pendientes de revisión por un experto",
     "col_pending": "Pendientes",
-    "effort_col_cells_pending": "Celdas pendientes"
+    "effort_col_cells_pending": "Celdas pendientes",
+    "pending_title": "{{n}} ocasiones siguen pendientes de experto"
   },
   "footer": {
     "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Todos los derechos reservados.",
