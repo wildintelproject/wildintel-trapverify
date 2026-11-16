@@ -1,4 +1,5 @@
 import logging
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -81,7 +82,16 @@ def export_session() -> Response:
 def import_session(req: ImportSessionRequest) -> dict:
     """Import a session ZIP exported on another computer and open it."""
     dest = session_transfer.import_zip(req.zip_path)
-    session_service.load_from_dir(dest)
+    try:
+        session_service.load_from_dir(dest)
+    except HTTPException:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise
+    except Exception:
+        # a manifest the app cannot read (columns missing, wrong format): refuse it cleanly and leave no half-imported folder
+        logger.exception("Imported session could not be loaded: %s", dest)
+        shutil.rmtree(dest, ignore_errors=True)
+        raise HTTPException(400, "El ZIP contiene una sesión que no se puede abrir (el candidate_manifest.csv no es válido).")
     relink = session_service.auto_relink()
     return {"ok": True, "session_dir": str(dest), "config": session_service.get_config(), "relink": relink}
 

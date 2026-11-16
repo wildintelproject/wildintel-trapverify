@@ -2742,6 +2742,18 @@ def test_verifying_a_package_that_already_has_review_tags_does_not_duplicate_the
     assert "travelDirection:left" in tags
 
 
+def test_importing_a_zip_with_an_unreadable_manifest_is_refused_and_leaves_nothing(client, setup_session, tmp_path):
+    import zipfile
+    from services import session_service
+    bad = tmp_path / "broken.zip"
+    with zipfile.ZipFile(bad, "w") as zf:
+        zf.writestr("config.json", "{}")
+        zf.writestr("candidate_manifest.csv", "a\n1\n")              # none of the columns the review needs
+    before = set(session_service.DEFAULT_OUTPUT_DIR.glob("broken_imported_*"))
+    r = client.post("/api/session/import", json={"zip_path": str(bad)})
+    assert r.status_code == 400
+    assert set(session_service.DEFAULT_OUTPUT_DIR.glob("broken_imported_*")) == before     # no half-imported folder
+    assert client.get("/api/state").json()["ready"]                    # the session that was open stays open
 def test_a_cell_confirmed_in_the_pending_review_reaches_the_verified_camtrapdp(client, camtrap_dir, tmp_path):
     import pandas as pd
     sd, ev = _round1_with_two_unsure(client, camtrap_dir, tmp_path)
