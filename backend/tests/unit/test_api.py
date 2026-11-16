@@ -2581,3 +2581,20 @@ def test_editing_a_species_drops_the_cross_confirmations_it_leaves_unconfirmed(c
     client.put("/api/species/Sus_scrofa/decisions", json={"confirmed_keys": []})
     st = {s["scientificName"]: s["status"] for s in client.get("/api/cross", params={"site_id": "SITE_B", "occasion": 1}).json()["species"]}
     assert st["Sus scrofa"] == "none" and ev
+
+
+def test_setup_stores_the_archive_stats_and_older_sessions_get_them_once(client, setup_session):
+    import json
+    from pathlib import Path
+    cfg_file = Path(setup_session["session_dir"]) / "config.json"
+    assert json.loads(cfg_file.read_text())["archive_stats"] == {"total_observations": 5, "target_assigned": 5}
+    # a session made before they were stored: the first save computes and stores them
+    data = json.loads(cfg_file.read_text())
+    del data["archive_stats"]
+    cfg_file.write_text(json.dumps(data))
+    client.post("/api/session/load", json={"session_dir": str(cfg_file.parent)})
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
+    assert json.loads(cfg_file.read_text())["archive_stats"] == {"total_observations": 5, "target_assigned": 5}
+    row = pd.read_csv(cfg_file.parent / "occupancy_inputs" / "review_effort.csv").iloc[0]
+    assert row["total_classified_images"] == 5

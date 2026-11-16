@@ -21,7 +21,9 @@ from camtrap_workflow import (
     build_species_effort,
     compute_min_score_exclusions,
     dataset_fingerprint,
+    archive_stats,
     cell_states,
+    compute_archive_stats,
     cleared_keys_set,
     cross_key,
     load_cross,
@@ -119,6 +121,11 @@ def rebuild_outputs(export: bool = True) -> None:
     config = session_service.get_config()
     candidates = session_service.get_candidates()
 
+    if "archive_stats" not in config:                      # a session made before they were stored: once
+        stats = archive_stats(config)
+        if stats:
+            config["archive_stats"] = stats
+            session_service.write_config_file(session_service.session_dir() / "config.json", config)
     if export:
         write_verified_export()
     else:
@@ -202,6 +209,7 @@ def run_setup(req: SetupRequest) -> dict:
     config = req.model_dump()
     config["session_name"] = session_service.clean_session_name(req.session_name)
     config["dataset_fingerprint"] = dataset_fingerprint(camtrap_dir)     # recognises the same data on another computer
+    config["archive_stats"] = compute_archive_stats(obs, req.target_species)     # sized once, not on every save
     config["camtrap_dir"] = str(camtrap_dir.resolve())
     config["output_dir"] = str(base_out)
     config["session_dir"] = str(sd)

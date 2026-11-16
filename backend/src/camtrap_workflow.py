@@ -111,6 +111,19 @@ def normalise_ts(x: str) -> str:
     return _TZ_OFFSET_RE.sub("", s)
 
 
+def parse_timestamps(values: pd.Series) -> pd.Series:
+    """Vectorised equivalent of ``pd.to_datetime(values.apply(normalise_ts), errors="coerce")``.
+
+    Same normalisation as :func:`normalise_ts` (EXIF date separators, trailing UTC offset stripped)
+    with pandas string methods instead of one Python call per row, which matters for a ``media.csv``
+    with hundreds of thousands of rows. Unparseable or missing values become ``NaT``.
+    """
+    s = values.astype("string")
+    s = s.str.replace(r"^(\d{4}):(\d{2}):(\d{2})", r"\1-\2-\3", regex=True)
+    s = s.str.replace(_TZ_OFFSET_RE.pattern, "", regex=True)
+    return pd.to_datetime(s.astype(object), errors="coerce", utc=False)
+
+
 # ─── CamtrapDP I/O ────────────────────────────────────────────────────────────
 
 def find_datapackage(camtrap_dir: Path) -> Optional[Path]:
@@ -338,7 +351,7 @@ def generate_default_datapackage(
             "schema": f"https://raw.githubusercontent.com/tdwg/camtrap-dp/1.0.2/{name}-table-schema.json",
         }
 
-    ts = pd.to_datetime(med.get("timestamp", pd.Series(dtype=str)).apply(normalise_ts), errors="coerce").dropna()
+    ts = parse_timestamps(med.get("timestamp", pd.Series(dtype=str))).dropna()
     if not ts.empty:
         temporal = {"start": ts.min().date().isoformat(), "end": ts.max().date().isoformat()}
     else:
@@ -1256,9 +1269,7 @@ def build_candidates(
     site_col = detect_site_col(dep)
 
     med = med.copy()
-    med["ts"] = pd.to_datetime(
-        med["timestamp"].apply(normalise_ts), errors="coerce", utc=False
-    )
+    med["ts"] = parse_timestamps(med["timestamp"])
     if "fileName" not in med.columns:
         med["fileName"] = med["filePath"].apply(
             lambda x: Path(str(x)).name if pd.notna(x) else ""
@@ -2944,6 +2955,33 @@ def build_occupancy_inputs(
 
 # ─── Review effort ────────────────────────────────────────────────────────────
 
+def compute_archive_stats(obs: pd.DataFrame, target_species: list[str]) -> dict:
+    """Size of the classified archive, for the percentages of ``review_effort.csv``."""
+    names = obs["scientificName"] if "scientificName" in obs.columns else pd.Series(dtype=str)
+    return {"total_observations": int(len(obs)), "target_assigned": int(names.isin(target_species).sum())}
+
+
+def archive_stats(config: dict) -> dict:
+    """Archive statistics of a session: stored in its config, or computed from ``observations.csv``.
+
+    New sessions store them at setup (the observations are in memory then), so saving a round no
+    longer reads the whole observations table again. Sessions made before that get them computed
+    here (reading only the species column). Returns ``{}`` when the source data cannot be read (for
+    example its folder is not linked on this computer).
+    """
+    cached = config.get("archive_stats")
+    if isinstance(cached, dict) and "total_observations" in cached:
+        return cached
+    obs_path = resolve_camtrapdp_resource(Path(config.get("camtrap_dir", "")), "observations")
+    if obs_path is None:
+        return {}
+    try:
+        names = pd.read_csv(obs_path, dtype=str, usecols=lambda c: c == "scientificName")
+    except (OSError, ValueError, pd.errors.ParserError):
+        return {}
+    return compute_archive_stats(names, config.get("target_species", []))
+
+
 def build_review_effort(
     candidates: pd.DataFrame,
     decisions_dir: Path,
@@ -3007,15 +3045,9 @@ def build_review_effort(
     n_candidates = len(candidates)
     n_cells = len(keys)
 
-    total_media: Optional[int] = None
-    target_assigned: Optional[int] = None
-    obs_path = resolve_camtrapdp_resource(Path(config["camtrap_dir"]), "observations")
-    if obs_path is not None:
-        obs_all = pd.read_csv(obs_path, dtype=str)
-        total_media = len(obs_all)
-        target_assigned = int(
-            obs_all["scientificName"].isin(config["target_species"]).sum()
-        )
+    archive = archive_stats(config)
+    total_media: Optional[int] = archive.get("total_observations")
+    target_assigned: Optional[int] = archive.get("target_assigned")
 
     def pct(x: int, d: Optional[int]) -> Optional[float]:
         return round(100 * x / d, 1) if d else None

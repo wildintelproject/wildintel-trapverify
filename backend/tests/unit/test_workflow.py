@@ -2299,3 +2299,54 @@ def test_candidates_are_the_same_with_the_minimal_read(camtrap_dir):
     assert "bboxes" in shared and set(small.columns) <= set(full.columns)
     pd.testing.assert_frame_equal(small[shared].reset_index(drop=True), full[shared].reset_index(drop=True))
 
+
+
+# ─── Vectorised timestamp parsing ─────────────────────────────────────────────
+
+_TS_SAMPLES = [
+    "2025-11-02 10:00:00", "2025-11-02T10:00:00", "2025:11:02 10:00:00", "2025-11-02 10:00:00+01:00",
+    "2025-11-02T10:00:00Z", "2025-11-02 10:00:00+0000", "2025-11-02 10:00:00.250", "2025-11-02",
+    "2025:11:02", " 2025-11-02 10:00:00", "garbage", "", "nan", None, float("nan"), "2025-13-45 99:99:99",
+    "2025-11-02 10:00:00-05:30", "2025:11:02 23:59:59Z",
+]
+
+
+@pytest.mark.parametrize("shuffle", [0, 1, 2, 3])
+def test_parse_timestamps_equals_the_row_by_row_version(shuffle):
+    import random
+    from camtrap_workflow import normalise_ts, parse_timestamps
+    values = _TS_SAMPLES[:]
+    random.Random(shuffle).shuffle(values)
+    s = pd.Series(values, dtype=object)
+    expected = pd.to_datetime(s.apply(normalise_ts), errors="coerce", utc=False)
+    got = parse_timestamps(s)
+    pd.testing.assert_series_equal(got, expected, check_names=False)
+
+
+def test_parse_timestamps_of_a_uniform_column():
+    from camtrap_workflow import parse_timestamps
+    s = pd.Series(["2025-11-02 10:00:00", "2025-11-02 10:00:30", None])
+    out = parse_timestamps(s)
+    assert out.iloc[0] == pd.Timestamp("2025-11-02 10:00:00") and pd.isna(out.iloc[2])
+
+
+# ─── Archive statistics ───────────────────────────────────────────────────────
+
+def test_review_effort_uses_the_stored_archive_stats_without_reading_the_data(candidates, decisions_dir, tmp_path):
+    from camtrap_workflow import build_review_effort
+    cfg = {"camtrap_dir": str(tmp_path / "not-there"), "target_species": ["Vulpes vulpes"],
+           "archive_stats": {"total_observations": 1000, "target_assigned": 400}}
+    build_review_effort(candidates, decisions_dir, cfg, tmp_path / "o")
+    row = pd.read_csv(tmp_path / "o" / "review_effort.csv").iloc[0]
+    assert row["total_classified_images"] == 1000 and row["target_assigned_images"] == 400
+
+
+def test_archive_stats_are_computed_from_the_data_for_older_sessions(camtrap_dir):
+    from camtrap_workflow import archive_stats
+    stats = archive_stats({"camtrap_dir": str(camtrap_dir), "target_species": ["Vulpes vulpes"]})
+    assert stats == {"total_observations": 5, "target_assigned": 5}
+
+
+def test_archive_stats_are_empty_when_the_data_cannot_be_read(tmp_path):
+    from camtrap_workflow import archive_stats
+    assert archive_stats({"camtrap_dir": str(tmp_path / "gone"), "target_species": []}) == {}
