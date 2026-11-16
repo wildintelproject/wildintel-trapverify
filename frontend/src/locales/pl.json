@@ -113,8 +113,6 @@
     "hint_min_score": "Zdjęcia, których pewność wykrycia dla gatunku jest poniżej tej wartości, nie są pokazywane.",
     "label_min_score_by_species": "Minimalna pewność detekcji dla gatunku",
     "hint_min_score_by_species": "Opcjonalne. Gatunek z własną wartością używa jej zamiast ogólnej; pozostaw pole puste, aby użyć wartości ogólnej, lub wpisz 0, aby wyłączyć próg dla tego gatunku. Przydatne dla gatunków, z którymi klasyfikator sobie nie radzi, np. nocnych.",
-    "label_random_seed": "Ziarno losowości dla zdarzeń detekcji o tym samym wyniku",
-    "hint_random_seed": "Zdarzenia detekcji o tym samym wyniku (wszystkie, gdy zdjęcia nie mają wyniku) są pokazywane w losowej kolejności. Ziarno czyni tę kolejność powtarzalną: te same dane i to samo ziarno zawsze dają tę samą kolejność. Podaj je w raporcie z wyników.",
     "label_classified_by": "Sklasyfikowane przez",
     "hint_classified_by": "Wartość zapisywana w polu classifiedBy zweryfikowanego CamtrapDP dla potwierdzonych obserwacji.",
     "label_extended_confirmation": "Rozszerzone potwierdzenie",

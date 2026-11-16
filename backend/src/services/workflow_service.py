@@ -187,7 +187,6 @@ def run_setup(req: SetupRequest) -> dict:
         include_burst_context=req.include_burst_context,
         min_score=req.min_score,
         min_score_by_species=req.min_score_by_species,
-        seed=req.random_seed,
         occasion_hours=req.occasion_hours or None,
         review_order=req.review_order,
     )
@@ -223,7 +222,6 @@ def run_setup(req: SetupRequest) -> dict:
         gap_seconds=req.gap_seconds,
         min_score=req.min_score,
         min_score_by_species=req.min_score_by_species,
-        seed=req.random_seed,
         occasion_hours=req.occasion_hours or None,
         review_order=req.review_order,
     ).to_csv(sd / "min_score_exclusions.csv", index=False)

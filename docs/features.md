@@ -16,7 +16,7 @@
 
 - **Configurable sampling occasions** — divides the study window into fixed-length windows (`occasion_days`, default 5 days; or `occasion_hours` for occasions shorter than a day, e.g. 1 h for activity patterns, in which case camera operation is given in hours and the occupancy estimate is not computed) per deployment. The number of occasions adapts automatically to the study duration.
 - **Detection event grouping** — consecutive frames at the same location separated by less than `gap_seconds` (default 60 s) are grouped into a single reviewable detection event.
-- **Confidence ranking** — within each site × occasion × species cell, detection events are ranked by the maximum `classificationProbability` across their frames, so round 1 always shows the most likely true detection. Events with the same score (all of them when no photo has a score) are shown in a seeded random order (`random_seed`, default 42), so the order is reproducible and not chronological.
+- **Confidence ranking** — within each site × occasion × species cell, detection events are ranked by the maximum `classificationProbability` across their frames, so round 1 always shows the most likely true detection. Events with the same score (all of them when no photo has a score) are shown in chronological order (earliest first).
 - **Score filtering** — frames below `min_score` (default 0.5) are excluded from the candidate manifest, avoiding the lowest-confidence noise.
 
 ---
@@ -85,7 +85,7 @@
 - **Needs labels that already exist** — a classifier or citizen-science labels for the study system; it does not classify.
 - **Still images only** — video files are not read; extract frames and classify them first (see the [user manual](user-manual.md#9-scope-and-limitations) for guidance).
 - **Designed for occupancy models** — only one detection event per cell is verified, so the verified data are not suitable for counting events, activity patterns or abundance; time-to-first-detection needs care because the highest-scoring event is shown first, not the earliest.
-- **The score only orders the events** — it does not need to be calibrated (raw model outputs work with the minimum score set to 0); without scores the events are shown in a seeded random order.
+- **The score only orders the events** — it does not need to be calibrated (raw model outputs work with the minimum score set to 0); without scores the events are shown in chronological order.
 - **Corrects false positives, mostly not missed detections** — animals the classifier missed are not searched for. The exception is another target species seen in a photo you are reviewing: it can be confirmed from the large view (a verified detection, counted as a false negative of the classifier).
 - **Unsure cases and pending expert review** — mark a doubtful event *Unsure*: the next event of the occasion is shown, and an occasion that runs out with an unsure event and no confirmation waits for an expert (NA in the verified history, `cell_status_<sp>.csv`) instead of counting as not detected.
 

@@ -1409,7 +1409,6 @@ def build_candidates(
     gap_seconds: int = 60,
     include_burst_context: bool = False,
     min_score: float = 0.0,
-    seed: int = 42,
     occasion_hours: Optional[int] = None,
     min_score_by_species: Optional[dict[str, float]] = None,
     review_order: str = "score",
@@ -1448,10 +1447,6 @@ def build_candidates(
             reach to remain a candidate. A frame with no score at all is never
             demoted -- only a known score below this excludes it. Defaults to
             0.0 (no filtering).
-        seed: Seed of the pseudo-random order of detection events that have the
-            same score within a cell (for example when no frame has a score). The
-            same seed gives the same order; the order does not depend on the
-            chronology or on the row order. Defaults to 42.
         occasion_hours: Width of each sampling occasion in hours instead of days
             (e.g. 1 for activity patterns). ``None`` or 0 uses ``occasion_days``.
         min_score_by_species: Optional ``scientificName`` -> cut-off that replaces
@@ -1569,23 +1564,19 @@ def build_candidates(
         return pd.DataFrame()
 
     # Rank bursts by max prob within each cell (highest prob = rank 1). Bursts with
-    # the same score -- all of them when no frame has a score -- are put in a
-    # pseudo-random order that depends only on ``seed``, the cell and the burst
-    # (not on the row order), so it is reproducible and not chronological.
+    # the same score -- all of them when no frame has a score -- keep their
+    # chronological order (bursts of a cell are numbered in time order).
     burst_max = (
         joined.groupby(["site_occasion_key", "burst_id"])["prob"]
         .max()
         .reset_index(name="burst_max_prob")
-    )
-    burst_max["_tie"] = pd.util.hash_pandas_object(
-        burst_max[["site_occasion_key", "burst_id"]].assign(_seed=seed), index=False
     )
     if review_order == "time":
         # Earliest event first. Bursts of a cell are numbered in time order, so burst_id breaks any tie.
         burst_max = burst_max.sort_values(["site_occasion_key", "burst_id"])
     else:
         burst_max = burst_max.sort_values(
-            ["site_occasion_key", "burst_max_prob", "_tie"], ascending=[True, False, True]
+            ["site_occasion_key", "burst_max_prob", "burst_id"], ascending=[True, False, True]
         )
     burst_max["rank"] = burst_max.groupby("site_occasion_key").cumcount() + 1
 
@@ -3318,7 +3309,6 @@ def compute_min_score_exclusions(
     total_iterations: int,
     gap_seconds: int,
     min_score: float,
-    seed: int = 42,
     occasion_hours: Optional[int] = None,
     min_score_by_species: Optional[dict[str, float]] = None,
     review_order: str = "score",
@@ -3362,7 +3352,7 @@ def compute_min_score_exclusions(
         dep, med, obs,
         target_species=target_species, study_start=study_start, study_end=study_end,
         occasion_days=occasion_days, total_iterations=total_iterations,
-        gap_seconds=gap_seconds, include_burst_context=False, min_score=0.0, seed=seed,
+        gap_seconds=gap_seconds, include_burst_context=False, min_score=0.0,
         occasion_hours=occasion_hours, review_order=review_order,
     )
     if full.empty:

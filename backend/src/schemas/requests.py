@@ -22,8 +22,6 @@ class SetupRequest(BaseModel):
     session_name: str = Field("", max_length=120)
     # Per-species cut-offs that replace min_score (scientificName -> threshold; <= 0 means none).
     min_score_by_species: dict[str, float] = {}
-    # Seed of the pseudo-random order of detection events with the same score (e.g. no scores).
-    random_seed: int = 42
     # Order in which the detection events of each occasion are reviewed: from the most confident one
     # ("score", the default) or from the earliest one ("time"; needed for time-to-detection analyses).
     review_order: Literal["score", "time"] = "score"

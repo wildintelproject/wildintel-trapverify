@@ -1403,19 +1403,6 @@ def test_idle_threshold_comes_from_setup(client, camtrap_dir, tmp_path):
     assert data["review_idle_seconds"] == 30 and tot["review_active_seconds"] == 0   # every 40 s gap is idle
 
 
-# ─── random seed ──────────────────────────────────────────────────────────────
-
-def test_random_seed_is_stored_in_the_session_config(client, camtrap_dir, tmp_path):
-    for seed in (42, 7):
-        r = client.post("/api/setup", json={
-            "camtrap_dir": str(camtrap_dir), "output_dir": str(tmp_path / f"o{seed}"),
-            "target_species": ["Vulpes vulpes"], "study_start": "2025-11-01", "study_end": "2025-11-10",
-            "occasion_days": 5, "total_iterations": 100_000, "gap_seconds": 60, "min_score": 0.5,
-            "random_seed": seed})
-        assert r.status_code == 200
-        assert client.get("/api/state").json()["config"]["random_seed"] == seed
-
-
 # ─── bounding boxes on served images ──────────────────────────────────────────
 
 @pytest.fixture

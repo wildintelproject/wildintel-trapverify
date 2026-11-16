@@ -113,8 +113,6 @@
     "hint_min_score": "No se muestran las fotos cuya confianza de detección para la especie está por debajo de este valor.",
     "label_min_score_by_species": "Confianza mínima de detección por especie",
     "hint_min_score_by_species": "Opcional. Una especie con valor propio lo usa en lugar del general; deja la casilla vacía para usar el general, o escribe 0 para quitar el corte a esa especie. Útil para especies que el clasificador maneja mal, como las nocturnas.",
-    "label_random_seed": "Semilla aleatoria para eventos de detección empatados",
-    "hint_random_seed": "Los eventos de detección con la misma puntuación (todos, si las fotos no tienen puntuación) se muestran en orden aleatorio. La semilla hace ese orden reproducible: los mismos datos y la misma semilla dan siempre el mismo orden. Anótala al informar de tus resultados.",
     "label_classified_by": "Clasificado por",
     "hint_classified_by": "Valor que se escribirá en el campo classifiedBy del CamtrapDP verificado para las observaciones confirmadas.",
     "label_extended_confirmation": "Confirmación extendida",
