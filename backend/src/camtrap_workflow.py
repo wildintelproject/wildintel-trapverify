@@ -2307,6 +2307,7 @@ def _build_events(
     has_deployment = "deploymentID" in sp_cands.columns
     has_file_name = "fileName" in sp_cands.columns
     has_boxes = "bboxes" in sp_cands.columns
+    has_rank = "rank" in sp_cands.columns
 
     burst_rep: dict = {}
     if with_burst_reps:
@@ -2331,13 +2332,14 @@ def _build_events(
         if resolver is None and image_base_dir:
             resolver = MediaResolver(image_base_dir, fallback_base, flat_search, extra_bases)   # one listing per folder for the whole call
         frames = []
-        for obs_id, media_id, fp, dep_id, fname, ts_shown, prob, is_ctx_row, bboxes, burst in zip(
+        for obs_id, media_id, fp, dep_id, fname, ts_shown, prob, is_ctx_row, bboxes, burst, frame_rank in zip(
             group["observationID"], group["mediaID"], group["filePath"],
             group["deploymentID"] if has_deployment else [""] * len(group),
             group["fileName"] if has_file_name else [""] * len(group),
             group["_ts_shown"], group["_p"], group["_ctx"],
             group["bboxes"] if has_boxes else [None] * len(group),
             group["burst_id"],
+            group["rank"] if has_rank else [None] * len(group),
         ):
             img_url = gallery_frame_img_url(
                 str(fp), str(media_id), str(dep_id), str(fname),
@@ -2354,6 +2356,8 @@ def _build_events(
                 # Boxes can only be drawn on images the app serves itself, not on remote ones.
                 "boxes":     count_boxes(bboxes) if img_url.startswith("/api/image/") else 0,
             }
+            if frame_rank is not None:
+                frame["rank"] = int(frame_rank)         # the round this frame's detection event belongs to
             if with_burst_reps:
                 frame["burstRepObsId"] = burst_rep.get((key, burst), obs_id)
             frames.append(frame)
