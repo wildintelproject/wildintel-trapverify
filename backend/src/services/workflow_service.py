@@ -50,8 +50,8 @@ from schemas.requests import SetupRequest
 from services import progress_service, session_service
 
 
-EXPORT_STALE_MARKER = ".camtrap_dp_stale"
-OUTPUTS_STALE_MARKER = ".outputs_stale"          # the histories, reports and fits too (a click that must answer at once)
+EXPORT_STALE_MARKER = ".outputs_stale"
+OUTPUTS_STALE_MARKER = ".outputs_all_stale"        # the histories, reports and fits too (a click that must answer at once)
 
 
 def export_is_stale() -> bool:

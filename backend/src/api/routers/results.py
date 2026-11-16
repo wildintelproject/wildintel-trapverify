@@ -74,7 +74,7 @@ def download_results() -> FileResponse:
     try:
         with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for f in sd.rglob("*"):
-                if f.is_file():
+                if f.is_file() and f.name not in (".outputs_stale", ".outputs_all_stale"):
                     zf.write(f, f.relative_to(sd))
     except Exception:
         tmp_path.unlink(missing_ok=True)

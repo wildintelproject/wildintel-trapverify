@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.deps import require_candidates
 from camtrap_workflow import (
     NO_ANIMAL_LABEL,
+    cell_states,
     confirmed_keys_set,
     load_rejection_corrections,
     resolve_camtrapdp_resource,
@@ -81,10 +82,14 @@ def post_decisions(req: DecisionsRequest) -> dict:
     progress_service.clear_progress(p["decisions"], req.species, "rounds", req.iteration)
     workflow_service.rebuild_outputs(export=False)       # camtrap_dp_verified/ is rebuilt when results are opened
 
+    states = cell_states(candidates, p["decisions"])
+    n_pending = int(((states["species_safe"] == req.species) & (states["status"] == "pending")).sum())
+
     return {
         "success": True,
         "saved": len(req.confirmed),
         "done": done,
+        "pending": n_pending,
         "next_iteration": next_iter if not done else None,
         "remaining": int(next_cands["site_occasion_key"].nunique()) if not done else 0,
     }

@@ -535,7 +535,7 @@ def test_saving_a_round_does_not_rewrite_the_verified_camtrapdp_until_needed(htt
     obs_file = sd / "camtrap_dp_verified" / "observations.csv"
     before = obs_file.read_bytes()
     _confirm_all_round1(http)
-    assert (sd / ".camtrap_dp_stale").exists()
+    assert (sd / ".outputs_stale").exists()
     assert obs_file.read_bytes() == before                     # not rewritten by the save
     assert (sd / "occupancy_inputs" / "effort_report.csv").exists()   # the cheap outputs are still updated
 
@@ -545,7 +545,7 @@ def test_opening_results_rebuilds_a_stale_verified_camtrapdp(http, camtrap_dir, 
     sd = Path(data["session_dir"])
     _confirm_all_round1(http)
     assert http.get("/api/results").status_code == 200
-    assert not (sd / ".camtrap_dp_stale").exists()
+    assert not (sd / ".outputs_stale").exists()
     obs = pd.read_csv(sd / "camtrap_dp_verified" / "observations.csv", dtype=str)
     assert len(obs[obs["classificationMethod"] == "human"]) == 3
 
@@ -559,7 +559,7 @@ def test_download_rebuilds_a_stale_verified_camtrapdp(http, camtrap_dir, tmp_pat
     with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
         obs = pd.read_csv(io.BytesIO(zf.read("camtrap_dp_verified/observations.csv")), dtype=str)
     assert len(obs[obs["classificationMethod"] == "human"]) == 3
-    assert not (sd / ".camtrap_dp_stale").exists()
+    assert not (sd / ".outputs_stale").exists()
 
 
 def test_a_missing_verified_camtrapdp_is_rebuilt_too(http, camtrap_dir, tmp_path):
