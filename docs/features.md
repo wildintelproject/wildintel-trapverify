@@ -70,7 +70,7 @@
     | `camera_operation.csv` | Active days per site × occasion |
     | `dethist_naive_{sp}.csv` | Detection history from the classifier (1 / 0 / NA) |
     | `dethist_verified_{sp}.csv` | Detection history after human verification |
-    | `ttd_naive_{sp}.csv`, `ttd_verified_{sp}.csv` | Hours from the start of each occasion to its first detection, censored at the occasion length (as `occuTTD` expects); NA where the camera was off or the occasion is pending |
+    | `ttd_naive_{sp}.csv` (and `ttd_verified_{sp}.csv` when reviewed by time) | Hours from the start of each occasion to its first detection, censored at the occasion length (as `occuTTD` expects); NA where the camera was off or the occasion is pending |
     | `verification_summary.csv` | Per-species: combos, detections, false positives, ψ_obs |
     | `review_effort.csv` | Actual number of images inspected per cell |
     | `effort_report.csv` | Effort per species and total: events and cells inspected, by outcome, with rejected/confirmed scores, active review time and an estimate of the time saved |

@@ -181,7 +181,7 @@
     "label_review_order": "Order of the detection events",
     "review_order_score": "By score: most confident first (fewest photos to inspect)",
     "review_order_time": "By time: earliest first (for time-to-detection analyses)",
-    "hint_review_order": "Each occasion is reviewed from its first event in this order. By score the first confirmed event is usually the quickest to find, but not necessarily the earliest detection. By time the first confirmed event is the first true detection, which time-to-detection models (e.g. occuTTD) need; more photos may have to be inspected. The detection histories are the same either way. The time-to-detection files (ttd_*.csv) are always written, but are exact only for review by time.",
+    "hint_review_order": "Each occasion is reviewed from its first event in this order. By score the first confirmed event is usually the quickest to find, but not necessarily the earliest detection. By time the first confirmed event is the first true detection, which time-to-detection models (e.g. occuTTD) need; more photos may have to be inspected. The detection histories are the same either way. The verified time-to-detection file (ttd_verified_*.csv) is only written for review by time; the naive one (ttd_naive_*.csv) is always written.",
     "hint_review_order_cutoff": "Photos below the minimum confidence are removed before the review, so the earliest event shown may not be the earliest one that happened. Use 0 to keep every photo if the first detection matters.",
     "local_format_mc": "Classifiers and reference",
     "local_format_mc_desc": "Recalculate the probability from one or more AI classifiers, checked against a human reference (e.g. Zooniverse)",
