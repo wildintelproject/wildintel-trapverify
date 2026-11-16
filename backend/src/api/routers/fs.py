@@ -99,7 +99,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
         is_remote_path,
         media_extra_bases,
         resolve_camtrapdp_resource,
-        resolve_media_path,
+        MediaResolver,
     )
 
     p = Path(camtrap_dir)
@@ -119,6 +119,7 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
     file_paths = med.get("filePath", pd.Series(dtype=str))
     fallback_base = Path(image_base_dir) if image_base_dir else p
     extra_bases = media_extra_bases(camtrap_dir, image_base_dir)
+    resolver = MediaResolver(image_base_dir, fallback_base, flat_search, extra_bases)   # one listing per folder, not one stat per photo
 
     total = 0
     missing = 0
@@ -131,18 +132,13 @@ def check_images(camtrap_dir: str, image_base_dir: str = "", flat_search: bool =
         if is_remote_path(fp) and not image_base_dir:
             continue
         total += 1
-        file_path = resolve_media_path(
-            fp, str(dep_id), str(file_name), image_base_dir, fallback_base,
-            flat_search=flat_search, extra_bases=extra_bases,
-        )
-        try:
-            exists = file_path.exists()
-        except PermissionError:
+        file_path = resolver.resolve(fp, str(dep_id), str(file_name))
+        state = resolver.status(file_path)
+        if state == "denied":
             permission_denied += 1
             if len(examples) < 5:
                 examples.append(str(file_path))
-            continue
-        if not exists:
+        elif state == "missing":
             missing += 1
             if len(examples) < 5:
                 examples.append(str(file_path))

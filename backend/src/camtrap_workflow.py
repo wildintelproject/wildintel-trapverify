@@ -10,6 +10,7 @@ import logging
 import math
 import os
 import re
+import sys
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -422,7 +423,6 @@ def generate_default_datapackage(
         },
     }
 
-
 def _exists_or_denied(path: Path) -> bool:
     """Like ``Path.exists()`` but treats a permission error as "exists".
 
@@ -455,56 +455,6 @@ def _flat_image_index(image_base_dir: str) -> dict[str, tuple[str, ...]]:
     return {k: tuple(v) for k, v in index.items()}
 
 
-# Extensions that name the same kind of file: a classifier export may call a photo
-# ``x.JPEG`` while the file on disk is ``x.jpg``.
-_EXT_ALIASES = {".jpeg": ".jpg", ".jpe": ".jpg", ".tiff": ".tif"}
-
-# How many trailing parts of a ``filePath`` are tried under a base folder.
-_MAX_SUFFIX_PARTS = 6
-
-# How deep below the images folder a folder named like a deployment is looked for
-# (``images/R0025/dep_0011`` is 2 levels down).
-_DEPLOYMENT_DIR_DEPTH = 3
-
-
-def _norm_name(name: str) -> str:
-    """File name in lower case with equivalent image extensions folded (``x.JPEG`` -> ``x.jpg``)."""
-    stem, ext = os.path.splitext(name.lower())
-    return stem + _EXT_ALIASES.get(ext, ext)
-
-
-def _path_parts(file_path: str) -> list[str]:
-    """Components of a path written on any operating system (a drive letter is dropped)."""
-    parts = [p for p in re.split(r"[\\/]+", file_path) if p and p not in (".", "..")]
-    if parts and re.fullmatch(r"[A-Za-z]:", parts[0]):
-        parts = parts[1:]
-    return parts
-
-
-def _is_file(path: Path) -> bool:
-    try:
-        return path.is_file()
-    except OSError:
-        return False
-
-
-def _suffix_match(file_path: str, base: Path) -> Optional[Path]:
-    """First existing ``base / <last k parts of file_path>``, longest k first.
-
-    ``file_path`` may come from another computer, so both ``/`` and ``\\`` separate its
-    parts. Only suffixes of at least two parts (``parent/fileName``) are tried, so a bare
-    file name is never matched at the root of ``base``.
-    """
-    if not file_path or is_remote_path(file_path):
-        return None
-    parts = _path_parts(file_path)
-    for k in range(min(len(parts), _MAX_SUFFIX_PARTS), 1, -1):
-        candidate = base.joinpath(*parts[-k:])
-        if _is_file(candidate):
-            return candidate
-    return None
-
-
 @lru_cache(maxsize=8)
 def _flat_image_index_norm(image_base_dir: str) -> dict[str, tuple[str, ...]]:
     """The flat index keyed by :func:`_norm_name` (``x.JPEG`` finds ``x.jpg``)."""
@@ -514,132 +464,74 @@ def _flat_image_index_norm(image_base_dir: str) -> dict[str, tuple[str, ...]]:
     return {k: tuple(v) for k, v in index.items()}
 
 
-@lru_cache(maxsize=4096)
-def _folder_names(directory: str) -> tuple[frozenset[str], dict[str, str]]:
-    """(exact file names, normalised name -> real name) of one folder; empty if unreadable."""
-    try:
-        names = os.listdir(directory)
-    except OSError:
-        return frozenset(), {}
-    norm: dict[str, str] = {}
-    for n in sorted(names):
-        norm.setdefault(_norm_name(n), n)
-    return frozenset(names), norm
-
-
-class _DeploymentFolders:
-    """Folders named like a deployment, up to ``_DEPLOYMENT_DIR_DEPTH`` levels below a base.
-
-    The tree is explored one level at a time and only as deep as needed, so an archive laid
-    out as ``images/<group>/<deploymentID>/`` costs a couple of folder listings, not a walk
-    over every photo.
-    """
-
-    def __init__(self, base: str):
-        self.by_name: dict[str, list[str]] = {}
-        self.frontier = [base]
-        self.depth = 0
-
-    def find(self, deployment_id: str) -> list[str]:
-        want = deployment_id.lower()
-        while want not in self.by_name and self.frontier and self.depth < _DEPLOYMENT_DIR_DEPTH:
-            level: list[str] = []
-            for directory in self.frontier:
-                try:
-                    with os.scandir(directory) as entries:
-                        subdirs = [e.path for e in entries if e.is_dir()]
-                except OSError:
-                    continue
-                for sub in subdirs:
-                    self.by_name.setdefault(os.path.basename(sub).lower(), []).append(sub)
-                    level.append(sub)
-            self.frontier = level
-            self.depth += 1
-        return self.by_name.get(want, [])
-
-
-_DEPLOYMENT_TREES: dict[str, _DeploymentFolders] = {}
-
-
-def _by_deployment_folder(image_base_dir: str, deployment_id: str, file_name: str) -> Optional[Path]:
-    """The photo in a folder named like its deployment anywhere below the images folder.
-
-    The folder name is matched ignoring case and the file name ignoring case and
-    ``.JPEG``/``.jpg``. Covers classifier exports (e.g. from TRAPPER) whose ``filePath`` is a
-    web address and whose file names differ in extension from the files on disk, with the
-    photos stored as ``images/<group>/<deploymentID>/``. A name found in more than one folder
-    is ambiguous and is not used.
-    """
-    if not image_base_dir or not deployment_id or not file_name:
-        return None
-    tree = _DEPLOYMENT_TREES.setdefault(image_base_dir, _DeploymentFolders(image_base_dir))
-    folders = [os.path.join(image_base_dir, deployment_id), *tree.find(deployment_id)]
-    hits: dict[str, str] = {}
-    for folder in folders:
-        exact, norm = _folder_names(folder)
-        name = file_name if file_name in exact else norm.get(_norm_name(file_name))
-        if name is not None:
-            path = os.path.join(folder, name)
-            hits.setdefault(os.path.normcase(os.path.normpath(path)), path)
-    if len(hits) == 1:
-        return Path(next(iter(hits.values())))
-    if len(hits) > 1:
-        logger.warning("Photo %s of %s found in %d folders; not used", file_name, deployment_id, len(hits))
-    return None
-
-
-def dataset_fingerprint(camtrap_dir: Path) -> Optional[str]:
-    """Content hash of a CamtrapDP's deployments table, or None if it cannot be read.
-
-    It identifies "the same dataset" across computers regardless of where it is stored, so a
-    session imported from another computer can find the data folder automatically when this
-    computer already used the same dataset in another session.
-    """
-    import hashlib
-
-    dep = resolve_camtrapdp_resource(Path(camtrap_dir), "deployments")
-    if dep is None:
-        return None
-    try:
-        return hashlib.sha1(dep.read_bytes()).hexdigest()
-    except OSError:
-        return None
-
-
-def media_extra_bases(camtrap_dir: str, image_base_dir: str) -> tuple[Path, ...]:
-    """Folders also searched by the end of ``filePath`` when a photo is not under the images folder.
-
-    With an Images directory set these are the CamtrapDP folder and the parent of the Images
-    directory (so choosing the ``camtrapDP`` folder itself, one level too deep, does not hide
-    every photo). Without one the CamtrapDP folder is already the base, so none are needed.
-    """
-    if not image_base_dir:
-        return ()
-    bases: list[Path] = []
-    for b in (Path(camtrap_dir) if camtrap_dir else None, Path(image_base_dir).parent):
-        if b is not None and b != Path(image_base_dir) and b not in bases:
-            bases.append(b)
-    return tuple(bases)
-
-
 def clear_media_caches() -> None:
-    """Drop the cached file indexes and folder listings.
+    """Drop the cached flat-search file index.
 
-    They never invalidate on their own (no mtime/TTL check), so a new session reusing the
-    same ``image_base_dir`` after files were added, moved, or removed on disk would otherwise
-    keep seeing the old listing for as long as this backend process stays alive. Call this
-    once per new setup so each session starts from a fresh scan.
+    ``_flat_image_index`` never invalidates on its own (no mtime/TTL check),
+    so a new session reusing the same ``image_base_dir`` after files were
+    added, moved, or removed on disk would otherwise keep seeing the old
+    listing for as long as this backend process stays alive. Call this once
+    per new setup so each session starts from a fresh scan.
     """
     _flat_image_index.cache_clear()
     _flat_image_index_norm.cache_clear()
-    _folder_names.cache_clear()
-    _DEPLOYMENT_TREES.clear()
 
 
 def is_remote_path(file_path: str) -> bool:
     """True if a media record's ``filePath`` is a remote HTTP(S) URL rather
     than a local (absolute or relative) path."""
     return file_path.startswith("http://") or file_path.startswith("https://")
+
+
+def _is_file(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
+_MAX_SUFFIX_PARTS = 6
+
+# How deep below the images folder a folder named like a deployment is looked
+# for (``images/R0025/dep_0011`` is 2 levels down).
+_DEPLOYMENT_DIR_DEPTH = 3
+
+# Extensions that name the same kind of file: a classifier export may call a
+# photo ``x.JPEG`` while the file on disk is ``x.jpg``.
+_EXT_ALIASES = {".jpeg": ".jpg", ".jpe": ".jpg", ".tiff": ".tif"}
+
+
+def _norm_name(name: str) -> str:
+    """File name in lower case with equivalent image extensions folded."""
+    stem, ext = os.path.splitext(name.lower())
+    return stem + _EXT_ALIASES.get(ext, ext)
+
+
+def _path_parts(file_path: str) -> list[str]:
+    """Components of a path written on any OS (drive letter dropped)."""
+    parts = [p for p in re.split(r"[\\/]+", file_path) if p and p not in (".", "..")]
+    if parts and re.fullmatch(r"[A-Za-z]:", parts[0]):
+        parts = parts[1:]
+    return parts
+
+
+def _suffix_match(file_path: str, base: Path, is_file=None) -> Optional[Path]:
+    """First existing ``base / <last k parts of file_path>``, longest k first.
+
+    ``file_path`` may come from another OS, so both ``/`` and ``\\`` separate
+    parts; only suffixes of at least two parts (``parent/fileName``) are tried,
+    so a bare file name is never matched at the root of ``base``.
+    """
+    if not file_path or is_remote_path(file_path):
+        return None
+    if is_file is None:
+        is_file = _is_file
+    parts = _path_parts(file_path)
+    for k in range(min(len(parts), _MAX_SUFFIX_PARTS), 1, -1):
+        candidate = base.joinpath(*parts[-k:])
+        if is_file(candidate):
+            return candidate
+    return None
 
 
 def resolve_media_path(
@@ -649,7 +541,9 @@ def resolve_media_path(
     image_base_dir: str,
     fallback_base: Path,
     flat_search: bool = False,
-    extra_bases: tuple = (),
+    exists=None,
+    is_file=None,
+    suffix_lookup=None,
 ) -> Path:
     """Resolve a media record to a local file path.
 
@@ -661,34 +555,26 @@ def resolve_media_path(
     locally under that layout.
 
     If that misses, the trailing part of ``filePath`` is looked up under
-    ``image_base_dir`` (longest first, down to ``parent/fileName``). This finds photos
-    whose ``filePath`` points at another computer -- e.g.
+    ``image_base_dir`` (longest first, down to ``parent/fileName``). This
+    finds photos whose ``filePath`` points at another computer -- e.g.
     ``/Volumes/Disk/2023/R0025/dep_0011/x.jpg`` exported on a Mac -- when
-    ``image_base_dir`` is the local folder holding ``R0025/``, without scanning
-    the whole image tree.
+    ``image_base_dir`` is the local folder holding ``R0025/``, without having
+    to scan the whole image tree.
 
-    Then a folder named like the ``deploymentID`` is searched up to three levels
-    below ``image_base_dir`` and ``fileName`` is looked up in it ignoring case and
-    equivalent extensions (``x.JPEG`` is found as ``x.jpg``). A name found in more
-    than one such folder is ambiguous and is not used.
-
-    If that misses and ``flat_search`` is enabled, ``fileName`` is looked up
-    case-insensitively anywhere under ``image_base_dir`` (R's "flat" mode), also
-    ignoring equivalent extensions. Ties are broken by keeping only hits whose
-    path contains ``deployment_id``; if more than one candidate remains, the match
-    is ambiguous and is logged as such (not raised -- a single image failing to
+    If that misses too and ``flat_search`` is enabled, ``fileName`` is looked up
+    case-insensitively anywhere under ``image_base_dir`` (R's "flat" mode).
+    Ties are broken by keeping only hits whose path contains
+    ``deployment_id``; if more than one candidate remains, the match is
+    ambiguous and is logged as such (not raised -- a single image failing to
     resolve should not interrupt review of the rest), and resolution falls
     through to the next rule.
 
-    Then the end of ``filePath`` is tried under each of ``extra_bases`` (see
-    :func:`media_extra_bases`) if the file does not exist as written.
-
     Otherwise falls back to the previous rule (``filePath`` used as-is if
     absolute, otherwise joined to ``fallback_base``) when nothing above
-    matched, or when ``image_base_dir`` is not set. In the latter case, if that
-    file does not exist, the end of ``filePath`` is tried under ``fallback_base``
-    (the CamtrapDP folder), so photos stored below the data folder are found even
-    when no images folder was configured.
+    matched, or when ``image_base_dir`` is not set. In the latter case, if
+    that file doesn't exist, the ``filePath``-suffix lookup is tried under
+    ``fallback_base`` too (the CamtrapDP folder), so photos stored below the
+    data folder are found even when no images folder was configured.
 
     Args:
         file_path: The record's ``filePath`` value (may be absolute,
@@ -702,24 +588,33 @@ def resolve_media_path(
             ``camtrap_dir`` itself).
         flat_search: If True, search ``image_base_dir`` recursively by
             ``fileName`` when the structured path misses. Defaults to False.
-        extra_bases: Folders whose layout may hold the photo under the end of
-            ``filePath`` when it is not under ``image_base_dir``.
+        exists: Optional existence predicate used for the structured lookup.
+            Defaults to :func:`_exists_or_denied` (one ``stat`` call);
+            :class:`MediaResolver` passes a cached directory-listing check
+            instead so resolving many records doesn't stat every file.
+        is_file: Optional strict predicate (the file exists and is
+            accessible) used for the ``filePath``-suffix lookup.
+        suffix_lookup: Optional replacement for :func:`_suffix_match`,
+            ``(file_path, base) -> Path | None``; :class:`MediaResolver` passes
+            one that caches the matching folders per source folder.
 
     Returns:
         The resolved path (existence is not checked here).
     """
+    if exists is None:
+        exists = _exists_or_denied
+    if is_file is None:
+        is_file = _is_file
+    if suffix_lookup is None:
+        suffix_lookup = lambda fp, base: _suffix_match(fp, base, is_file)  # noqa: E731
     if image_base_dir:
         structured = Path(image_base_dir) / deployment_id / file_name
-        if _exists_or_denied(structured):
+        if exists(structured):
             return structured
 
-        suffix_hit = _suffix_match(file_path, Path(image_base_dir))
+        suffix_hit = suffix_lookup(file_path, Path(image_base_dir))
         if suffix_hit is not None:
             return suffix_hit
-
-        deployment_hit = _by_deployment_folder(str(image_base_dir), deployment_id, file_name)
-        if deployment_hit is not None:
-            return deployment_hit
 
         if flat_search and file_name:
             hits = _flat_image_index(str(image_base_dir)).get(file_name.lower(), ())
@@ -740,13 +635,253 @@ def resolve_media_path(
     if not p.is_absolute():
         base = Path(image_base_dir) if image_base_dir else fallback_base
         p = (base / p).resolve()
-    if file_path and not is_remote_path(file_path) and not _is_file(p):
-        # The photo is not where filePath says: try its end under the other folders.
-        for base in (extra_bases if image_base_dir else (fallback_base,)):
-            suffix_hit = _suffix_match(file_path, Path(base))
-            if suffix_hit is not None:
-                return suffix_hit
+    if not image_base_dir and file_path and not is_remote_path(file_path) and not is_file(p):
+        suffix_hit = suffix_lookup(file_path, Path(fallback_base))
+        if suffix_hit is not None:
+            return suffix_hit
     return p
+
+
+# Windows and (by default) macOS file systems are case-insensitive, so a
+# directory-listing lookup must be too, or it would report files as missing
+# that ``Path.exists()`` finds.
+_CASE_INSENSITIVE_FS = sys.platform in ("win32", "darwin")
+
+
+class MediaResolver:
+    """Resolve many media records to local files without ``stat``-ing each one.
+
+    :func:`resolve_media_path` checks the structured
+    ``image_base_dir/deploymentID/fileName`` location with one ``stat`` call
+    per record. That is fine for a single image but slow for hundreds of
+    thousands of records on a Windows or external drive. This class caches
+    one directory listing per folder instead (a few hundred ``listdir`` calls
+    for a typical camera-trap archive) and answers existence checks from
+    memory, with the same permission semantics as :func:`_exists_or_denied`.
+
+    The cache lives as long as the instance: create a new one when the image
+    folders may have changed (new session, relinked folders).
+    """
+
+    def __init__(
+        self,
+        image_base_dir: str,
+        fallback_base: Path,
+        flat_search: bool = False,
+        extra_bases: tuple = (),
+    ):
+        self.image_base_dir = image_base_dir or ""
+        self.fallback_base = Path(fallback_base)
+        self.flat_search = flat_search
+        # Folders also searched by filePath suffix when a photo isn't found
+        # with the configured images folder (e.g. the CamtrapDP folder, or the
+        # parent of an images folder that was set one level too deep).
+        self.extra_bases = tuple(
+            Path(b) for b in extra_bases
+            if b and (not self.image_base_dir or Path(b) != Path(self.image_base_dir))
+        )
+        self._dirs: dict[str, Optional[tuple[frozenset, frozenset]]] = {}
+        self._norm_names: dict[str, dict[str, str]] = {}
+        self._subdirs: dict[str, tuple[str, ...]] = {}
+        self._dep_dirs: dict[str, list[str]] = {}
+        self._dep_frontier: list[str] = [self.image_base_dir] if self.image_base_dir else []
+        self._dep_depth = 0
+        self._suffix_dirs: dict[tuple, list[tuple[str, tuple[frozenset, frozenset]]]] = {}
+        self._base_strs: dict[Path, str] = {}
+        self._base_path = Path(self.image_base_dir) if self.image_base_dir else None
+
+    def _listing(self, directory: str) -> Optional[tuple[frozenset, frozenset]]:
+        key = os.path.normcase(directory)
+        if key not in self._dirs:
+            try:
+                names = os.listdir(directory)
+            except PermissionError:
+                logger.warning("Permission denied listing %s", directory)
+                self._dirs[key] = None
+            except OSError:
+                self._dirs[key] = (frozenset(), frozenset())
+            else:
+                self._dirs[key] = (frozenset(names), frozenset(n.lower() for n in names))
+        return self._dirs[key]
+
+    def exists(self, path: Path) -> bool:
+        """Cached equivalent of :func:`_exists_or_denied` for a file path."""
+        parent, name = os.path.split(str(path))
+        listing = self._listing(parent)
+        if listing is None:  # access denied: let the real error surface later
+            return True
+        exact, lower = listing
+        return name in exact or (_CASE_INSENSITIVE_FS and name.lower() in lower)
+
+    def status(self, path: Path) -> str:
+        """``'ok'``, ``'missing'`` or ``'denied'`` for a file path (cached)."""
+        parent, name = os.path.split(str(path))
+        listing = self._listing(parent)
+        if listing is None:
+            return "denied"
+        exact, lower = listing
+        if name in exact or (_CASE_INSENSITIVE_FS and name.lower() in lower):
+            return "ok"
+        return "missing"
+
+    def suffix_lookup(self, file_path: str, base: Path) -> Optional[Path]:
+        """Cached equivalent of :func:`_suffix_match`.
+
+        All files of one source folder share the candidate folders under
+        ``base``, so those are worked out once per source folder (longest
+        suffix first, keeping only folders that exist) and each file is then
+        a lookup in their cached listings.
+        """
+        if not file_path or is_remote_path(file_path):
+            return None
+        parts = _path_parts(file_path)
+        if len(parts) < 2:
+            return None
+        name = parts[-1]
+        base_str = self._base_strs.get(base)
+        if base_str is None:
+            base_str = self._base_strs[base] = str(base)
+        key = (base_str, *parts[-_MAX_SUFFIX_PARTS:-1])
+        dirs = self._suffix_dirs.get(key)
+        if dirs is None:
+            dirs = []
+            for k in range(min(len(parts), _MAX_SUFFIX_PARTS), 1, -1):
+                d = os.path.join(base_str, *parts[-k:-1])
+                listing = self._listing(d)
+                if listing is not None and listing[0]:
+                    dirs.append((d, listing))
+            self._suffix_dirs[key] = dirs
+        for d, (exact, lower) in dirs:
+            if name in exact or (_CASE_INSENSITIVE_FS and name.lower() in lower):
+                return Path(d, name)
+        return None
+
+    def _match_name(self, directory: str, file_name: str) -> Optional[str]:
+        """Name of the file in ``directory`` that is ``file_name``, ignoring case
+        and equivalent extensions (``x.JPEG`` is ``x.jpg``), or None."""
+        listing = self._listing(directory)
+        if not listing or not listing[0]:
+            return None
+        if file_name in listing[0]:
+            return file_name
+        key = os.path.normcase(directory)
+        names = self._norm_names.get(key)
+        if names is None:
+            names = {}
+            for n in sorted(listing[0]):
+                names.setdefault(_norm_name(n), n)
+            self._norm_names[key] = names
+        return names.get(_norm_name(file_name))
+
+    def _child_dirs(self, directory: str) -> tuple[str, ...]:
+        key = os.path.normcase(directory)
+        if key not in self._subdirs:
+            try:
+                with os.scandir(directory) as it:
+                    self._subdirs[key] = tuple(e.path for e in it if e.is_dir())
+            except OSError:
+                self._subdirs[key] = ()
+        return self._subdirs[key]
+
+    def deployment_dirs(self, deployment_id: str) -> list[str]:
+        """Folders named like ``deployment_id`` (any case) up to
+        ``_DEPLOYMENT_DIR_DEPTH`` levels below the images folder.
+
+        The tree is explored one level at a time and only as deep as needed,
+        so an archive laid out as ``images/<group>/<deploymentID>/`` costs a
+        couple of folder listings, not a walk over every photo.
+        """
+        want = (deployment_id or "").lower()
+        if not want:
+            return []
+        while want not in self._dep_dirs and self._dep_frontier and self._dep_depth < _DEPLOYMENT_DIR_DEPTH:
+            level: list[str] = []
+            for d in self._dep_frontier:
+                for sub in self._child_dirs(d):
+                    self._dep_dirs.setdefault(os.path.basename(sub).lower(), []).append(sub)
+                    level.append(sub)
+            self._dep_frontier = level
+            self._dep_depth += 1
+        return self._dep_dirs.get(want, [])
+
+    def by_deployment_folder(self, deployment_id: str, file_name: str) -> Optional[Path]:
+        """The photo in a folder named like its deployment anywhere below the
+        images folder, ignoring case and ``.JPEG``/``.jpg``.
+
+        Covers classifier exports (e.g. from TRAPPER) whose ``filePath`` is a
+        web address and whose ``fileName`` extension differs from the file on
+        disk, with the photos stored as ``images/<group>/<deploymentID>/``.
+        A name found in more than one folder is ambiguous and not used.
+        """
+        if not self.image_base_dir or not file_name or not deployment_id:
+            return None
+        folders = [os.path.join(self.image_base_dir, deployment_id), *self.deployment_dirs(deployment_id)]
+        hits: dict[str, str] = {}
+        for d in folders:
+            name = self._match_name(d, file_name)
+            if name is not None:
+                p = os.path.join(d, name)
+                hits.setdefault(os.path.normcase(os.path.normpath(p)), p)
+        if len(hits) == 1:
+            return Path(next(iter(hits.values())))
+        if len(hits) > 1:
+            logger.warning("Photo %s of %s found in %d folders; not used", file_name, deployment_id, len(hits))
+        return None
+
+    def resolve(self, file_path: str, deployment_id: str, file_name: str) -> Path:
+        """Same rules as :func:`resolve_media_path`, using the cached listings,
+        plus the lookup by deployment folder (:meth:`by_deployment_folder`)
+        before the slower fallbacks."""
+        if self.image_base_dir:
+            # Fast path for the two common hits (structured layout, filePath
+            # suffix) with plain strings: building Path objects dominated the
+            # cost of checking hundreds of thousands of records.
+            d = os.path.join(self.image_base_dir, deployment_id)
+            listing = self._listing(d)
+            if listing is None or file_name in listing[0] or (
+                _CASE_INSENSITIVE_FS and file_name.lower() in listing[1]
+            ):
+                return Path(d, file_name)
+            hit = self.suffix_lookup(file_path, self._base_path)
+            if hit is not None:
+                return hit
+            hit = self.by_deployment_folder(deployment_id, file_name)
+            if hit is not None:
+                return hit
+        if self.extra_bases and not self.flat_search and file_path and not is_remote_path(file_path):
+            # A filePath that exists as written still wins over the extra
+            # folders; checked with strings first because building and
+            # resolving Path objects for every miss is what made bulk checks slow.
+            direct = file_path if os.path.isabs(file_path) else os.path.join(
+                self.image_base_dir or str(self.fallback_base), file_path,
+            )
+            if self.status(direct) != "ok":
+                for base in self.extra_bases:
+                    hit = self.suffix_lookup(file_path, base)
+                    if hit is not None:
+                        return hit
+        path = resolve_media_path(
+            file_path, deployment_id, file_name, self.image_base_dir,
+            self.fallback_base, flat_search=self.flat_search, exists=self.exists,
+            is_file=lambda p: self.status(p) == "ok",
+            suffix_lookup=self.suffix_lookup,
+        )
+        if self.extra_bases and self.flat_search and self.status(path) != "ok":
+            for base in self.extra_bases:
+                hit = self.suffix_lookup(file_path, base)
+                if hit is not None:
+                    return hit
+        return path
+
+
+def image_url(media_id: str, token: str = "") -> str:
+    """URL of the local-image endpoint for a media record.
+
+    ``token`` identifies the session (and its image folders) so the browser
+    can cache images aggressively without ever showing a stale picture from
+    another session that happens to reuse the same ``mediaID`` values.
+    """
+    return f"/api/image/{quote(str(media_id), safe='')}" + (f"?v={token}" if token else "")
 
 
 def gallery_frame_img_url(
@@ -758,6 +893,8 @@ def gallery_frame_img_url(
     fallback_base: Path,
     flat_search: bool = False,
     extra_bases: tuple = (),
+    resolver: Optional[MediaResolver] = None,
+    token: str = "",
 ) -> str:
     """Pick the URL a gallery frame should load its image from.
 
@@ -771,14 +908,13 @@ def gallery_frame_img_url(
     """
     if is_remote_path(file_path):
         if image_base_dir:
-            local_path = resolve_media_path(
-                file_path, deployment_id, file_name, image_base_dir, fallback_base,
-                flat_search=flat_search, extra_bases=extra_bases,
-            )
-            if _exists_or_denied(local_path):
-                return f'/api/image/{media_id}'
+            if resolver is None:
+                resolver = MediaResolver(image_base_dir, fallback_base, flat_search, extra_bases)
+            local_path = resolver.resolve(file_path, deployment_id, file_name)
+            if resolver.exists(local_path):
+                return image_url(media_id, token)
         return f'/api/proxy-image?url={quote(file_path, safe="")}'
-    return f'/api/image/{media_id}'
+    return image_url(media_id, token)
 
 
 def find_flat_search_ambiguities(med: pd.DataFrame, image_base_dir: str) -> list[dict]:
@@ -803,31 +939,99 @@ def find_flat_search_ambiguities(med: pd.DataFrame, image_base_dir: str) -> list
         List of dicts with ``mediaID``, ``fileName``, ``deploymentID`` and
         the conflicting candidate paths, one per ambiguous record.
     """
-    if not image_base_dir:
+    if not image_base_dir or med.empty:
         return []
+
+    def _col(name: str) -> pd.Series:
+        if name in med.columns:
+            return med[name].fillna("").astype(str)
+        return pd.Series("", index=med.index, dtype=str)
+
+    # Records already found without the flat search (structured layout or the
+    # filePath suffix) can't be ambiguous. Checking them from cached directory
+    # listings first means the whole image tree is only walked when some
+    # record really depends on the flat search.
+    base = Path(image_base_dir)
+    lister = MediaResolver(str(image_base_dir), base)
+    strict = lambda p: lister.status(p) == "ok"  # noqa: E731
+    found = [
+        strict(base / d / f) or lister.suffix_lookup(fp, base) is not None
+        or lister.by_deployment_folder(d, f) is not None
+        for fp, d, f in zip(_col("filePath"), _col("deploymentID"), _col("fileName"))
+    ]
+    med = med[[not hit for hit in found]]
+    if med.empty:
+        return []
+
     index = _flat_image_index(str(image_base_dir))
+    # Only names that occur more than once anywhere under the root can ever be
+    # ambiguous, so filter to those first instead of visiting every record.
+    duplicated = {name: hits for name, hits in index.items() if len(hits) > 1}
+    if not duplicated:
+        return []
+
+    file_names = _col("fileName")
+    lower = file_names.str.lower()
+    mask = (file_names != "") & lower.isin(duplicated.keys())
+    if not mask.any():
+        return []
+
+    def _norm(path: str) -> str:
+        path = os.path.normcase(os.path.normpath(path))
+        return path.lower() if _CASE_INSENSITIVE_FS else path
+
+    # A structured path that exists is necessarily under the indexed root, so
+    # existence can be answered from the index instead of one stat per record.
+    indexed_paths = {_norm(h) for hits in duplicated.values() for h in hits}
+    base = str(image_base_dir)
     ambiguous: list[dict] = []
-    for _, row in med.iterrows():
-        dep_id = str(row.get("deploymentID", "") or "")
-        file_name = str(row.get("fileName", "") or "")
-        if not file_name:
+    for media_id, dep_id, file_name, name_lower in zip(
+        _col("mediaID")[mask], _col("deploymentID")[mask], file_names[mask], lower[mask],
+    ):
+        if _norm(os.path.join(base, dep_id, file_name)) in indexed_paths:
             continue
-        structured = Path(image_base_dir) / dep_id / file_name
-        if structured.exists():
-            continue
-        hits = index.get(file_name.lower(), ())
-        if len(hits) <= 1:
-            continue
+        hits = duplicated[name_lower]
         by_dep = [h for h in hits if dep_id and dep_id in h]
         if len(by_dep) == 1:
             continue
         ambiguous.append({
-            "mediaID": str(row.get("mediaID", "")),
+            "mediaID": media_id,
             "fileName": file_name,
             "deploymentID": dep_id,
             "candidates": list(hits),
         })
     return ambiguous
+
+
+def dataset_fingerprint(camtrap_dir: Path) -> Optional[str]:
+    """Content hash of a CamtrapDP's deployments table, or None if it cannot be read.
+
+    It identifies "the same dataset" across computers regardless of where it is stored, so a
+    session imported from another computer can find the data folder automatically when this
+    computer already used the same dataset in another session.
+    """
+    import hashlib
+
+    dep = resolve_camtrapdp_resource(Path(camtrap_dir), "deployments")
+    if dep is None:
+        return None
+    try:
+        return hashlib.sha1(dep.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def media_extra_bases(camtrap_dir: str, image_base_dir: str) -> tuple[str, ...]:
+    """Fallback folders for photos not found with the configured images folder.
+
+    Picking the CamtrapDP folder (or another folder one level too deep) as the
+    images folder is an easy mistake; the data folder and the images folder's
+    parent are searched too, by the end of each photo's ``filePath``.
+    """
+    bases = [camtrap_dir]
+    if image_base_dir:
+        bases.append(str(Path(image_base_dir).parent))
+    return tuple(b for b in bases if b)
 
 
 def detect_site_col(dep: pd.DataFrame) -> str:
@@ -2095,6 +2299,7 @@ def _build_events(
     flat_search: bool,
     extra_bases: tuple,
     with_burst_reps: bool = False,
+    resolver: Optional[MediaResolver] = None,
 ) -> list[dict]:
     """Gallery event dicts (one per cell) from candidate frames already sorted for display.
 
@@ -2132,6 +2337,8 @@ def _build_events(
         rep_obs = decision_rows.loc[rep_idx, "observationID"]
         max_prob = float(prob_col.max())
 
+        if resolver is None and image_base_dir:
+            resolver = MediaResolver(image_base_dir, fallback_base, flat_search, extra_bases)   # one listing per folder for the whole call
         frames = []
         for obs_id, media_id, fp, dep_id, fname, ts_shown, prob, is_ctx_row, bboxes, burst in zip(
             group["observationID"], group["mediaID"], group["filePath"],
@@ -2144,6 +2351,7 @@ def _build_events(
             img_url = gallery_frame_img_url(
                 str(fp), str(media_id), str(dep_id), str(fname),
                 image_base_dir, fallback_base, flat_search=flat_search, extra_bases=extra_bases,
+                resolver=resolver,
             )
             frame = {
                 "obsId":     obs_id,
@@ -2183,6 +2391,7 @@ def get_events(
     fallback_base: Path = Path("."),
     flat_search: bool = False,
     extra_bases: tuple = (),
+    resolver: Optional[MediaResolver] = None,
 ) -> list[dict]:
     """Return pending gallery events for a species in a given verification round.
 
@@ -2224,7 +2433,7 @@ def get_events(
     total_seqs_by_key = all_sp.groupby("site_occasion_key")["rank"].max().to_dict()
 
     sp_cands = _sort_frames(sp_cands, ["burst_id", "ts"])
-    return _build_events(sp_cands, total_seqs_by_key, image_base_dir, fallback_base, flat_search, extra_bases)
+    return _build_events(sp_cands, total_seqs_by_key, image_base_dir, fallback_base, flat_search, extra_bases, resolver=resolver)
 
 
 def get_pending_events(
@@ -2234,6 +2443,7 @@ def get_pending_events(
     fallback_base: Path = Path("."),
     flat_search: bool = False,
     extra_bases: tuple = (),
+    resolver: Optional[MediaResolver] = None,
 ) -> list[dict]:
     """The cells of a species that are pending expert review, as gallery events.
 
@@ -2255,7 +2465,7 @@ def get_pending_events(
     total_seqs_by_key = species_cands.groupby("site_occasion_key")["rank"].max().to_dict()
     events = _build_events(
         _sort_frames(rows, ["rank", "burst_id", "ts"]), total_seqs_by_key, image_base_dir, fallback_base,
-        flat_search, extra_bases, with_burst_reps=True,
+        flat_search, extra_bases, with_burst_reps=True, resolver=resolver,
     )
     for e in events:
         e["status"] = "pending"
@@ -2270,6 +2480,7 @@ def get_review_events(
     fallback_base: Path = Path("."),
     flat_search: bool = False,
     extra_bases: tuple = (),
+    resolver: Optional[MediaResolver] = None,
 ) -> list[dict]:
     """Return all cells for a completed species with their decision status.
 
@@ -2331,12 +2542,15 @@ def get_review_events(
         rep_obs = decision_rows.loc[rep_idx, "observationID"]
         max_prob = float(prob_col.max())
 
+        if resolver is None and image_base_dir:
+            resolver = MediaResolver(image_base_dir, fallback_base, flat_search, extra_bases)   # one listing per folder for the whole call
         frames = []
         for _, row in group.iterrows():
             fp = str(row["filePath"])
             img_url = gallery_frame_img_url(
                 fp, str(row["mediaID"]), str(row.get("deploymentID", "")), str(row.get("fileName", "")),
                 image_base_dir, fallback_base, flat_search=flat_search, extra_bases=extra_bases,
+                resolver=resolver,
             )
             row_is_ctx = bool(row.get("is_context", False))
             row_prob = pd.to_numeric(row.get("classificationProbability"), errors="coerce")

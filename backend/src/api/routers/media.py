@@ -28,20 +28,7 @@ def serve_image(media_id: str, obs: str | None = None, boxes: bool = False, v: s
     # URLs carrying the session token (?v=) can be kept by the browser; bare URLs never are.
     cache = {"Cache-Control": "private, max-age=86400"} if v else {"Cache-Control": "no-store"}
 
-    from camtrap_workflow import media_extra_bases, resolve_media_path
-
-    config = session_service.get_config()
-    image_base_dir = config.get("image_base_dir", "")
-    fallback_base = Path(image_base_dir) if image_base_dir else Path(config["camtrap_dir"])
-    file_path = resolve_media_path(
-        str(row["filePath"]),
-        str(row.get("deploymentID", "")),
-        str(row.get("fileName", "")),
-        image_base_dir,
-        fallback_base,
-        flat_search=bool(config.get("flat_search", False)),
-        extra_bases=media_extra_bases(config["camtrap_dir"], image_base_dir),
-    )
+    file_path = session_service.resolve_image_path(media_id)
     try:
         stat_result = file_path.stat()
     except FileNotFoundError:
