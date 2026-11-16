@@ -304,6 +304,11 @@ describe('GalleryPage', () => {
       expect(api.saveProgress).not.toHaveBeenCalled()
     })
 
+    it('shows how many occasions are pending expert review in the header', async () => {
+      renderGallery()
+      expect(await screen.findByText('2 pending expert review')).toBeInTheDocument()
+    })
+
     it('settles a cell as not detected when it is rejected', async () => {
       api.settlePending.mockResolvedValue({ success: true, confirmed: 0, rejected: 1 })
       renderGallery()

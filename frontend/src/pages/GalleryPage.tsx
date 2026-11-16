@@ -59,7 +59,7 @@ export default function GalleryPage() {
   const { t } = useTranslation()
 
   const [events, setEvents] = useState<DetectionEvent[]>([])
-  const [spStats, setSpStats] = useState<{ species_name: string; n_total_combos: number; n_confirmed_combos: number; n_resolved: number } | null>(null)
+  const [spStats, setSpStats] = useState<{ species_name: string; n_total_combos: number; n_confirmed_combos: number; n_resolved: number; n_pending?: number } | null>(null)
   const [reviewParams, setReviewParams] = useState<{ gap_seconds: number; occasion_days: number; occasion_hours: number; min_score: number; min_score_by_species?: Record<string, number>; review_order?: 'score' | 'time' } | null>(null)
   const [iteration, setIteration] = useState(1)
   const [totalIterations, setTotalIterations] = useState(1)
@@ -975,6 +975,12 @@ export default function GalleryPage() {
                 {' '}{t('gallery.confirmed_periods', { n: spStats.n_confirmed_combos }).replace(/^\d+ /, '')}
                 {' · '}
                 {t('gallery.reviewed', { resolved: spStats.n_resolved, total: spStats.n_total_combos })}
+                {(spStats.n_pending ?? 0) > 0 && (
+                  <>
+                    {' · '}
+                    <span className="text-amber-500 font-semibold">{t('gallery.pending_count', { n: spStats.n_pending })}</span>
+                  </>
+                )}
                 {' · '}
                 <span className={pct === 100 ? 'text-emerald-500 font-bold' : 'text-amber-400 font-semibold'}>
                   {pct}%
@@ -1035,6 +1041,7 @@ export default function GalleryPage() {
           <button
             className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg shadow-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
             onClick={handleSave}
+            title={pendingMode ? undefined : t('gallery.finish_round_tooltip')}
             disabled={saving}
           >
             {saving ? <Spinner sm /> : (
