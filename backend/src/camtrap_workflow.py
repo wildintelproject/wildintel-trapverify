@@ -1726,6 +1726,21 @@ def cross_keys_set(decisions_dir: Path) -> set[str]:
     return set(cross["site_occasion_key"].replace("", pd.NA).dropna())
 
 
+def added_cross_keys(decisions_dir: Path, candidates: "pd.DataFrame") -> set[str]:
+    """Cross confirmations in cells where the species had no candidate.
+
+    Confirming another species from a photo is meant to save work in cells the
+    classifier already flagged for that species. In a cell it never flagged,
+    the confirmation recovers a classifier false negative, and how many of
+    those are recovered depends on which other species are being reviewed, not
+    on the classifier: counting them would make detection differ among sites.
+    They are therefore kept apart ("added"): not 1 in ``dethist_verified``,
+    but reported in ``cell_status`` and ``dethist_verified_with_additions``.
+    """
+    keys = set(candidates["site_occasion_key"].dropna()) if "site_occasion_key" in candidates.columns else set()
+    return cross_keys_set(decisions_dir) - keys
+
+
 def cross_key(site_id: str, occasion: int, species_safe: str) -> str:
     """``site_occasion_key`` of a cell, as built by :func:`build_candidates`."""
     return f"{site_id}_occ{int(occasion)}_{species_safe}"
@@ -2583,6 +2598,9 @@ TAG_REFERENCE = "camtrapverify:reference"  # the reference (e.g. Zooniverse) con
 TAG_CONFIRMED = "camtrapverify:confirmed"
 TAG_REJECTED = "camtrapverify:rejected"
 TAG_UNSURE = "camtrapverify:unsure"
+# Confirmed from a photo reviewed for another species, in a cell where the
+# classifier had not flagged this species: kept apart from the verified history.
+TAG_ADDED = "camtrapverify:added"
 TAG_ACTUAL_SPECIES = "camtrapverify-actual-species:"
 
 
@@ -2775,7 +2793,7 @@ def export_verified_camtrapdp(
             obs["observationTags"] = ""
         # A package that is verified again may already carry this review's tags: the new ones replace
         # them (never twice, never "rejected" beside "confirmed"); every other tag is kept.
-        mine = (TAG_CONFIRMED, TAG_REJECTED, TAG_UNSURE)
+        mine = (TAG_CONFIRMED, TAG_REJECTED, TAG_UNSURE, TAG_ADDED)
 
         def merge(old_tags: str, new_tags: list[str]) -> str:
             keep = [x.strip() for x in str(old_tags).split("|")
@@ -2805,6 +2823,17 @@ def export_verified_camtrapdp(
             added = added.copy()
             added["observationTags"] = TAG_CONFIRMED
             obs = pd.concat([obs, added], ignore_index=True)
+        # Confirmations in cells the classifier never flagged for that species
+        # are tagged apart (they are not in the verified history).
+        if candidates is not None:
+            outside = added_cross_keys(decisions_dir, candidates)
+            if outside:
+                rows = cross[cross["site_occasion_key"].isin(outside)]
+                pairs = set(zip(rows["mediaID"].astype(str), rows["scientificName"].astype(str)))
+                is_pair = pd.Series(list(zip(obs["mediaID"].astype(str), obs["scientificName"].astype(str))),
+                                    index=obs.index).isin(pairs)
+                obs.loc[is_pair, "observationTags"] = obs.loc[is_pair, "observationTags"].fillna("").astype(str).map(
+                    lambda t: t if TAG_ADDED in t.split("|") else "|".join([x for x in (t, TAG_ADDED) if x]))
 
     obs = restore_observation_ids(obs)
     obs.to_csv(out_dir / "observations.csv", index=False)
@@ -2962,9 +2991,13 @@ def build_occupancy_inputs(
       human-confirmed detections. Cells pending expert review are NA too.
     * ``cell_status_<sp>.csv`` — same shape, telling the NA cells apart: ``1``, ``0``,
       ``pending`` (pending expert review), ``unreviewed`` (rounds not finished; written as 0 in the
-      verified history) or ``inactive`` (camera not operating).
+      verified history), ``added`` (confirmed from a photo reviewed for another species where the
+      classifier had not flagged this one; 0 in the verified history, see :func:`added_cross_keys`)
+      or ``inactive`` (camera not operating).
+    * ``dethist_verified_with_additions_<sp>.csv`` — only when there are ``added`` cells: the
+      verified history with those cells as 1.
     * ``verification_summary.csv`` — per-species summary with ``psi_obs`` naive
-      vs. verified, plus ``pending_cells`` and ``unreviewed_cells``.
+      vs. verified, plus ``pending_cells``, ``unreviewed_cells`` and ``added_cells``.
 
     Args:
         candidates: Full candidate manifest DataFrame.
@@ -3065,11 +3098,12 @@ def build_occupancy_inputs(
     summary_rows = []
     states = cell_states(candidates, decisions_dir)
     status_by_key = dict(zip(states["site_occasion_key"], states["status"]))
-    # Cells confirmed from another species' gallery are detections too, also where the classifier
-    # never assigned the species (a missed detection).
+    # Cells confirmed from another species' gallery are detections where the classifier had flagged
+    # the species; elsewhere they are "added" (see added_cross_keys) and kept out of dethist_verified.
     cross_all = cross_keys_set(decisions_dir)
+    added_keys = added_cross_keys(decisions_dir, candidates)
     for key in cross_all:
-        status_by_key[key] = "confirmed"
+        status_by_key[key] = "added" if key in added_keys else "confirmed"
     cross_media_ts: dict = {}
     if cross_all:
         real_all = candidates[~candidates["is_context"].fillna(False).astype(bool)] if "is_context" in candidates.columns else candidates
@@ -3087,7 +3121,7 @@ def build_occupancy_inputs(
         else:
             verif_keys = {k for k in (dec["site_occasion_key"].dropna() if not dec.empty else [])
                           if k.endswith(f"_{sp_safe}")}
-        verif_keys |= {k for k in cross_all if k.endswith(f"_{sp_safe}")}      # confirmed from another species' photo
+        verif_keys |= {k for k in cross_all - added_keys if k.endswith(f"_{sp_safe}")}   # confirmed from another species' photo
 
         # Verified history: 1 confirmed; NA where the camera was inactive OR the cell is pending
         # expert review (unknown, not a true zero); 0 otherwise. cell_status_<sp>.csv keeps those
@@ -3097,6 +3131,7 @@ def build_occupancy_inputs(
         status = np.full((n_sites, n_occ), "inactive", dtype=object)
         n_pending = 0
         n_unverified = 0
+        n_added = 0
         for i, site in enumerate(sites):
             for j in range(n_occ):
                 if op[i, j] == 0:
@@ -3107,6 +3142,12 @@ def build_occupancy_inputs(
                 if cell == "confirmed":
                     yV[i, j] = 1.0
                     status[i, j] = "1"
+                elif cell == "added":
+                    # No candidate of the species: 0 in the verified history,
+                    # 1 only in dethist_verified_with_additions_<sp>.csv.
+                    yV[i, j] = 0.0
+                    status[i, j] = "added"
+                    n_added += 1
                 elif cell == "pending":
                     status[i, j] = "pending"
                     n_pending += 1
@@ -3130,6 +3171,13 @@ def build_occupancy_inputs(
 
         _to_df(yN).to_csv(out_dir / f"dethist_naive_{sp_safe}.csv", index=False)
         _to_df(yV).to_csv(out_dir / f"dethist_verified_{sp_safe}.csv", index=False)
+        with_additions = out_dir / f"dethist_verified_with_additions_{sp_safe}.csv"
+        if n_added:
+            yA = yV.copy()
+            yA[status == "added"] = 1.0
+            _to_df(yA).to_csv(with_additions, index=False)
+        else:
+            with_additions.unlink(missing_ok=True)
 
         # Time to detection (hours from the start of each occasion to its first detection)
         tN, tV = _time_to_detection(
@@ -3155,7 +3203,6 @@ def build_occupancy_inputs(
         naive_det = int(np.nansum(yN == 1))
         verif_det = int(np.nansum(yV == 1))
         fp_cells  = int(np.nansum((yN == 1) & (yV == 0)))
-        fn_cells  = int(np.nansum((yN == 0) & (yV == 1)))               # missed by the classifier, found by the expert
         psi_naive = float(np.mean(
             [any(yN[i, j] == 1 for j in range(n_occ) if not np.isnan(yN[i, j]))
              for i in range(n_sites)]
@@ -3172,7 +3219,7 @@ def build_occupancy_inputs(
             "naive_detections":     naive_det,
             "verified_detections":  verif_det,
             "false_positive_cells": fp_cells,
-            "false_negative_cells": fn_cells,
+            "added_cells":          n_added,
             "pending_cells":        n_pending,
             "unreviewed_cells":     n_unverified,
             "psi_obs_naive":        round(psi_naive, 3),
