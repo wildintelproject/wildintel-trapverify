@@ -82,8 +82,8 @@ export const api = {
       `/api/species/${species}/pending`, { confirmed, rejected_keys: rejectedKeys },
     ),
 
-  getProgress: (species: string, iteration: number) =>
-    req<{ progress: SavedProgress | null }>(`/api/species/${species}/progress?iteration=${iteration}`),
+  getProgress: (species: string, mode: 'rounds' | 'pending', iteration: number) =>
+    req<{ progress: SavedProgress | null }>(`/api/species/${species}/progress?mode=${mode}&iteration=${iteration}`),
 
   saveProgress: (species: string, body: Omit<SavedProgress, 'saved_at'>, keepalive = false) =>
     req<{ success: boolean; saved_at: string | null; n: number }>(`/api/species/${species}/progress`, {

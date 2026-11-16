@@ -141,12 +141,9 @@ def rebuild_outputs(export: bool = True) -> None:
         idle_seconds=int(config.get("review_idle_seconds", 120)),
     )
     build_false_positive_sources(effort, p["decisions"], p["corrections"], p["occupancy_out"])
-    if config.get("occasion_hours"):
-        # With occasions shorter than a day the detection histories are not suitable for an
-        # occupancy model, so the fit is not computed (see the manual).
-        logger.info("Occasions of %s h: occupancy fit skipped", config["occasion_hours"])
-    else:
-        fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))
+    # Also with occasions in hours (as in the community fork); Results and the manual caution that
+    # the estimate is not meaningful when the occasions are hours of the same day.
+    fit_naive_vs_verified(p["occupancy_out"], config.get("target_species", []))
     logger.info("Output files rebuilt successfully")
 
 
@@ -338,6 +335,7 @@ def settle_pending(species_safe: str, confirmed_ids: list[str], rejected_keys: l
     n_conf, n_rej = resolve_pending(
         p["decisions"], session_service.get_candidates(), species_safe, confirmed_ids, rejected_keys,
     )
+    progress_service.clear_progress(p["decisions"], species_safe, "pending", 0)
     rebuild_outputs(export=False)
     logger.info("Pending cells settled for %s: confirmed=%d rejected=%d", species_safe, n_conf, n_rej)
     return {"success": True, "confirmed": n_conf, "rejected": n_rej}
@@ -445,20 +443,20 @@ def reopen_last_round(species_safe: str) -> dict:
         return ev["repObsId"] in ids or any(f["obsId"] in ids for f in ev["frames"])
 
     decisions = {
-        ev["repObsId"]: "confirmed" if _of(ev, confirmed_ids) else "unsure" if _of(ev, unsure_ids) else "rejected"
+        ev["key"]: "confirmed" if _of(ev, confirmed_ids) else "unsure" if _of(ev, unsure_ids) else "rejected"
         for ev in events
     }
     corr = load_rejection_corrections(p["corrections"])
     corr = corr[(corr["species_safe"] == species_safe) & (corr["iteration"] == str(rounds))]
-    corrections = {o: t for o, t in zip(corr["observationID"], corr["actual_species"]) if o in decisions}
+    corrections = {k: t for k, t in zip(corr["site_occasion_key"], corr["actual_species"]) if k in decisions}
     log = load_review_log(p["review_log"])
     times: dict[str, int] = {}
     if not log.empty:
         mine = log[(log["species_safe"] == species_safe) & (log["iteration"] == str(rounds))]
-        for o, at in zip(mine["observationID"], mine["decided_at"]):
-            if o in decisions and at:
-                times[o] = int(pd.Timestamp(at).timestamp() * 1000)
-    progress_service.save_progress(d, species_safe, rounds, decisions, corrections, times)
+        for k, at in zip(mine["site_occasion_key"], mine["decided_at"]):
+            if k in decisions and at:
+                times[k] = int(pd.Timestamp(at).timestamp() * 1000)
+    progress_service.save_progress(d, species_safe, "rounds", rounds, decisions, {}, corrections, times)
     rebuild_outputs()
     logger.info("Round %d of %s re-opened (%d decisions restored)", rounds, species_safe, len(decisions))
     return {"success": True, "iteration": rounds, "restored": len(decisions)}

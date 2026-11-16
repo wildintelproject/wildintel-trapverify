@@ -125,23 +125,22 @@ def update_species_decisions(species_safe: str, req: ReviewDecisionsRequest) -> 
 
 
 @router.get("/{species_safe}/progress")
-def get_progress(species_safe: str, iteration: int) -> dict:
-    """Saved progress of an unfinished round (``{"progress": null}`` when there is none)."""
+def get_progress(species_safe: str, mode: str | None = None, iteration: int | None = None) -> dict:
+    """Saved progress of an unfinished round or of the pending view (``{"progress": null}`` when none)."""
     d = session_service.paths()["decisions"]
-    return {"progress": progress_service.load_progress(d, species_safe, iteration)}
+    return {"progress": progress_service.load_progress(d, species_safe, mode, iteration)}
 
 
 @router.put("/{species_safe}/progress")
 def save_progress(species_safe: str, req: ProgressRequest) -> dict:
-    """Save the decisions made so far in a round; changes no result."""
+    """Save the decisions made so far in a round, or in the pending-review view; changes no result."""
     d = session_service.paths()["decisions"]
-    if req.iteration <= rounds_completed(d).get(species_safe, 0):
+    if req.mode == "rounds" and req.iteration <= rounds_completed(d).get(species_safe, 0):
         raise HTTPException(400, "Esa ronda ya está terminada.")
-    n = progress_service.save_progress(
-        d, species_safe, req.iteration, req.decisions, req.corrections, req.decision_times,
+    saved_at = progress_service.save_progress(
+        d, species_safe, req.mode, req.iteration, req.decisions, req.chosen_rep, req.corrections, req.decision_times,
     )
-    saved = progress_service.load_progress(d, species_safe, req.iteration)
-    return {"success": True, "n": n, "saved_at": saved["saved_at"] if saved else None}
+    return {"success": True, "saved_at": saved_at, "n": len(req.decisions)}
 
 
 @router.post("/{species_safe}/reopen")
