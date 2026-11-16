@@ -55,6 +55,8 @@ export default function DirectoryPicker({ onSelect, onClose, initialPath, showFi
     }
   }
 
+  // Opens the folder once, when the picker appears (later changes to the path come from the user's clicks).
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { browse(initialPath) }, [])
 
   function handleManualGo(e: React.FormEvent) {
