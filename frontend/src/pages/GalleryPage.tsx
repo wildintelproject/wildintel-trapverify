@@ -11,6 +11,7 @@ import EventCard, { type Decision } from '../components/EventCard'
 import { frameSrc } from '../utils/frameImage'
 import { crossButtonState } from '../crossState'
 import { effectiveMinScore } from '../utils/minScore'
+import { clearDraft, draftKey, loadDraft, saveDraft } from '../utils/draft'
 import type { CrossSpecies, DetectionEvent, SpeciesStats } from '../types'
 
 interface EventSlide extends SlideImage {
@@ -46,6 +47,16 @@ function progressBody(
     if (mode === 'pending' && d === 'confirmed' && chosenRep[e.key]) rep[e.key] = chosenRep[e.key]
   })
   return { mode, iteration, decisions: dec, chosen_rep: rep, corrections: corr, decision_times: tm }
+}
+
+/** The draft this browser kept for a round, when it is newer than what the server holds. */
+function newerDraft(sid: string, species: string, mode: 'rounds' | 'pending', iter: number, serverSavedAt?: string | null) {
+  if (!sid) return null
+  const d = loadDraft(draftKey(sid, species, mode, iter))
+  if (!d || Object.keys(d.decisions).length === 0) return null
+  const tLocal = d.savedAt ? Date.parse(d.savedAt) || 0 : 0
+  const tServer = serverSavedAt ? Date.parse(serverSavedAt) || 0 : 0
+  return tLocal > tServer ? d : null
 }
 
 function Spinner({ sm }: { sm?: boolean }) {
@@ -105,6 +116,7 @@ export default function GalleryPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const lastSavedRef = useRef('')
   const finishedRef = useRef(false)
+  const [sessionId, setSessionId] = useState('')
   const progressTimerRef = useRef<number | null>(null)
   const decisionsRef = useRef(decisions)
   const completedRef = useRef(false)
@@ -142,6 +154,7 @@ export default function GalleryPage() {
       const sp = allStats.find((s) => s.species_safe === species)
       if (sp) setSpStats(sp)
       if (state.config?.total_iterations) setTotalIterations(state.config.total_iterations)
+      setSessionId(state.session_dir ?? '')
       const recording = !!state.config?.record_rejection_species
       setRecordRejection(recording)
       if (recording) {
@@ -162,22 +175,25 @@ export default function GalleryPage() {
         chosenRepRef.current = {}
         // Verdicts given earlier in this view and not yet saved come back as they were left.
         const prog = await api.getProgress(species, 'pending', 0).then((r) => r.progress).catch(() => null)
+        // A draft kept by this browser that is newer than the server's progress wins (the tab was
+        // closed before the autosave reached the server).
+        const draft = newerDraft(state.session_dir ?? '', species, 'pending', 0, prog?.saved_at)
         const restored: Record<string, Decision> = {}
         const restoredCorr: Record<string, string> = {}
-        if (prog) {
-          pend.forEach((ev) => {
-            const d = prog.decisions[ev.key]
-            if (!d) return
-            restored[ev.key] = d
-            if (prog.chosen_rep[ev.key]) chosenRepRef.current[ev.key] = prog.chosen_rep[ev.key]
-            if (prog.corrections[ev.key]) restoredCorr[ev.key] = prog.corrections[ev.key]
-            if (prog.decision_times[ev.key]) decidedAtRef.current[ev.key] = prog.decision_times[ev.key]
-          })
-        }
+        pend.forEach((ev) => {
+          const d = (draft ? draft.decisions : prog?.decisions)?.[ev.key]
+          if (!d) return
+          restored[ev.key] = d
+          const rep = (draft ? draft.chosenRep : prog?.chosen_rep)?.[ev.key]
+          if (rep) chosenRepRef.current[ev.key] = rep
+          if (prog?.corrections[ev.key]) restoredCorr[ev.key] = prog.corrections[ev.key]
+          if (prog?.decision_times[ev.key]) decidedAtRef.current[ev.key] = prog.decision_times[ev.key]
+        })
         setDecisions(restored)
         setCorrections(restoredCorr)
         setProgressAt(prog?.saved_at ?? null)
-        lastSavedRef.current = JSON.stringify(progressBody(pend, restored, restoredCorr, decidedAtRef.current, 0, 'pending', chosenRepRef.current))
+        // With a newer draft the server does not hold this yet: the next autosave sends it.
+        lastSavedRef.current = draft ? '' : JSON.stringify(progressBody(pend, restored, restoredCorr, decidedAtRef.current, 0, 'pending', chosenRepRef.current))
         setProgressState('idle')
         return
       }
@@ -220,20 +236,21 @@ export default function GalleryPage() {
       // Unfinished work from an earlier visit (any browser, or another computer through the
       // session export): the progress saved in the session folder wins over the round's files.
       const prog = await api.getProgress(species, 'rounds', iter).then((r) => r.progress).catch(() => null)
-      if (prog) {
+      const draft = newerDraft(state.session_dir ?? '', species, 'rounds', iter, prog?.saved_at)
+      if (prog || draft) {
         const restored: Record<string, Decision> = {}
         const restoredCorr: Record<string, string> = {}
         evts.forEach((ev) => {
-          const d = prog.decisions[ev.key]
+          const d = (draft ? draft.decisions : prog?.decisions)?.[ev.key]
           if (!d) return
           restored[ev.key] = d
-          if (prog.corrections[ev.key]) restoredCorr[ev.key] = prog.corrections[ev.key]
-          if (prog.decision_times[ev.key]) decidedAtRef.current[ev.key] = prog.decision_times[ev.key]
+          if (prog?.corrections[ev.key]) restoredCorr[ev.key] = prog.corrections[ev.key]
+          if (prog?.decision_times[ev.key]) decidedAtRef.current[ev.key] = prog.decision_times[ev.key]
         })
         setDecisions(restored)
         setCorrections(restoredCorr)
-        setProgressAt(prog.saved_at)
-        lastSavedRef.current = JSON.stringify(progressBody(evts, restored, restoredCorr, decidedAtRef.current, iter))
+        setProgressAt(prog?.saved_at ?? null)
+        lastSavedRef.current = draft ? '' : JSON.stringify(progressBody(evts, restored, restoredCorr, decidedAtRef.current, iter))
       } else {
         setProgressAt(null)
         lastSavedRef.current = JSON.stringify(progressBody(evts, pre, corr, decidedAtRef.current, iter))
@@ -302,6 +319,16 @@ export default function GalleryPage() {
     progressTimerRef.current = window.setTimeout(() => { flushProgress() }, 2500)
     return () => { if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current) }
   }, [progressPayload, flushProgress])
+
+  // Keep a draft of the decisions in this browser too, so hours of review are not lost if the tab
+  // is closed before the autosave reaches the server. Only a convenience: the server's progress is
+  // what counts, and the draft is dropped when the round is saved.
+  useEffect(() => {
+    if (loading || completed || finishedRef.current || !sessionId || !species) return
+    if (Object.keys(decisions).length === 0) return
+    saveDraft(draftKey(sessionId, species, pendingMode ? 'pending' : 'rounds', pendingMode ? 0 : iteration),
+      { decisions, chosenRep: { ...chosenRepRef.current } })
+  }, [decisions, loading, completed, sessionId, species, pendingMode, iteration])
 
   const flushRef = useRef(flushProgress)
   flushRef.current = flushProgress
@@ -575,6 +602,7 @@ export default function GalleryPage() {
       }
       const r = await api.settlePending(species, confirmedIds, rejectedKeys)
       finishedRef.current = true                           // the server dropped the pending progress
+      clearDraft(draftKey(sessionId, species, 'pending', 0))
       showToast(t('gallery.pending_saved', { confirmed: r.confirmed, rejected: r.rejected }), 'success')
       setLbOpen(false)
       setReloadKey((k) => k + 1)
@@ -620,6 +648,7 @@ export default function GalleryPage() {
       })
       const result = await api.saveDecisions(species, iteration, confirmedIds, unsureIds, correctionIds, decisionTimes)
       finishedRef.current = true                           // the server dropped the progress with the round
+      clearDraft(draftKey(sessionId, species, 'rounds', iteration))
       if (result.done) {
         // The rounds are over: cells with an unsure event and no event left are now pending expert review.
         const after = await api.getSpecies().catch(() => [] as SpeciesStats[])
