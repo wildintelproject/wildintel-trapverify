@@ -2754,3 +2754,15 @@ def test_importing_a_zip_with_an_unreadable_manifest_is_refused_and_leaves_nothi
     assert r.status_code == 400
     assert set(session_service.DEFAULT_OUTPUT_DIR.glob("broken_imported_*")) == before     # no half-imported folder
     assert client.get("/api/state").json()["ready"]                    # the session that was open stays open
+def test_a_cell_confirmed_in_the_pending_review_reaches_the_verified_camtrapdp(client, camtrap_dir, tmp_path):
+    import pandas as pd
+    sd, ev = _round1_with_two_unsure(client, camtrap_dir, tmp_path)
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 2, "confirmed": []})
+    pend = {e["key"]: e for e in client.get("/api/species/Vulpes_vulpes/pending").json()}
+    rep = pend["SITE_A_occ2_Vulpes_vulpes"]["frames"][0]["burstRepObsId"]
+    client.post("/api/species/Vulpes_vulpes/pending", json={"confirmed": [rep], "rejected_keys": []})
+    assert client.get("/api/results").json()["confirmed"] >= 1
+    obs = pd.read_csv(sd / "camtrap_dp_verified" / "observations.csv", dtype=str)
+    row = obs[obs["observationID"] == rep].iloc[0]
+    assert row["classificationMethod"] == "human"                              # the expert's verdict is in the export
+    assert row["observationTags"].split("|").count("camtrapverify:confirmed") == 1
