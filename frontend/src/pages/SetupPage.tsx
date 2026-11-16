@@ -8,6 +8,7 @@ import DirectoryPicker from '../components/DirectoryPicker'
 import MultiClassifierForm, { type McParams } from '../components/MultiClassifierForm'
 import OccasionLength from '../components/OccasionLength'
 import { occasionDuration } from '../utils/occasionDuration'
+import { wholeNumber } from '../utils/integer'
 import CsvImportForm from '../components/CsvImportForm'
 import RelinkDialog from '../components/RelinkDialog'
 import type { RecentSession, RelinkStatus, WorkflowConfig } from '../types'
@@ -446,7 +447,8 @@ export default function SetupPage({ onSetup, ready }: Props) {
   function toggleSpecies(sp: string) {
     setSelectedSpecies((prev) => {
       const next = new Set(prev)
-      next.has(sp) ? next.delete(sp) : next.add(sp)
+      if (next.has(sp)) next.delete(sp)
+      else next.add(sp)
       return next
     })
   }
@@ -1242,7 +1244,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
           <div className="mb-6">
             <label className={labelClass}>{t('setup.label_gap')}</label>
             <input type="number" className={inputClass} min={1} value={form.gap_seconds}
-              onChange={(e) => set('gap_seconds', Number(e.target.value))} />
+              onChange={(e) => set('gap_seconds', wholeNumber(e.target.value, 1, 60))} />
             <p className={hintClass}>{t('setup.hint_gap')}</p>
           </div>
           )}
@@ -1356,7 +1358,7 @@ export default function SetupPage({ onSetup, ready }: Props) {
               step={10}
               className={inputClass}
               value={form.review_idle_seconds}
-              onChange={(e) => set('review_idle_seconds', Math.max(10, Number(e.target.value) || 120))}
+              onChange={(e) => set('review_idle_seconds', wholeNumber(e.target.value, 10, 120))}
             />
             <p className={hintClass}>{t('setup.hint_review_idle_seconds')}</p>
           </div>
