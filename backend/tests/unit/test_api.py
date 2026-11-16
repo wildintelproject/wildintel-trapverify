@@ -2598,3 +2598,26 @@ def test_setup_stores_the_archive_stats_and_older_sessions_get_them_once(client,
     assert json.loads(cfg_file.read_text())["archive_stats"] == {"total_observations": 5, "target_assigned": 5}
     row = pd.read_csv(cfg_file.parent / "occupancy_inputs" / "review_effort.csv").iloc[0]
     assert row["total_classified_images"] == 5
+
+
+def test_ttd_verified_is_only_written_when_the_review_was_by_time(client, camtrap_dir, tmp_path):
+    by_score = _setup_order(client, camtrap_dir, tmp_path, "score")
+    files = {f.name for f in (by_score / "occupancy_inputs").glob("ttd_*.csv")}
+    assert files == {"ttd_naive_Vulpes_vulpes.csv"}                         # the naive one does not depend on the review
+    by_time = _setup_order(client, camtrap_dir, tmp_path, "time")
+    assert {f.name for f in (by_time / "occupancy_inputs").glob("ttd_*.csv")} == {"ttd_naive_Vulpes_vulpes.csv", "ttd_verified_Vulpes_vulpes.csv"}
+
+
+def test_a_stale_verified_ttd_file_is_removed_in_score_order(client, camtrap_dir, tmp_path):
+    sd = _setup_order(client, camtrap_dir, tmp_path, "score")
+    stale = sd / "occupancy_inputs" / "ttd_verified_Vulpes_vulpes.csv"
+    stale.write_text("siteID,occ1\nSITE_A,1\n")                              # left by an earlier version
+    ev = client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json()
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [ev[0]["repObsId"]]})
+    assert not stale.exists()
+
+
+def test_the_naive_ttd_is_the_same_in_either_order(client, camtrap_dir, tmp_path):
+    a = _setup_order(client, camtrap_dir, tmp_path, "score")
+    b = _setup_order(client, camtrap_dir, tmp_path, "time")
+    assert (a / "occupancy_inputs" / "ttd_naive_Vulpes_vulpes.csv").read_text() == (b / "occupancy_inputs" / "ttd_naive_Vulpes_vulpes.csv").read_text()

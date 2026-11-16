@@ -2921,7 +2921,14 @@ def build_occupancy_inputs(
         status_df.insert(0, "siteID", sites)
         status_df.to_csv(out_dir / f"cell_status_{sp_safe}.csv", index=False)
         _ttd_to_df(tN, sites, occ_cols).to_csv(out_dir / f"ttd_naive_{sp_safe}.csv", index=False)
-        _ttd_to_df(tV, sites, occ_cols).to_csv(out_dir / f"ttd_verified_{sp_safe}.csv", index=False)
+        # The verified time is the first true detection only when the events were reviewed in time
+        # order; in score order the earliest detection may never have been looked at, so the file
+        # would look right and overestimate. It is not written then (and an old one is removed).
+        verified_ttd = out_dir / f"ttd_verified_{sp_safe}.csv"
+        if config.get("review_order") == "time":
+            _ttd_to_df(tV, sites, occ_cols).to_csv(verified_ttd, index=False)
+        else:
+            verified_ttd.unlink(missing_ok=True)
 
         naive_det = int(np.nansum(yN == 1))
         verif_det = int(np.nansum(yV == 1))

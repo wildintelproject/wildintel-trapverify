@@ -642,14 +642,14 @@ When the data do not allow a standard error to be computed (the curvature of the
 
 ### Time to detection
 
-For time-to-detection models (for example `unmarked::occuTTD`) the occupancy inputs include, per species, `ttd_naive_{sp}.csv` and `ttd_verified_{sp}.csv`: one row per site, one column per occasion, in **hours from the start of the occasion** to the first detection.
+For time-to-detection models (for example `unmarked::occuTTD`) the occupancy inputs include, per species, `ttd_naive_{sp}.csv` and, when you reviewed **by time**, `ttd_verified_{sp}.csv`: one row per site, one column per occasion, in **hours from the start of the occasion** to the first detection.
 
 - **Naive**: the earliest photo the classifier assigned to the species in that occasion. **Verified**: the earliest photo of the event you confirmed.
 - **Censored** values: an occasion with no detection (no candidate, or all its events were inspected and rejected) is set to the **length of the occasion** in hours, as `occuTTD` expects. The last occasion can be shorter than the others and is censored at its own length.
 - **NA** (empty): the camera was not operating in that occasion and, in the verified file, an occasion that is still **pending** (no confirmation yet and events left to review).
 - Occasions in days or in hours are both handled (a 5-day occasion is censored at 120 h).
 
-The verified time is the **first true detection only when the events were reviewed by time** (*Order of the detection events: by time* at setup). In score order it is the time of the event you confirmed, which can be later than an earlier detection that was never looked at, so the verified TTD would be overestimated. Photos removed by the minimum detection confidence are not candidates, so they cannot be the first detection either (use 0 to keep them all when this matters).
+The verified time is the **first true detection only when the events were reviewed by time** (*Order of the detection events: by time* at setup), so `ttd_verified_{sp}.csv` is **written only in that case**. In score order the time of the event you confirmed can be later than an earlier detection that was never looked at, so the verified TTD would be overestimated and the file is not produced (`ttd_naive_{sp}.csv`, which does not depend on the review, still is). For time to detection, choose the review by time at setup. Photos removed by the minimum detection confidence are not candidates, so they cannot be the first detection either (use 0 to keep them all when this matters).
 
 ### Output Files
 
@@ -692,7 +692,7 @@ Events that were never inspected (because a cell was already confirmed or no rou
 | `camera_operation.csv` | Camera operation matrix (sites × sampling occasions): days of operation per occasion, or **hours** of operation when the occasions are in hours. |
 | `dethist_naive_{sp}.csv` | Naive detection history per species (AI detections, not human-validated). One file per species. |
 | `dethist_verified_{sp}.csv` | Verified detection history per species (confirmed by expert). One file per species. |
-| `ttd_naive_{sp}.csv`, `ttd_verified_{sp}.csv` | Time to first detection per site and occasion, in hours from the start of the occasion (see [Time to detection](#time-to-detection)). One pair per species. |
+| `ttd_naive_{sp}.csv` (and `ttd_verified_{sp}.csv` with the review by time) | Time to first detection per site and occasion, in hours from the start of the occasion (see [Time to detection](#time-to-detection)). One pair per species. |
 | `verification_summary.csv` | Per-species summary: confirmed, rejected and unreviewed counts. |
 | `occupancy_fit.csv` | Occupancy fit per species: naive and verified ψ and *p*, each with its 95 % confidence limits (see [How the occupancy estimates are computed](#how-the-occupancy-estimates-are-computed)). |
 | `review_effort.csv` | Total review effort: number of detection events and images inspected. |
@@ -734,7 +734,7 @@ The outputs are designed for **occupancy models**: a detection history per speci
 
 - **Only one detection event is verified per cell.** The review stops at the first event you confirm, so the verified data do not contain every detection. They cannot be used to count events or animals, because most detections are never looked at. For **daily activity patterns**, use [occasions of one hour](#occasions-shorter-than-a-day), where each hour of each site has its own verified record.
 - **Abundance** methods that need every independent event (for example random-encounter models) or that need individuals to be told apart (spatial capture–recapture) are not supported.
-- **Time to first detection** needs the *earliest* detection in each period. By default the tool presents the highest-scoring event first, not the earliest, so a missed first detection is possible, and for this kind of analysis its effect is larger than for presence/absence, because the first detection itself is the measurement. Choose **Order of the detection events: by time** at setup to review each occasion from its earliest event, so the first confirmed event is the first true detection; the `ttd_*` files are exact only in that case (see [Time to detection](#time-to-detection)). Reviewing by time may need more photos, and photos below the minimum confidence are removed before the review, so use 0 to keep them all when the first detection matters.
+- **Time to first detection** needs the *earliest* detection in each period. By default the tool presents the highest-scoring event first, not the earliest, so a missed first detection is possible, and for this kind of analysis its effect is larger than for presence/absence, because the first detection itself is the measurement. Choose **Order of the detection events: by time** at setup to review each occasion from its earliest event, so the first confirmed event is the first true detection; `ttd_verified_*.csv` is written only in that case (see [Time to detection](#time-to-detection)). Reviewing by time may need more photos, and photos below the minimum confidence are removed before the review, so use 0 to keep them all when the first detection matters.
 
 ### What the score needs to be
 
