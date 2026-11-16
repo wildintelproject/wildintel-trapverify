@@ -7,6 +7,9 @@ import { formatP, formatPsi } from '../utils/occupancy'
 import { anyCutoff } from '../utils/minScore'
 import { downloadFromServer } from '../utils/download'
 
+/** Text without HTML tags, for tooltips. */
+const plain = (s: string) => s.replace(/<[^>]+>/g, '')
+
 interface SpeciesRow {
   species: string
   confirmed: number
@@ -154,7 +157,7 @@ export default function ResultsPage() {
             <div className="text-red-500 text-xs">{t('results.pct_total', { pct: pR })}</div>
           </div>
           {pending > 0 && (
-            <div className="rounded-lg border border-amber-500 bg-white dark:bg-zinc-900 text-center p-4" title={t('results.pending_hint')}>
+            <div className="rounded-lg border border-amber-500 bg-white dark:bg-zinc-900 text-center p-4" title={plain(t('results.pending_hint'))}>
               <div className="text-4xl font-bold text-amber-500 mb-1">{pending}</div>
               <div className="text-zinc-500 dark:text-zinc-400 text-sm">{t('results.pending')}</div>
               <div className="text-amber-500 text-xs">{t('results.pct_total', { pct: pP })}</div>
@@ -229,7 +232,7 @@ export default function ResultsPage() {
                 <>
                   <th className={th}>{t('results.effort_col_cells_det')}</th>
                   <th className={th}>{t('results.effort_col_cells_non')}</th>
-                  <th className={th} title={t('results.pending_hint')}>{t('results.effort_col_cells_pending')}</th>
+                  <th className={th} title={plain(t('results.pending_hint'))}>{t('results.effort_col_cells_pending')}</th>
                   <th className={th}>{t('results.effort_col_cells_unv')}</th>
                   <th className={th}>{t('results.effort_col_events')}</th>
                   <th className={th}>{t('results.effort_col_inspected')}</th>
@@ -356,6 +359,18 @@ export default function ResultsPage() {
       </div>
       <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm"
         dangerouslySetInnerHTML={{ __html: t('results.subtitle') }} />
+
+      {(results.pending ?? 0) > 0 && (
+        <div className="px-4 py-3 rounded bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-sm mb-4" data-testid="pending-banner">
+          <p className="font-medium mb-1">{t('results.pending_title', { n: results.pending })}</p>
+          <p dangerouslySetInnerHTML={{ __html: t('results.pending_hint') }} />
+          <ul className="list-disc list-inside mt-1">
+            {results.by_species.filter((r) => (r.pending ?? 0) > 0).map((r) => (
+              <li key={r.species}><span className="italic">{r.species}</span>: {r.pending}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {results.datapackage_generated && (
         <div className="px-4 py-2 rounded bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm mb-4">

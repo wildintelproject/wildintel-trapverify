@@ -1296,6 +1296,12 @@ export default function SetupPage({ onSetup, ready }: Props) {
                     </label>
                   ))}
                 </div>
+                {Object.keys(form.min_score_by_species ?? {}).length > 0 && (
+                  <button type="button" className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    onClick={() => set('min_score_by_species', {})}>
+                    {t('setup.reset_min_score_by_species')}
+                  </button>
+                )}
               </details>
             )}
           </div>

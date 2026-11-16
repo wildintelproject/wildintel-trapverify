@@ -190,7 +190,8 @@
     "review_order_mc_warning": "Ten zbiór filtrowano według komórek, co zachowuje obecność, ale może usunąć najwcześniejsze zdarzenie detekcji okazji. Dla czasu do detekcji połącz klasyfikatory ponownie z opcją „None” w opcjach zaawansowanych.",
     "mc_dataset_title": "Połączony zbiór danych",
     "mc_dataset_desc": "Klasyfikatory zostały połączone w ten CamtrapDP. Sprawdź tylko, gdzie są zdjęcia: okres badań, okazje próbkowania i zdarzenia detekcji pochodzą z połączenia.",
-    "mc_sampling_summary": "Ustalone przez połączenie klasyfikatorów: okres badań od {{start}} do {{end}}, okazje próbkowania po {{duration}} i zdarzenia detekcji ze zdjęć oddalonych o najwyżej {{gap}} s. Aby je zmienić, połącz klasyfikatory ponownie."
+    "mc_sampling_summary": "Ustalone przez połączenie klasyfikatorów: okres badań od {{start}} do {{end}}, okazje próbkowania po {{duration}} i zdarzenia detekcji ze zdjęć oddalonych o najwyżej {{gap}} s. Aby je zmienić, połącz klasyfikatory ponownie.",
+    "reset_min_score_by_species": "Użyj progu ogólnego dla wszystkich"
   },
   "index": {
     "title": "Weryfikacja wykryć",
@@ -309,7 +310,13 @@
     "cross_pending_note": "Potwierdzono {{species}} w tym zdarzeniu. Jeśli to jedyne zwierzę, oznacz to zdarzenie detekcji jako Odrzucone.",
     "cross_conflict_toast": "Potwierdzono {{species}} w tym samym zdarzeniu: poprawne tylko, jeśli są zwierzęta obu gatunków. Naciśnij ten sam przycisk ponownie, aby przejść dalej, albo zmień decyzję.",
     "cross_elsewhere": "już potwierdzony w tej okazji",
-    "cross_elsewhere_tooltip": "{{species}} został potwierdzony w tej lokalizacji i okazji ze zdjęcia innego zdarzenia detekcji. Można to cofnąć tylko z tamtego zdjęcia."
+    "cross_elsewhere_tooltip": "{{species}} został potwierdzony w tej lokalizacji i okazji ze zdjęcia innego zdarzenia detekcji. Można to cofnąć tylko z tamtego zdjęcia.",
+    "lb_reviewing": "Przeglądany gatunek",
+    "pending_nothing_to_save": "Nie potwierdzono ani nie odrzucono żadnej oczekującej okazji.",
+    "needs_decision_count": "{{n}} zdarzeń wykrycia wymaga jeszcze decyzji przed zakończeniem rundy. Twój postęp jest już zapisany: możesz zamknąć i kontynuować później.",
+    "no_events": "Brak oczekujących zdarzeń detekcji dla tego gatunku w tej rundzie.",
+    "open_tip_title": "Wskazówka:",
+    "open_tip": "przeglądaj w dużym widoku (kliknij zdjęcie lub przycisk „Duży widok”). Tam widać każde zdjęcie zdarzenia detekcji, można powiększać i zmieniać jasność oraz decydować klawiaturą: Y potwierdzone, U niepewne, N odrzucone; Backspace wraca do poprzedniej karty; ← → zmieniają zdjęcie, ↑ ↓ zdarzenie detekcji; 1–9 potwierdzają inny gatunek."
   },
   "help": {
     "title": "Pomoc — CamTrap Verify",
@@ -422,7 +429,8 @@
     "pending_hint": "W <code>dethist_verified_*.csv</code> pojawiają się jako NA, tak jak okazje z nieaktywną kamerą. Aby je rozróżnić, zajrzyj do <code>cell_status_*.csv</code> (wartości <code>pending</code> i <code>inactive</code>). Sesję możesz wyeksportować z indeksu gatunków, aby przejrzał je ktoś inny.",
     "pending": "Oczekuje na przegląd eksperta",
     "col_pending": "Oczekujące",
-    "effort_col_cells_pending": "Komórki oczekujące"
+    "effort_col_cells_pending": "Komórki oczekujące",
+    "pending_title": "{{n}} okazji nadal czeka na ocenę eksperta"
   },
   "footer": {
     "copyright": "© {{year}} <a href='https://wildintel.eu/' target='_blank' rel='noopener noreferrer' style='color:inherit;text-decoration:underline'>WildINTEL</a>. Wszelkie prawa zastrzeżone.",
