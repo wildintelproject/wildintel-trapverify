@@ -1979,6 +1979,37 @@ def cleared_keys_set(decisions_dir: Path) -> set[str]:
     return keys
 
 
+def load_pending_rejected(decisions_dir: Path, species_safe: Optional[str] = None) -> set[tuple[str, int]]:
+    """Unsure events the expert rejected in the pending review, as ``(site_occasion_key, rank)``
+    (``pending_rejected_<sp>.csv``)."""
+    out: set[tuple[str, int]] = set()
+    if decisions_dir.exists():
+        pattern = f"pending_rejected_{species_safe}.csv" if species_safe else "pending_rejected_*.csv"
+        for f in decisions_dir.glob(pattern):
+            df = pd.read_csv(f, dtype=str)
+            if {"site_occasion_key", "rank"} <= set(df.columns):
+                out.update(zip(df["site_occasion_key"], df["rank"].astype(int)))
+    return out
+
+
+def pending_queue(decisions_dir: Path, species_safe: str, keys: set[str]) -> dict[str, tuple[list[int], int]]:
+    """For each pending cell in ``keys``: the ranks of its unsure events still to be shown in the
+    pending review (lowest first), and how many unsure events it had in total.
+
+    The pending review goes in rounds, like the main review: each round shows one unsure event per
+    cell; rejecting it brings the cell's next unsure event in the next round, and rejecting the last
+    one settles the cell as not detected.
+    """
+    unsure = load_all_unsure(decisions_dir, species_safe)
+    unsure = unsure[unsure["site_occasion_key"].isin(keys)]
+    rejected = load_pending_rejected(decisions_dir, species_safe)
+    out: dict[str, tuple[list[int], int]] = {}
+    for key, grp in unsure.groupby("site_occasion_key"):
+        ranks = sorted(set(grp["round"].astype(int)))
+        out[key] = ([r for r in ranks if (key, r) not in rejected], len(ranks))
+    return out
+
+
 def cell_states(candidates: pd.DataFrame, decisions_dir: Path) -> pd.DataFrame:
     """One row per site x occasion x species cell with its review status.
 
@@ -2022,10 +2053,12 @@ def resolve_pending(
     """Record an expert's verdict on cells that were pending expert review.
 
     Confirmed representative observations are appended to ``decisions_<sp>_pending.csv`` (read like
-    any decision file, without counting as a new round); cells settled as not detected are appended
-    to ``unsure_cleared_<sp>.csv``. Cells left unsure again are not mentioned and stay pending.
+    any decision file, without counting as a new round). A rejected cell's current unsure event is
+    appended to ``pending_rejected_<sp>.csv``; if it was the cell's last unsure event the cell is
+    settled as not detected (``unsure_cleared_<sp>.csv``), otherwise it stays pending and shows its
+    next unsure event. Cells left unsure again are not mentioned and stay pending.
 
-    Returns ``(n_confirmed, n_rejected)`` actually recorded.
+    Returns ``(n_confirmed, n_rejected)``: cells confirmed, and cells settled as not detected.
     """
     decisions_dir.mkdir(parents=True, exist_ok=True)
     sp_cands = candidates[candidates["species_safe"] == species_safe]
@@ -2042,7 +2075,18 @@ def resolve_pending(
         conf_rows.drop_duplicates("site_occasion_key").to_csv(path, index=False)
 
     confirmed_keys = set(conf_rows["site_occasion_key"]) if not conf_rows.empty else set()
-    cleared = sorted((set(rejected_keys) & pending) - confirmed_keys)
+    # Rejecting a pending card rejects the unsure event it shows. The cell is settled as not detected
+    # only when that was its last unsure event; otherwise its next unsure event comes in the next round.
+    to_reject = (set(rejected_keys) & pending) - confirmed_keys
+    queue = pending_queue(decisions_dir, species_safe, to_reject)
+    rej_rows = [{"site_occasion_key": k, "rank": queue[k][0][0]} for k in sorted(to_reject) if queue.get(k, ([],))[0]]
+    if rej_rows:
+        path = decisions_dir / f"pending_rejected_{species_safe}.csv"
+        new = pd.DataFrame(rej_rows).astype(str)
+        if path.exists():
+            new = pd.concat([pd.read_csv(path, dtype=str), new])
+        new.drop_duplicates().to_csv(path, index=False)
+    cleared = sorted(k for k in to_reject if len(queue.get(k, ([],))[0]) <= 1)
     if cleared:
         path = decisions_dir / f"unsure_cleared_{species_safe}.csv"
         existing = pd.read_csv(path, dtype=str) if path.exists() else pd.DataFrame(columns=["site_occasion_key"])
@@ -2457,9 +2501,10 @@ def get_pending_events(
 ) -> list[dict]:
     """The cells of a species that are pending expert review, as gallery events.
 
-    Each card carries the frames of every detection event of that cell that was marked unsure
-    during the rounds (lowest rank first); every frame has ``burstRepObsId`` (the representative of
-    its event), so confirming while looking at a given event records that event.
+    The pending review goes in rounds (see :func:`pending_queue`): each card is the next unsure
+    detection event of its cell not yet rejected in this review, with ``pendingIndex`` (its position
+    among the cell's unsure events, 1-based) and ``pendingTotal``. Every frame has ``burstRepObsId``
+    (the event's representative observation), which is what a confirmation records.
 
     Returns event dicts (as :func:`get_events`) with ``status='pending'``, sorted by site, occasion.
     """
@@ -2467,11 +2512,13 @@ def get_pending_events(
     pending = set(states.loc[states["status"] == "pending", "site_occasion_key"])
     if not pending:
         return []
-    unsure = load_all_unsure(decisions_dir)
-    unsure = unsure[unsure["site_occasion_key"].isin(pending)]
-    flagged = species_cands[species_cands["observationID"].isin(set(unsure["observationID"]))]
-    burst_keys = flagged[["site_occasion_key", "burst_id"]].drop_duplicates()
-    rows = species_cands.merge(burst_keys, on=["site_occasion_key", "burst_id"])
+    sp_safe = str(species_cands["species_safe"].iloc[0])
+    queue = pending_queue(decisions_dir, sp_safe, pending)
+    current = {k: ranks[0] for k, (ranks, _total) in queue.items() if ranks}
+    if not current:
+        return []
+    rank_num = pd.to_numeric(species_cands["rank"], errors="coerce")
+    rows = species_cands[rank_num.eq(species_cands["site_occasion_key"].map(current))]
     total_seqs_by_key = species_cands.groupby("site_occasion_key")["rank"].max().to_dict()
     events = _build_events(
         _sort_frames(rows, ["rank", "burst_id", "ts"]), total_seqs_by_key, image_base_dir, fallback_base,
@@ -2479,6 +2526,9 @@ def get_pending_events(
     )
     for e in events:
         e["status"] = "pending"
+        ranks, total = queue[e["key"]]
+        e["pendingIndex"] = total - len(ranks) + 1
+        e["pendingTotal"] = total
     events.sort(key=lambda e: (e["siteId"], e["occasion"]))
     return events
 
@@ -2633,6 +2683,7 @@ def reviewed_event_tags(
     rounds_done: dict[str, int],
     corrections: Optional[dict[str, str]] = None,
     cleared: Optional[set] = None,
+    pending_rejected: Optional[set] = None,
 ) -> dict[tuple, list[str]]:
     """Tags for the events the reviewer rejected, for **every photo** of each event, keyed by ``(mediaID, scientificName)``.
 
@@ -2640,7 +2691,8 @@ def reviewed_event_tags(
     or has none and the species finished a round at that rank or later. Such an event is tagged
     ``camtrapverify:rejected``, or ``camtrapverify:unsure`` when it was marked unsure and its cell
     is still pending expert review (an expert who settled the cell as not detected makes it a
-    rejection; ``cleared`` holds those cells). With a recorded actual species (typed for the photo that
+    rejection; ``cleared`` holds those cells, and ``pending_rejected`` the ``(cell, rank)`` events
+    rejected in the pending review). With a recorded actual species (typed for the photo that
     represents the event) every photo of the event also gets ``camtrapverify-actual-species:<name>``.
     Events never inspected get no tag. Context frames are not part of the event.
     """
@@ -2662,8 +2714,9 @@ def reviewed_event_tags(
         return {}
     reps = rows.loc[rows.groupby([cell, burst], sort=False)["_p"].idxmax()]
     event_tags: dict[tuple, list[str]] = {}
-    for oid, key, b in zip(reps["observationID"], reps[cell], reps[burst]):
-        unsure = oid in unc_ids and oid not in conf_ids and key not in (cleared or ())
+    for oid, key, b, rk in zip(reps["observationID"], reps[cell], reps[burst], reps["rank"]):
+        unsure = (oid in unc_ids and oid not in conf_ids and key not in (cleared or ())
+                  and (key, int(rk)) not in (pending_rejected or ()))
         t = [TAG_UNSURE if unsure else TAG_REJECTED]
         actual = (corrections or {}).get(oid, "").strip().replace("|", " ")
         if actual:
@@ -2782,7 +2835,7 @@ def export_verified_camtrapdp(
         unc = load_all_unsure(decisions_dir) if decisions_dir.exists() else pd.DataFrame()
         unc_ids = set(unc["observationID"].dropna()) if not unc.empty else set()
         rev = reviewed_event_tags(candidates, _rep_confirmed(decisions_dir), unc_ids, rounds_completed(decisions_dir), corrections,
-                                  cleared_keys_set(decisions_dir))
+                                  cleared_keys_set(decisions_dir), load_pending_rejected(decisions_dir))
         if rev:
             pairs = pd.Series(list(zip(obs["mediaID"], obs["scientificName"])), index=obs.index)
             for i, pair in pairs[pairs.isin(rev)].items():

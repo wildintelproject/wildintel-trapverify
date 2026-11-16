@@ -254,10 +254,21 @@ describe('GalleryPage', () => {
       api.getPending.mockResolvedValue([pendingEvent('a'), pendingEvent('b')])
     })
 
+    it('says which unsure event of the cell is shown and in which pending round', async () => {
+      api.getPending.mockResolvedValue([
+        { ...pendingEvent('a'), pendingIndex: 2, pendingTotal: 3 },
+        { ...pendingEvent('b'), pendingIndex: 1, pendingTotal: 1 },
+      ])
+      renderGallery()
+      expect(await screen.findByText(/Pending expert review · Round 1/)).toBeInTheDocument()   // the earliest round still open
+      expect(screen.getByText('unsure event 2 of 3')).toBeInTheDocument()
+      expect(screen.getAllByTestId('pending-pos')).toHaveLength(1)                           // a cell with one unsure event shows no position
+    })
+
     it('shows the pending cells instead of a round, and saves without deciding every one', async () => {
       api.settlePending.mockResolvedValue({ success: true, confirmed: 1, rejected: 0 })
       renderGallery()
-      expect(await screen.findByText('Pending expert review')).toBeInTheDocument()
+      expect(await screen.findByText(/Pending expert review/)).toBeInTheDocument()
       expect(api.getEvents).not.toHaveBeenCalledWith('Vulpes_vulpes', 4)
       expect(screen.getByRole('button', { name: /Save progress/ })).toBeInTheDocument()   // the pending verdicts are autosaved too
       await userEvent.click(screen.getAllByRole('button', { name: /Confirmed/ })[0])
@@ -270,7 +281,7 @@ describe('GalleryPage', () => {
     it('records the event of the photo being looked at when confirming', async () => {
       api.settlePending.mockResolvedValue({ success: true, confirmed: 1, rejected: 0 })
       renderGallery()
-      await screen.findByText('Pending expert review')
+      await screen.findByText(/Pending expert review/)
       const card = document.querySelector('[data-key="a"]') as HTMLElement
       await userEvent.click(within(card).getByRole('button', { name: /previous photo/i }))        // best frame is #2: go to #1
       await userEvent.click(within(card).getByRole('button', { name: /Confirmed/ }))
@@ -280,7 +291,7 @@ describe('GalleryPage', () => {
 
     it('saves the pending verdicts as progress, with the photo being looked at, and restores them', async () => {
       renderGallery()
-      await screen.findByText('Pending expert review')
+      await screen.findByText(/Pending expert review/)
       const card = document.querySelector('[data-key="a"]') as HTMLElement
       await userEvent.click(within(card).getByRole('button', { name: /previous photo/i }))
       await userEvent.click(within(card).getByRole('button', { name: /Confirmed/ }))
@@ -297,7 +308,7 @@ describe('GalleryPage', () => {
       } })
       api.settlePending.mockResolvedValue({ success: true, confirmed: 0, rejected: 1 })
       renderGallery()
-      await screen.findByText('Pending expert review')
+      await screen.findByText(/Pending expert review/)
       expect(api.getProgress).toHaveBeenCalledWith('Vulpes_vulpes', 'pending', 0)
       await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
       await waitFor(() => expect(api.settlePending).toHaveBeenCalledWith('Vulpes_vulpes', [], ['b']))
@@ -312,7 +323,7 @@ describe('GalleryPage', () => {
     it('settles a cell as not detected when it is rejected', async () => {
       api.settlePending.mockResolvedValue({ success: true, confirmed: 0, rejected: 1 })
       renderGallery()
-      await screen.findByText('Pending expert review')
+      await screen.findByText(/Pending expert review/)
       await userEvent.click(screen.getAllByRole('button', { name: /Rejected/ })[1])
       await userEvent.click(screen.getByRole('button', { name: 'Save verdicts' }))
       await waitFor(() => expect(api.settlePending).toHaveBeenCalledWith('Vulpes_vulpes', [], ['b']))
