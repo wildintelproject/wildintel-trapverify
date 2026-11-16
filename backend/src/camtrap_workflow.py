@@ -2392,7 +2392,7 @@ def _rep_confirmed(decisions_dir: Path) -> set:
     """``observationID`` of the confirmed representative of every confirmed event (decision files)."""
     ids: set = set()
     if decisions_dir.exists():
-        for f in decisions_dir.glob("decisions_*_iter*.csv"):
+        for f in decisions_dir.glob("decisions_*.csv"):
             df = pd.read_csv(f, dtype=str)
             if "observationID" in df.columns:
                 ids.update(df["observationID"].dropna())
@@ -2508,10 +2508,11 @@ def export_verified_camtrapdp(
     # Cargar deployments/media (para el datapackage.json) y observaciones originales
     dep, med, obs = load_camtrapdp(camtrap_dir)
 
-    # IDs de observaciones confirmadas (repObsId de cada decisión)
+    # IDs de observaciones confirmadas (repObsId de cada decisión), also those an expert confirmed
+    # in the pending review (decisions_<sp>_pending.csv)
     confirmed_ids: set[str] = set()
     if decisions_dir.exists():
-        for f in decisions_dir.glob("decisions_*_iter*.csv"):
+        for f in decisions_dir.glob("decisions_*.csv"):
             df = pd.read_csv(f, dtype=str)
             if "observationID" in df.columns:
                 confirmed_ids.update(df["observationID"].dropna().tolist())
