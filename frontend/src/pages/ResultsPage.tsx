@@ -9,6 +9,7 @@ interface SpeciesRow {
   species: string
   confirmed: number
   rejected: number
+  pending?: number
   unverified: number
 }
 
@@ -19,7 +20,10 @@ interface Results {
   confirmed: number
   rejected: number
   unverified: number
+  pending: number
   by_species: SpeciesRow[]
+  added?: number
+  added_by_species?: Record<string, number>
   seq_total: number
   seq_confirmed: number
   seq_rejected: number
@@ -220,6 +224,32 @@ export default function ResultsPage() {
           {results.datapackage_fabricated_fields.length > 0 && (
             <ul className="list-disc list-inside mt-1">
               {results.datapackage_fabricated_fields.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {(results.added ?? 0) > 0 && (
+        <div className="px-4 py-3 rounded bg-sky-50 dark:bg-sky-950 border border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-300 text-sm mb-4" data-testid="added-notice">
+          <p className="font-medium mb-1">{t('results.added_title', { n: results.added })}</p>
+          <p dangerouslySetInnerHTML={{ __html: t('results.added_hint') }} />
+          <ul className="list-disc list-inside mt-1">
+            {Object.entries(results.added_by_species ?? {}).map(([sp, n]) => (
+              <li key={sp}><span className="italic">{sp}</span>: {n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {results.pending > 0 && (
+        <div className="px-4 py-3 rounded bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-sm mb-4">
+          <p className="font-medium mb-1">{t('results.pending_title', { n: results.pending })}</p>
+          <p dangerouslySetInnerHTML={{ __html: t('results.pending_hint') }} />
+          {results.by_species.filter((r) => (r.pending ?? 0) > 0).length > 0 && (
+            <ul className="list-disc list-inside mt-1">
+              {results.by_species.filter((r) => (r.pending ?? 0) > 0).map((r) => (
+                <li key={r.species}><span className="italic">{r.species}</span>: {r.pending}</li>
+              ))}
             </ul>
           )}
         </div>
