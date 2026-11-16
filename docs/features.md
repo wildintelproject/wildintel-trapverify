@@ -33,7 +33,7 @@
     - Brightness and contrast controls
     - Tonal inversion (useful for night-vision / near-infrared images)
     - Left / right arrows to move between occasions without closing
-- **Another species in the photo** — in the large view, confirm another target species at the same location and occasion from the photo being viewed (keys `1`–`9`). It becomes a verified detection (also where the classifier never assigned it), the verified CamtrapDP marks or adds a human observation, and undoing leaves no trace.
+- **Another species in the photo** — in the large view, confirm another target species at the same location and occasion from the photo being viewed (keys `1`–`9`). It becomes a verified detection where the classifier had flagged that species; where it had not, the confirmation is kept apart (tag `camtrapverify:added`, status `added` in `cell_status_{sp}.csv`, and `dethist_verified_with_additions_{sp}.csv`) because such misses are found only where other species are being reviewed. The verified CamtrapDP marks or adds a human observation, and undoing leaves no trace.
 - **Keyboard navigation** — arrow keys advance frames; `C` confirms, `R` rejects (configurable); `U` marks a detection event as unsure.
 - **Per-species progress bars** — a coloured badge on each species card shows the current round; the bar fills as cells are resolved.
 
@@ -70,6 +70,7 @@
     | `camera_operation.csv` | Active days per site × occasion |
     | `dethist_naive_{sp}.csv` | Detection history from the classifier (1 / 0 / NA) |
     | `dethist_verified_{sp}.csv` | Detection history after human verification |
+    | `dethist_verified_with_additions_{sp}.csv` | Only with `added` cells (another species confirmed where the classifier had not flagged this one): the verified history with those cells as 1 |
     | `ttd_naive_{sp}.csv` (and `ttd_verified_{sp}.csv` when reviewed by time) | Hours from the start of each occasion to its first detection, censored at the occasion length (as `occuTTD` expects); NA where the camera was off or the occasion is pending |
     | `verification_summary.csv` | Per-species: combos, detections, false positives, ψ_obs |
     | `review_effort.csv` | Actual number of images inspected per cell |

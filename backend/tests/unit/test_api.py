@@ -2557,7 +2557,7 @@ def test_every_target_species_is_listed_for_a_cell(client, camtrap_dir, tmp_path
     assert {s["scientificName"]: s["status"] for s in r} == {"Vulpes vulpes": "none", "Sus scrofa": "none"}
 
 
-def test_confirming_a_species_the_classifier_missed_is_a_detection_and_a_false_negative(client, camtrap_dir, tmp_path):
+def test_confirming_a_species_the_classifier_missed_is_kept_apart_as_an_addition(client, camtrap_dir, tmp_path):
     sd = _two_species_session(client, camtrap_dir, tmp_path)
     assert _cross(client).json()["success"] is True
     st = {s["scientificName"]: s for s in client.get("/api/cross", params={"site_id": "SITE_A", "occasion": 1}).json()["species"]}
@@ -2565,13 +2565,17 @@ def test_confirming_a_species_the_classifier_missed_is_a_detection_and_a_false_n
     client.get("/api/results")                                            # opening Results rebuilds the stale outputs
     v = pd.read_csv(sd / "occupancy_inputs" / "dethist_verified_Sus_scrofa.csv", dtype=str).fillna("").set_index("siteID")
     n = pd.read_csv(sd / "occupancy_inputs" / "dethist_naive_Sus_scrofa.csv", dtype=str).fillna("").set_index("siteID")
-    assert v.loc["SITE_A", "occ1"] == "1" and n.loc["SITE_A", "occ1"] == "0"
+    assert v.loc["SITE_A", "occ1"] == "0" and n.loc["SITE_A", "occ1"] == "0"     # no candidate there: not in the verified history
+    w = pd.read_csv(sd / "occupancy_inputs" / "dethist_verified_with_additions_Sus_scrofa.csv", dtype=str).fillna("").set_index("siteID")
+    assert w.loc["SITE_A", "occ1"] == "1"
+    status = pd.read_csv(sd / "occupancy_inputs" / "cell_status_Sus_scrofa.csv", dtype=str).fillna("").set_index("siteID")
+    assert status.loc["SITE_A", "occ1"] == "added"
     summary = pd.read_csv(sd / "occupancy_inputs" / "verification_summary.csv").set_index("species")
-    assert summary.loc["Sus scrofa", "false_negative_cells"] == 1
+    assert summary.loc["Sus scrofa", "added_cells"] == 1
     obs = _verified_observations(sd)
     added = obs[(obs["mediaID"] == "m001") & (obs["scientificName"] == "Sus scrofa")]
     assert len(added) == 1 and added.iloc[0]["classificationMethod"] == "human"
-    assert added.iloc[0]["observationTags"] == "camtrapverify:confirmed" and added.iloc[0]["observationID"] == "m001_Sus_scrofa_expert"
+    assert added.iloc[0]["observationTags"] == "camtrapverify:confirmed|camtrapverify:added" and added.iloc[0]["observationID"] == "m001_Sus_scrofa_expert"
 
 
 def test_a_cell_confirmed_from_another_photo_leaves_that_species_rounds(client, camtrap_dir, tmp_path):

@@ -424,12 +424,16 @@ export default function GalleryPage() {
         await api.removeCross(sp, ev.siteId, ev.occasion)
         showToast(t('gallery.cross_removed', { species: sp, site: ev.siteId, occasion: ev.occasion }), 'success')
       } else {
-        await api.addCross({
+        const res = await api.addCross({
           species: sp, site_id: ev.siteId, occasion: ev.occasion,
           media_id: frame.mediaId, observation_id: frame.isContext ? '' : frame.obsId,
           source_species: spStats?.species_name ?? '',
         })
-        showToast(t('gallery.cross_added', { species: sp, site: ev.siteId, occasion: ev.occasion }), 'success')
+        if (res.added) {
+          showToast(t('gallery.cross_added_outside', { species: sp, site: ev.siteId, occasion: ev.occasion }), 'warning', 7000)
+        } else {
+          showToast(t('gallery.cross_added', { species: sp, site: ev.siteId, occasion: ev.occasion }), 'success')
+        }
       }
       await refreshCross(ev.siteId, ev.occasion)
     } catch (e) {
@@ -742,6 +746,9 @@ export default function GalleryPage() {
         const st = crossByCell[crossCellKey]?.find((c) => c.scientificName === sp)
         const status = crossButtonState(st, lbCurrentEv.frames)
         const already = status === 'confirmed' || status === 'elsewhere'
+        // The classifier did not flag this species here: a confirmation is recorded apart
+        // (not in the verified history).
+        const outside = st?.has_candidates === false
         return (
           <button
             key={sp}
@@ -760,12 +767,17 @@ export default function GalleryPage() {
               ? t('gallery.cross_elsewhere_tooltip', { species: sp })
               : status === 'cross'
               ? t('gallery.cross_undo_tooltip', { species: sp })
+              : outside
+              ? t('gallery.cross_outside_tooltip', { species: sp })
               : t('gallery.cross_tooltip', { species: sp, site: lbCurrentEv.siteId, occasion: lbCurrentEv.occasion })}
           >
             {i < 9 && <span className="text-[10px] opacity-60 font-mono w-3">{i + 1}</span>}
             <span className="flex-1 leading-tight break-words">
               <span className="italic">{sp}</span>
               {already && <span className="block text-[10px] not-italic">{t('gallery.cross_elsewhere')}</span>}
+              {!already && outside && (
+                <span className="block text-[10px] not-italic opacity-70" data-testid="cross-outside">{t('gallery.cross_outside')}</span>
+              )}
             </span>
             {status === 'cross' && <span aria-hidden="true">✓</span>}
           </button>

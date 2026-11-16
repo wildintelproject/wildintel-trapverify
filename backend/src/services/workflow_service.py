@@ -349,9 +349,13 @@ def cross_status(site_id: str, occasion: int) -> list[dict]:
     """State of every target species at one site and occasion.
 
     ``status`` is ``cross`` (confirmed from a photo of another species, with that photo's mediaID),
-    ``confirmed`` (confirmed in its own review) or ``none``.
+    ``confirmed`` (confirmed in its own review) or ``none``. ``has_candidates`` tells whether the
+    classifier flagged the species there: a confirmation where it did not is kept apart ("added";
+    see ``camtrap_workflow.added_cross_keys``).
     """
     d = session_service.paths()["decisions"]
+    cands = session_service.get_candidates()
+    cand_keys = set(cands["site_occasion_key"]) if cands is not None else set()
     dec = load_all_decisions(d) if d.exists() else pd.DataFrame()
     own = set(dec["site_occasion_key"].dropna()) if "site_occasion_key" in dec.columns else set()
     cross = load_cross(d).set_index("site_occasion_key") if d.exists() else pd.DataFrame()
@@ -359,7 +363,8 @@ def cross_status(site_id: str, occasion: int) -> list[dict]:
     for sp in _target_species():
         sp_safe = sanitize(sp)
         key = cross_key(site_id, occasion, sp_safe)
-        item = {"scientificName": sp, "species_safe": sp_safe, "status": "none"}
+        item = {"scientificName": sp, "species_safe": sp_safe, "status": "none",
+                "has_candidates": key in cand_keys}
         if key in own:
             item["status"] = "confirmed"
         elif not cross.empty and key in cross.index:
@@ -382,8 +387,11 @@ def add_cross(species: str, site_id: str, occasion: int, media_id: str,
         session_service.paths()["decisions"], species, site_id, occasion, media_id, observation_id, source_species,
     )
     mark_outputs_stale()
-    logger.info("Cross-species confirmation: %s from a photo of %s (%s)", key, source_species, media_id)
-    return {"success": True, "key": key}
+    cands = session_service.get_candidates()
+    added = cands is not None and key not in set(cands["site_occasion_key"])
+    logger.info("Cross-species confirmation: %s from a photo of %s (%s)%s", key, source_species, media_id,
+                " [no candidates: added]" if added else "")
+    return {"success": True, "key": key, "added": added}
 
 
 def remove_cross(species: str, site_id: str, occasion: int) -> dict:

@@ -510,7 +510,7 @@ When you review one species you will sometimes see a clear animal of **another t
 | You do | Effect on the detection histories |
 |---|---|
 | Confirm the species you are reviewing | It is a detection (1) for that species and occasion. |
-| Click another species in the panel | It is a **verified detection (1)** of that species at that location and occasion, also when the classifier never assigned it there (a missed detection, counted as `false_negative_cells` in `verification_summary.csv`). Its rounds for that occasion are skipped, and the verified CamtrapDP marks that photo's observation of the species as human-confirmed, or adds one (`observationID` ending in `_expert`, tagged `camtrapverify:confirmed`). |
+| Click another species in the panel | If the classifier had flagged that species at that location and occasion, it is a **verified detection (1)** of it. If it had **not** (the button reads *no candidates here: recorded apart*), the confirmation recovers a classifier miss, and such misses are found only where other target species are being reviewed, so counting them would make detection differ among sites for a reason unrelated to the classifier: it is kept apart (`added` in `cell_status_<sp>.csv`, `added_cells` in `verification_summary.csv`, and `dethist_verified_with_additions_<sp>.csv`), and Results lists them. In both cases its rounds for that occasion are skipped, and the verified CamtrapDP marks that photo's observation of the species as human-confirmed, or adds one (`observationID` ending in `_expert`, tagged `camtrapverify:confirmed`, plus `camtrapverify:added` when kept apart). |
 | Reject an event and type its *actual species* | **Nothing changes in the histories.** The actual species is only recorded (`rejection_corrections.csv`, the false-positive table). It is not counted as a detection of that species. |
 
 So to count another species as present, use the panel; typing the actual species of a rejection never does. Undoing leaves no trace in the outputs (they are rebuilt when you open Results).
@@ -680,6 +680,7 @@ Saving a round does not rewrite this package (rewriting the whole observations t
 | `camtrapverify:confirmed` | Confirmed (the same photos that are marked `human`; with *extended confirmation*, every photo of the event). |
 | `camtrapverify:rejected` | **Every photo** of a detection event that was inspected and rejected, including earlier events of a cell confirmed later. |
 | `camtrapverify:unsure` | Same, on every photo of an event the reviewer marked *Unsure* while its occasion is still pending expert review (once an expert settles the occasion as not detected, its photos are tagged `rejected`). |
+| `camtrapverify:added` | Together with `confirmed`: the species was confirmed from a photo reviewed for another species in a cell where the classifier had not flagged it (kept out of the verified history). |
 | `camtrapverify-actual-species:<name>` | Added to **every photo** of a rejected event when *Record the actual species* was on and a species was typed for it. It is not added to confirmed or unsure events. |
 
 The tags are written per photo and species, so the other photos of a confirmed event (when *extended confirmation* is off) carry no review tag, and a photo that also has an observation of another species is tagged only for the species of the event. Events that were never inspected (because a cell was already confirmed or no round reached them) get no tag. Example: `travelDirection:left|camtrapverify:rejected|camtrapverify-actual-species:Canis lupus`.
@@ -691,6 +692,7 @@ The tags are written per photo and species, so the other photos of a confirmed e
 | `camera_operation.csv` | Camera operation matrix (sites × sampling occasions): days of operation per occasion, or **hours** of operation when the occasions are in hours. |
 | `dethist_naive_{sp}.csv` | Naive detection history per species (AI detections, not human-validated). One file per species. |
 | `dethist_verified_{sp}.csv` | Verified detection history per species (confirmed by expert). One file per species. |
+| `dethist_verified_with_additions_{sp}.csv` | Only when a species has `added` cells (another species confirmed where the classifier had not flagged this one): the verified history with those cells as 1. |
 | `ttd_naive_{sp}.csv` (and `ttd_verified_{sp}.csv` with the review by time) | Time to first detection per site and occasion, in hours from the start of the occasion (see [Time to detection](#time-to-detection)). One pair per species. |
 | `verification_summary.csv` | Per-species summary: confirmed, rejected and unreviewed counts. |
 | `occupancy_fit.csv` | Occupancy fit per species: naive and verified ψ and *p*, each with its 95 % confidence limits (see [How the occupancy estimates are computed](#how-the-occupancy-estimates-are-computed)). |

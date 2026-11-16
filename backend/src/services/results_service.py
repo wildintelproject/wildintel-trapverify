@@ -12,9 +12,11 @@ from fastapi import HTTPException
 
 from camtrap_workflow import (
     build_false_positive_sources,
+    added_cross_keys,
     build_species_effort,
     cell_states,
     confirmed_keys_set,
+    load_cross,
     load_review_log,
     rounds_completed,
 )
@@ -151,6 +153,14 @@ def compute_results() -> dict:
     effort_by_species = json.loads(effort_df.to_json(orient="records"))
     fp_df = build_false_positive_sources(effort_df, decisions_dir, p["corrections"], p["occupancy_out"])
     false_positive_sources = json.loads(fp_df.to_json(orient="records")) if fp_df is not None else []
+    # Confirmations from another species' photo where the classifier had not
+    # flagged that species: kept out of the verified histories (added_cross_keys).
+    added_keys = added_cross_keys(decisions_dir, candidates) if decisions_dir.exists() else set()
+    cross = load_cross(decisions_dir) if added_keys else pd.DataFrame()
+    added_by_species: dict[str, int] = {}
+    if added_keys:
+        rows = cross[cross["site_occasion_key"].isin(added_keys)].drop_duplicates("site_occasion_key")
+        added_by_species = {str(k): int(v) for k, v in rows["scientificName"].value_counts().items()}
     datapackage_generated, datapackage_fabricated_fields = _datapackage_warning(p["camtrap_out"])
     return {
         "session_dir":     str(session_service.session_dir()),
@@ -164,6 +174,8 @@ def compute_results() -> dict:
         "unverified":      int(p_counts.get("unverified", 0)),
         "pending":         int(p_counts.get("pending", 0)),
         "by_species":      by_species,
+        "added":           len(added_keys),
+        "added_by_species": added_by_species,
         "seq_total":       len(seqs),
         "seq_confirmed":   int(s_counts.get("confirmed", 0)),
         "seq_rejected":    int(s_counts.get("rejected", 0)),
