@@ -110,6 +110,26 @@ describe('GalleryPage', () => {
     expect(api.saveProgress).not.toHaveBeenCalled()                       // restoring is not a change to save
   })
 
+  it('restores the draft kept by this browser when it is newer than the server progress, and sends it', async () => {
+    localStorage.clear()
+    api.getState.mockResolvedValue({ ready: true, session_dir: '/sessions/s1', config: { total_iterations: 10, gap_seconds: 60, occasion_days: 5, min_score: 0.5 } })
+    api.getSpecies.mockResolvedValue([stats({ current_iteration: 3 })])
+    api.getProgress.mockResolvedValue({ progress: {
+      mode: 'rounds', iteration: 3, decisions: {}, chosen_rep: {}, corrections: {}, decision_times: {},
+      saved_at: '2026-01-01T10:00:00+00:00',
+    } })
+    localStorage.setItem('camtrap-verify:draft:/sessions/s1|Vulpes_vulpes|rounds|3',
+      JSON.stringify({ decisions: { a: 'confirmed' }, chosenRep: {}, savedAt: '2026-01-01T11:00:00+00:00' }))
+    api.saveDecisions.mockResolvedValue({ success: true, done: true, next_iteration: null, remaining: 0 })
+    renderGallery()
+    await screen.findByText('Round 3')
+    await userEvent.click(await screen.findByRole('button', { name: 'Finish round' }))
+    await waitFor(() => expect(api.saveDecisions).toHaveBeenCalled())
+    expect(api.saveDecisions.mock.calls[0][2]).toEqual(['obs-a'])               // the draft's decision, not the empty server one
+    expect(localStorage.getItem('camtrap-verify:draft:/sessions/s1|Vulpes_vulpes|rounds|3')).toBeNull()   // dropped with the round
+    localStorage.clear()
+  })
+
   it('saves the progress with the button, by the cell key of each event', async () => {
     api.getSpecies.mockResolvedValue([stats({ current_iteration: 3 })])
     renderGallery()

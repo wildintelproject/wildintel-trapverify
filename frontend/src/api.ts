@@ -29,7 +29,7 @@ function put<T>(url: string, body: unknown): Promise<T> {
 
 export const api = {
   getState: () =>
-    req<{ ready: boolean; config?: WorkflowConfig; default_output_dir?: string; relink?: RelinkStatus }>('/api/state'),
+    req<{ ready: boolean; config?: WorkflowConfig; default_output_dir?: string; session_dir?: string; relink?: RelinkStatus }>('/api/state'),
 
   setup: (config: WorkflowConfig) =>
     post<{ ok: boolean; n_candidates: number; n_combos: number }>('/api/setup', config),
