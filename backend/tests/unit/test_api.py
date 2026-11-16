@@ -2722,3 +2722,21 @@ def test_the_actual_species_goes_only_on_rejected_events(client, camtrap_dir, tm
     tags = _tags_by_media(sd)
     assert "actual-species" not in tags["m003"]                              # confirmed: the typed species is ignored
     assert "camtrapverify-actual-species:Canis lupus" in tags["m001"].split("|")
+
+
+def test_verifying_a_package_that_already_has_review_tags_does_not_duplicate_them(client, camtrap_dir, tmp_path):
+    import pandas as pd
+    from pathlib import Path
+    obs_file = camtrap_dir / "observations.csv"
+    obs = pd.read_csv(obs_file, dtype=str)
+    obs["observationTags"] = "travelDirection:left"
+    obs.loc[obs["mediaID"] == "m001", "observationTags"] = "camtrapverify:confirmed|camtrapverify:rejected|camtrapverify-actual-species:Sus scrofa|travelDirection:left"
+    obs.to_csv(obs_file, index=False)
+    sd = _setup_recording(client, camtrap_dir, tmp_path)
+    a1 = {e["key"]: e for e in _round1_events(client)}["SITE_A_occ1_Vulpes_vulpes"]
+    client.post("/api/decisions", json={"species": "Vulpes_vulpes", "iteration": 1, "confirmed": [a1["repObsId"]]})
+    client.get("/api/results")
+    tags = _tags_by_media(sd)["m001"].split("|")
+    assert tags.count("camtrapverify:confirmed") == 1
+    assert "camtrapverify:rejected" not in tags and not any(t.startswith("camtrapverify-actual-species") for t in tags)
+    assert "travelDirection:left" in tags

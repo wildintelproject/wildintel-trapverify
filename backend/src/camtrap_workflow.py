@@ -2563,9 +2563,19 @@ def export_verified_camtrapdp(
     if tag_by_row:
         if "observationTags" not in obs.columns:
             obs["observationTags"] = ""
-        new = pd.Series({i: "|".join(t) for i, t in tag_by_row.items()})
-        old = obs.loc[new.index, "observationTags"].fillna("").astype(str).str.strip()
-        obs.loc[new.index, "observationTags"] = (old + "|" + new).str.strip("|")
+        # A package that is verified again may already carry this review's tags: the new ones replace
+        # them (never twice, never "rejected" beside "confirmed"); every other tag is kept.
+        mine = (TAG_CONFIRMED, TAG_REJECTED, TAG_UNSURE)
+
+        def merge(old_tags: str, new_tags: list[str]) -> str:
+            keep = [x.strip() for x in str(old_tags).split("|")
+                    if x.strip() and x.strip() not in mine and not x.strip().startswith(TAG_ACTUAL_SPECIES)]
+            return "|".join([*keep, *new_tags])
+
+        idx = list(tag_by_row)
+        obs.loc[idx, "observationTags"] = [
+            merge(o, tag_by_row[i]) for i, o in zip(idx, obs.loc[idx, "observationTags"].fillna("").astype(str))
+        ]
 
     # Species confirmed from another species' photo (see load_cross): that photo's observation of the
     # species is marked human-confirmed, or one is added when the classifier never assigned it.
