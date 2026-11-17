@@ -172,7 +172,7 @@ describe('GalleryPage', () => {
     it('shows the progress of the round, the location and the species beside the photo', async () => {
       const panel = await open()
       expect(panel).toHaveTextContent('Round 2')
-      expect(panel).toHaveTextContent('0 of 3 cards decided')
+      expect(panel).toHaveTextContent('0/3 decided in this round')
       expect(panel).toHaveTextContent('Location S1: 0 of 3')
       expect(panel).toHaveTextContent('2 of 4 occasions resolved before this round')
     })
@@ -181,19 +181,19 @@ describe('GalleryPage', () => {
       await open()
       const panel = () => screen.getByTestId('lb-panel')                   // the lightbox remounts per card
       await userEvent.keyboard('y')
-      await waitFor(() => expect(panel()).toHaveTextContent('1 of 3 cards decided'))
-      const prev = screen.getByRole('button', { name: /Previous card/ })
+      await waitFor(() => expect(panel()).toHaveTextContent('1/3 decided in this round'))
+      const prev = screen.getByRole('button', { name: /Previous detection event/ })
       expect(prev).toBeEnabled()
       await userEvent.keyboard('{Backspace}')
       // back on the card just decided, which still shows as confirmed
       const confirm = screen.getAllByRole('button', { name: /Confirmed/ }).find((b) => b.className.includes('bg-emerald-600'))
       expect(confirm).toBeTruthy()
-      expect(panel()).toHaveTextContent('1 of 3 cards decided')               // nothing was undone
+      expect(panel()).toHaveTextContent('1/3 decided in this round')               // nothing was undone
     })
 
     it('has nothing to go back to on the first card', async () => {
       await open()
-      expect(screen.getByRole('button', { name: /Previous card/ })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Previous detection event/ })).toBeDisabled()
     })
 
     it('uses the strip at the bottom on a narrow screen', async () => {
@@ -202,7 +202,7 @@ describe('GalleryPage', () => {
       api.getEvents.mockResolvedValue([event('a', 2), event('b', 2)])
       renderGallery()
       await userEvent.click(await screen.findByRole('button', { name: 'Large view' }))
-      expect(await screen.findByRole('button', { name: 'Previous card' })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: 'Previous detection event' })).toBeInTheDocument()
       expect(screen.queryByTestId('lb-panel')).toBeNull()
       Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true })
     })
