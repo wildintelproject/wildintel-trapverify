@@ -60,6 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Contribution pull requests are now documented as targeting `development` (the Developer Manual said `main`). CI and the README now use Node.js 22, the version of the frontend Docker image (they said 20 and 18+).
 
 #### Fixed
+- **"Review in large view" button next to each location** (issue #101), as in the community fork, where the reviewer is looking when starting a location; it opens the large view at the first undecided event of that location. The button in the page header stays.
 - **No "Confirm all in this location" in the pending expert review** (issue #103): those occasions are the doubtful ones, so confirming them all at once is not offered there.
 - **Review texts say *detection event*, not *card*** (issue #100), as in the community fork and the paper: "Previous detection event", "N/M decided in this round", "This detection event" (instead of "Your decision"), in English, Spanish, German and Polish.
 - **Creating a session is much faster with *Show all event frames*** (issue #98): the context frames of each detection event are looked up by binary search in the media of its deployment instead of scanning the whole media table for every event. On a synthetic archive of 50 000 photos, creating the session went from 270 s to 7 s; the frames shown are the same.

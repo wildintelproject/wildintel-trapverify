@@ -241,6 +241,7 @@
     "open_large_view": "Duży widok",
     "open_large_view_hint": "Otwórz duży widok (zaczyna od pierwszego nierozstrzygniętego zdarzenia detekcji). Y potwierdź · N odrzuć · U niepewne · Backspace poprzednie zdarzenie detekcji · ↑↓ inne zdarzenia detekcji lokalizacji · ←→ zdjęcia",
     "decided_progress": "{{done}}/{{total}} rozstrzygniętych w tej rundzie",
+    "open_large": "Przeglądaj w dużym widoku",
     "lb_site_progress": "Lokalizacja {{site}}: {{done}} z {{total}}",
     "lb_species_progress": "Gatunek: rozstrzygnięto {{resolved}} z {{total}} okresów przed tą rundą",
     "lb_progress_label": "Postęp przeglądu",

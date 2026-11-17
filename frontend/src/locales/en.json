@@ -237,6 +237,7 @@
     "open_large_view": "Large view",
     "open_large_view_hint": "Open the large view (starts at the first undecided detection event). Y confirm · N reject · U unsure · Backspace previous detection event · ↑↓ other detection events at this location · ←→ photos",
     "decided_progress": "{{done}}/{{total}} decided in this round",
+    "open_large": "Review in large view",
     "lb_site_progress": "Location {{site}}: {{done}} of {{total}}",
     "lb_species_progress": "Species: {{resolved}} of {{total}} occasions resolved before this round",
     "lb_progress_label": "Review progress",

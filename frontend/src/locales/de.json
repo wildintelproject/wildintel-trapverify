@@ -237,6 +237,7 @@
     "open_large_view": "Großansicht",
     "open_large_view_hint": "Großansicht öffnen (beginnt bei der ersten unentschiedenen Detektionsereignis). Y bestätigen · N ablehnen · U unsicher · Rücktaste vorheriges Detektionsereignis · ↑↓ andere Detektionsereignisse des Standorts · ←→ Fotos",
     "decided_progress": "{{done}}/{{total}} in dieser Runde entschieden",
+    "open_large": "In Großansicht prüfen",
     "lb_site_progress": "Standort {{site}}: {{done}} von {{total}}",
     "lb_species_progress": "Art: {{resolved}} von {{total}} Zeiträumen vor dieser Runde geklärt",
     "lb_progress_label": "Fortschritt der Prüfung",
