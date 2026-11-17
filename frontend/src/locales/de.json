@@ -236,6 +236,7 @@
     "reopen_done": "Runde {{n}} wieder geöffnet.",
     "open_large_view": "Großansicht",
     "open_large_view_hint": "Großansicht öffnen (beginnt bei der ersten unentschiedenen Karte). Y bestätigen · N ablehnen · U unsicher · Rücktaste vorherige Karte · ↑↓ andere Karten des Standorts · ←→ Fotos",
+    "open_large": "In Großansicht prüfen",
     "decided_progress": "{{done}} von {{total}} Karten entschieden",
     "lb_site_progress": "Standort {{site}}: {{done}} von {{total}}",
     "lb_species_progress": "Art: {{resolved}} von {{total}} Zeiträumen vor dieser Runde geklärt",

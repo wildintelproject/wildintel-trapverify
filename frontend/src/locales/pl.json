@@ -240,6 +240,7 @@
     "reopen_done": "Runda {{n}} otwarta ponownie.",
     "open_large_view": "Duży widok",
     "open_large_view_hint": "Otwórz duży widok (zaczyna od pierwszej nierozstrzygniętej karty). Y potwierdź · N odrzuć · U niepewne · Backspace poprzednia karta · ↑↓ inne karty lokalizacji · ←→ zdjęcia",
+    "open_large": "Przeglądaj w dużym widoku",
     "decided_progress": "Rozstrzygnięto kart: {{done}} z {{total}}",
     "lb_site_progress": "Lokalizacja {{site}}: {{done}} z {{total}}",
     "lb_species_progress": "Gatunek: rozstrzygnięto {{resolved}} z {{total}} okresów przed tą rundą",

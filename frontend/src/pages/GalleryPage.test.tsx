@@ -169,6 +169,15 @@ describe('GalleryPage', () => {
       return await screen.findByTestId('lb-panel')
     }
 
+    it('opens from the button next to the location, at the first undecided event of that location', async () => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      api.getEvents.mockResolvedValue([event('a', 2), event('b', 2)])
+      renderGallery()
+      await userEvent.click((await screen.findAllByRole('button', { name: /Confirmed/ }))[0])       // a is decided
+      await userEvent.click(await screen.findByRole('button', { name: /Review in large view/ }))
+      expect(await screen.findByTestId('lb-panel')).toHaveTextContent('Location S1: 1 of 2')
+    })
+
     it('shows the progress of the round, the location and the species beside the photo', async () => {
       const panel = await open()
       expect(panel).toHaveTextContent('Round 2')

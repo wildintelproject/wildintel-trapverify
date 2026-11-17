@@ -236,6 +236,7 @@
     "reopen_done": "Round {{n}} reopened.",
     "open_large_view": "Large view",
     "open_large_view_hint": "Open the large view (starts at the first undecided card). Y confirm · N reject · U unsure · Backspace previous card · ↑↓ other cards at this location · ←→ photos",
+    "open_large": "Review in large view",
     "decided_progress": "{{done}} of {{total}} cards decided",
     "lb_site_progress": "Location {{site}}: {{done}} of {{total}}",
     "lb_species_progress": "Species: {{resolved}} of {{total}} occasions resolved before this round",

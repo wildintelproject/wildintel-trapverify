@@ -236,6 +236,7 @@
     "reopen_done": "Ronda {{n}} reabierta.",
     "open_large_view": "Vista grande",
     "open_large_view_hint": "Abrir la vista grande (empieza en la primera tarjeta sin decidir). Y confirmar · N rechazar · U incierto · Retroceso tarjeta anterior · ↑↓ otras tarjetas de la localidad · ←→ fotos",
+    "open_large": "Revisar en vista grande",
     "decided_progress": "{{done}} de {{total}} tarjetas decididas",
     "lb_site_progress": "Localidad {{site}}: {{done}} de {{total}}",
     "lb_species_progress": "Especie: {{resolved}} de {{total}} ocasiones resueltas antes de esta ronda",
