@@ -96,6 +96,8 @@ def mark_outputs_stale() -> None:
 def ensure_export_fresh() -> None:
     """Bring ``camtrap_dp_verified/`` up to date if saving a round left it stale.
 
+    A session imported from another computer has no ``occupancy_inputs/`` yet: everything is rebuilt.
+
     Saving a round only marks it stale (rewriting the whole observations table on every save is the
     slowest step on a large archive); it is rebuilt here, when the results are opened, downloaded
     or the session folder is opened.
@@ -103,8 +105,11 @@ def ensure_export_fresh() -> None:
     sd = session_service.session_dir()
     if sd is None or session_service.get_config() is None:
         return
-    if (sd / OUTPUTS_STALE_MARKER).exists():
-        logger.info("Rebuilding every output (stale)")
+    occupancy_dir = session_service.paths()["occupancy_out"]
+    if (sd / OUTPUTS_STALE_MARKER).exists() or not (occupancy_dir.is_dir() and any(occupancy_dir.iterdir())):
+        # also when occupancy_inputs/ is missing or empty: a session imported from another computer
+        # brings its decisions but none of the files derived from them
+        logger.info("Rebuilding every output (stale or missing)")
         rebuild_outputs(export=True)
     elif export_is_stale() or not session_service.paths()["camtrap_out"].exists():
         logger.info("Rebuilding the verified CamtrapDP (stale)")
