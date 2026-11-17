@@ -1346,6 +1346,31 @@ def test_burst_context_single_detection_burst_still_gets_context(camtrap_dir: Pa
     )
     assert "m_neighbor" in ctx_ids
 
+def test_burst_context_window_is_inclusive_and_per_deployment(camtrap_dir):
+    """Neighbours are the frames of the same deployment within ``gap_seconds`` of the burst, ends included."""
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    dep_ids = pd.read_csv(camtrap_dir / "deployments.csv", dtype=str)["deploymentID"].tolist()
+    other = next(d for d in dep_ids if d != "DEP1")
+    # m005 (DEP1) is alone at 2025-11-02 12:00:00; the window is [11:59:00, 12:01:00]
+    extra = pd.DataFrame({
+        "mediaID":      ["in_start", "in_end", "too_late", "too_early", "other_dep"],
+        "deploymentID": ["DEP1", "DEP1", "DEP1", "DEP1", other],
+        "timestamp":    ["2025-11-02 11:59:00", "2025-11-02 12:01:00", "2025-11-02 12:01:01",
+                         "2025-11-02 11:58:59", "2025-11-02 12:00:10"],
+        "filePath":     [f"img/{i}.jpg" for i in range(5)],
+    })
+    pd.concat([med, extra], ignore_index=True).to_csv(camtrap_dir / "media.csv", index=False)
+    dep, med2, obs = load_camtrapdp(camtrap_dir)
+    cands = build_candidates(
+        dep, med2, obs, target_species=["Vulpes vulpes"],
+        study_start=date(2025, 11, 1), study_end=date(2025, 11, 10),
+        occasion_days=5, total_iterations=100_000, gap_seconds=60, include_burst_context=True,
+    )
+    burst = cands.loc[cands["mediaID"] == "m005", "burst_id"].iloc[0]
+    ctx = cands[(cands["is_context"] == True) & (cands["burst_id"] == burst)]  # noqa: E712
+    assert set(ctx["mediaID"]) == {"in_start", "in_end"}
+    assert list(ctx["ts"]) == sorted(ctx["ts"])
+
 def test_burst_context_adds_context_rows(camtrap_dir_with_context):
     dep, med, obs = load_camtrapdp(camtrap_dir_with_context)
     cands = build_candidates(

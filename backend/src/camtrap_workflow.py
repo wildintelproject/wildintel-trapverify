@@ -1594,6 +1594,13 @@ def build_candidates(
         candidate_media_ids = set(candidates["mediaID"].astype(str))
         context_rows: list[dict] = []
 
+        # Pre-split the non-candidate media by deployment, sorted by time, so each burst's
+        # neighbours are found with a binary search instead of a scan over the whole media table
+        # (and a ``isin`` over every candidate id) for every burst.
+        pool = med[med["ts"].notna() & ~med["mediaID"].astype(str).isin(candidate_media_ids)]
+        pool = pool.assign(_dep=pool["deploymentID"].astype(str)).sort_values("ts", kind="stable")
+        pool_by_dep = {d: g for d, g in pool.groupby("_dep", sort=False)}
+
         for (key, burst_id_val), burst in candidates.groupby(
             ["site_occasion_key", "burst_id"], sort=False
         ):
@@ -1606,13 +1613,12 @@ def build_candidates(
             t0 = burst["ts"].min() - pad
             t1 = burst["ts"].max() + pad
 
-            neighbors = med[
-                (med["deploymentID"].astype(str) == dep_id)
-                & med["ts"].notna()
-                & (med["ts"] >= t0)
-                & (med["ts"] <= t1)
-                & (~med["mediaID"].astype(str).isin(candidate_media_ids))
-            ]
+            dep_pool = pool_by_dep.get(dep_id)
+            if dep_pool is None:
+                continue
+            lo = dep_pool["ts"].searchsorted(t0, side="left")
+            hi = dep_pool["ts"].searchsorted(t1, side="right")
+            neighbors = dep_pool.iloc[lo:hi]
 
             for _, row in neighbors.iterrows():
                 ts_val: pd.Timestamp = row["ts"]
