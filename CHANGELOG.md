@@ -60,6 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Contribution pull requests are now documented as targeting `development` (the Developer Manual said `main`). CI and the README now use Node.js 22, the version of the frontend Docker image (they said 20 and 18+).
 
 #### Fixed
+- **No "Confirm all in this location" in the pending expert review** (issue #103): those occasions are the doubtful ones, so confirming them all at once is not offered there.
 - **Importing a session ZIP with an unreadable manifest** answers a clean 400 and leaves no half-imported folder (it failed with an internal error and left the folder). Found by running the community fork's tests against this branch.
 - **A cell an expert confirms in the pending review now reaches the verified CamtrapDP.** It counted in the detection histories and in Results, but its observation stayed `machine` with the `unsure` tag in `observations.csv`; it is now `human`, tagged `camtrapverify:confirmed`, and the events before it are tagged rejected as for any confirmed cell. Found by running the community fork's tests against this branch.
 - **Verifying a package that already carries review tags** (for example the verified export of an earlier session) no longer duplicates them: the new `camtrapverify:confirmed` / `rejected` / `unsure` / `actual-species` tags replace the old ones of the same review (never `rejected` beside `confirmed`), and every other tag is kept (as in the community fork).

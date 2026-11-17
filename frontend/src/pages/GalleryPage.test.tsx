@@ -285,6 +285,12 @@ describe('GalleryPage', () => {
       expect(screen.getAllByTestId('pending-pos')).toHaveLength(1)                           // a cell with one unsure event shows no position
     })
 
+    it('does not offer to confirm everything at once', async () => {
+      renderGallery()
+      expect(await screen.findByText(/Pending expert review/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Confirm all in this location/ })).not.toBeInTheDocument()
+    })
+
     it('shows the pending cells instead of a round, and saves without deciding every one', async () => {
       api.settlePending.mockResolvedValue({ success: true, confirmed: 1, rejected: 0 })
       renderGallery()
