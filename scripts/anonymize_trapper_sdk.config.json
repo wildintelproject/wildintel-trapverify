@@ -4,6 +4,13 @@
   "protected_substrings": [],
 
   "replacements": [
+    { "old": "https://wildintel-trap.uhu.es", "new": "https://trapper.example.org" },
+    { "old": "wildintel-trap.uhu.es", "new": "trapper.example.org" },
+    { "old": "https://trap.uhu.es", "new": "https://trapper.example.org" },
+    { "old": "-trap.uhu.es", "new": ".example.org" },
+    { "old": "https://www.biodiversa.eu/", "new": "https://funding-programme.example/" },
+    { "old": "Joint Research Call 2022-2023", "new": "Joint Research Call" },
+    { "old": "Joint Research Call 2022–2023", "new": "Joint Research Call" },
     { "_section": "author identity (this repo has an extra GitHub noreply alias and a fuller name variant used in test fixtures, not just comments)" },
     { "old": "Iñaki Fernández de Viana y González", "new": "Anonymous Author" },
     { "old": "Iñaki Josep Fernández de V", "new": "Anonymous Author" },

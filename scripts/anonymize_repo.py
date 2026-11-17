@@ -823,6 +823,13 @@ def main() -> None:
             print("PDF manual was not built (see warning above).", file=sys.stderr)
         if transient_site.exists():
             shutil.rmtree(transient_site)
+        # `uv sync` (needed only to render the PDF) leaves a .venv with
+        # absolute paths of this machine, plus build metadata (*.egg-info),
+        # inside the snapshot. Neither is source: drop them so the snapshot
+        # directory ships only the anonymized code.
+        for leftover in [output / ".venv", *output.glob("*.egg-info")]:
+            if leftover.is_dir():
+                shutil.rmtree(leftover)
 
     packages_dir = None
     if args.packages_repo:
