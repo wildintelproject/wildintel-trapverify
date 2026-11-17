@@ -277,6 +277,32 @@ def test_import_on_another_computer_asks_for_folders_then_continues(client, camt
     assert set(_events(client, 2)) == {A1}
 
 
+def test_import_then_results_rebuilds_every_output(client, camtrap_dir, session, tmp_path):
+    """The hand-over workflow: an imported session has decisions but none of the files derived from them."""
+    _round1_with_unsure(client)
+    zip_path = _export(client, tmp_path)
+    resp = client.post("/api/session/import", json={"zip_path": str(zip_path)})
+    assert resp.status_code == 200, resp.text
+    session_dir = Path(resp.json()["session_dir"])
+    assert not (session_dir / "occupancy_inputs").exists()           # nothing derived travels in the ZIP
+
+    resp = client.post("/api/session/relink", json={"camtrap_dir": str(camtrap_dir)})
+    assert resp.status_code == 200, resp.text
+    assert client.get("/api/results/occupancy").status_code != 404
+    names = {p.name for p in (session_dir / "occupancy_inputs").iterdir()}
+    assert "verification_summary.csv" in names and any(n.startswith("dethist_") for n in names)
+    assert (session_dir / "camtrap_dp_verified").is_dir()
+
+
+def test_results_rebuild_when_occupancy_inputs_are_missing(client, session):
+    """A session already imported by an earlier version is repaired the first time Results is opened."""
+    _round1_with_unsure(client)
+    sd = Path(session["session_dir"])
+    shutil.rmtree(sd / "occupancy_inputs", ignore_errors=True)
+    assert client.get("/api/results/occupancy").status_code != 404
+    assert any((sd / "occupancy_inputs").iterdir())
+
+
 def test_relink_refuses_a_different_dataset(client, camtrap_dir, session, tmp_path):
     other = tmp_path / "different"
     shutil.copytree(camtrap_dir, other)

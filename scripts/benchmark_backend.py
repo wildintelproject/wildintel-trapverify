@@ -76,7 +76,7 @@ def main() -> None:
 
     body = {"camtrap_dir": str(work / "data"), "output_dir": str(work / "out"), "target_species": ["Vulpes vulpes"],
             "study_start": "2025-01-01", "study_end": "2025-03-14", "occasion_days": 3, "total_iterations": 100000,
-            "gap_seconds": 60, "min_score": 0.5}
+            "gap_seconds": 60, "min_score": 0.5, "include_burst_context": True}
     timed("create the session", lambda: client.post("/api/setup", json=body).json())
     ev = timed("list the events of round 1", lambda: client.get("/api/species/Vulpes_vulpes/events", params={"iteration": 1}).json())
     timed("save round 1 (300 confirmed)", lambda: client.post("/api/decisions", json={
