@@ -35,6 +35,7 @@ def get_occupancy() -> list[dict]:
 
     Reads occupancy_fit.csv if it already exists; otherwise runs the fit on demand.
     """
+    workflow_service.ensure_export_fresh()      # an imported session has no histories until they are rebuilt
     p = session_service.paths()
     fit_csv = p["occupancy_out"] / "occupancy_fit.csv"
 
