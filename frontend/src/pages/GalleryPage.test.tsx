@@ -169,10 +169,19 @@ describe('GalleryPage', () => {
       return await screen.findByTestId('lb-panel')
     }
 
+    it('opens from the button next to the location, at the first undecided event of that location', async () => {
+      api.getSpecies.mockResolvedValue([stats({ current_iteration: 2 })])
+      api.getEvents.mockResolvedValue([event('a', 2), event('b', 2)])
+      renderGallery()
+      await userEvent.click((await screen.findAllByRole('button', { name: /Confirmed/ }))[0])       // a is decided
+      await userEvent.click(await screen.findByRole('button', { name: /Review in large view/ }))
+      expect(await screen.findByTestId('lb-panel')).toHaveTextContent('Location S1: 1 of 2')
+    })
+
     it('shows the progress of the round, the location and the species beside the photo', async () => {
       const panel = await open()
       expect(panel).toHaveTextContent('Round 2')
-      expect(panel).toHaveTextContent('0 of 3 cards decided')
+      expect(panel).toHaveTextContent('0/3 decided in this round')
       expect(panel).toHaveTextContent('Location S1: 0 of 3')
       expect(panel).toHaveTextContent('2 of 4 occasions resolved before this round')
     })
@@ -181,19 +190,19 @@ describe('GalleryPage', () => {
       await open()
       const panel = () => screen.getByTestId('lb-panel')                   // the lightbox remounts per card
       await userEvent.keyboard('y')
-      await waitFor(() => expect(panel()).toHaveTextContent('1 of 3 cards decided'))
-      const prev = screen.getByRole('button', { name: /Previous card/ })
+      await waitFor(() => expect(panel()).toHaveTextContent('1/3 decided in this round'))
+      const prev = screen.getByRole('button', { name: /Previous detection event/ })
       expect(prev).toBeEnabled()
       await userEvent.keyboard('{Backspace}')
       // back on the card just decided, which still shows as confirmed
       const confirm = screen.getAllByRole('button', { name: /Confirmed/ }).find((b) => b.className.includes('bg-emerald-600'))
       expect(confirm).toBeTruthy()
-      expect(panel()).toHaveTextContent('1 of 3 cards decided')               // nothing was undone
+      expect(panel()).toHaveTextContent('1/3 decided in this round')               // nothing was undone
     })
 
     it('has nothing to go back to on the first card', async () => {
       await open()
-      expect(screen.getByRole('button', { name: /Previous card/ })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Previous detection event/ })).toBeDisabled()
     })
 
     it('uses the strip at the bottom on a narrow screen', async () => {
@@ -202,7 +211,7 @@ describe('GalleryPage', () => {
       api.getEvents.mockResolvedValue([event('a', 2), event('b', 2)])
       renderGallery()
       await userEvent.click(await screen.findByRole('button', { name: 'Large view' }))
-      expect(await screen.findByRole('button', { name: 'Previous card' })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: 'Previous detection event' })).toBeInTheDocument()
       expect(screen.queryByTestId('lb-panel')).toBeNull()
       Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true })
     })
@@ -283,6 +292,12 @@ describe('GalleryPage', () => {
       expect(await screen.findByText(/Pending expert review · Round 1/)).toBeInTheDocument()   // the earliest round still open
       expect(screen.getByText('unsure event 2 of 3')).toBeInTheDocument()
       expect(screen.getAllByTestId('pending-pos')).toHaveLength(1)                           // a cell with one unsure event shows no position
+    })
+
+    it('does not offer to confirm everything at once', async () => {
+      renderGallery()
+      expect(await screen.findByText(/Pending expert review/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Confirm all in this location/ })).not.toBeInTheDocument()
     })
 
     it('shows the pending cells instead of a round, and saves without deciding every one', async () => {

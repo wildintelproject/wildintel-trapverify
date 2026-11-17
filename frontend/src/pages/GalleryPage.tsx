@@ -1056,17 +1056,20 @@ export default function GalleryPage() {
       {/* Floating action buttons */}
       {!completed && (
         <div className="fixed bottom-6 right-6 z-[200] flex gap-2">
-          <button
-            className="px-5 py-2.5 bg-zinc-600 text-white rounded-lg shadow-xl hover:bg-zinc-500 transition-colors disabled:opacity-50 flex items-center gap-2"
-            onClick={confirmAllInSite}
-            disabled={saving || siteEvents.length === 0}
-            title={t('gallery.confirm_all_site_tooltip')}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M2 8.5L5.5 12L10 6M5 5.5L8.5 9L13 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            {t('gallery.confirm_all_site')}
-          </button>
+          {/* Not in the pending expert review: every event there was unsure or rejected, confirming them all would defeat it */}
+          {!pendingMode && (
+            <button
+              className="px-5 py-2.5 bg-zinc-600 text-white rounded-lg shadow-xl hover:bg-zinc-500 transition-colors disabled:opacity-50 flex items-center gap-2"
+              onClick={confirmAllInSite}
+              disabled={saving || siteEvents.length === 0}
+              title={t('gallery.confirm_all_site_tooltip')}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M2 8.5L5.5 12L10 6M5 5.5L8.5 9L13 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {t('gallery.confirm_all_site')}
+            </button>
+          )}
           <button
             className="px-5 py-2.5 bg-blue-600 text-white rounded-lg shadow-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex flex-col items-center leading-tight"
             onClick={() => flushProgress({ announce: true })}
@@ -1145,6 +1148,16 @@ export default function GalleryPage() {
                   max: Math.max(...siteEvents.map((e) => e.maxProb * 100)).toFixed(0),
                 })}
               </span>
+              {siteEvents.length > 0 && (
+                <button type="button"
+                  className="ml-auto px-3 py-1 text-sm font-normal rounded-md bg-blue-600 text-white hover:bg-blue-500"
+                  onClick={() => {
+                    const first = (completed ? undefined : siteEvents.find((e) => !decisions[e.key])) ?? siteEvents[0]
+                    openLightbox(indexByKey.get(first.key) ?? 0, 0)
+                  }}>
+                  ⤢ {t('gallery.open_large')}
+                </button>
+              )}
             </h5>
             <hr className="border-zinc-700 mt-0 mb-3" />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
