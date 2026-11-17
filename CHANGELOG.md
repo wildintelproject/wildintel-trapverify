@@ -60,6 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Contribution pull requests are now documented as targeting `development` (the Developer Manual said `main`). CI and the README now use Node.js 22, the version of the frontend Docker image (they said 20 and 18+).
 
 #### Fixed
+- **Large view: other species and decision in two columns, and the title no longer overlaps the panel** (issues #99 and #102): the other target species are on the left and, on their right, *Confirmed / Unsure / Rejected* and *Previous detection event* (as in the community fork). The title of the photo wraps inside its own area, to the right of the panel, so it is not drawn over it on ~1280 px screens.
 - **"Review in large view" button next to each location** (issue #101), as in the community fork, where the reviewer is looking when starting a location; it opens the large view at the first undecided event of that location. The button in the page header stays.
 - **No "Confirm all in this location" in the pending expert review** (issue #103): those occasions are the doubtful ones, so confirming them all at once is not offered there.
 - **Review texts say *detection event*, not *card*** (issue #100), as in the community fork and the paper: "Previous detection event", "N/M decided in this round", "This detection event" (instead of "Your decision"), in English, Spanish, German and Polish.
