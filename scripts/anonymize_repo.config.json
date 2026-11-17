@@ -32,6 +32,13 @@
   ],
 
   "replacements": [
+    { "old": "https://wildintel-trap.uhu.es", "new": "https://trapper.example.org" },
+    { "old": "wildintel-trap.uhu.es", "new": "trapper.example.org" },
+    { "old": "https://trap.uhu.es", "new": "https://trapper.example.org" },
+    { "old": "-trap.uhu.es", "new": ".example.org" },
+    { "old": "https://www.biodiversa.eu/", "new": "https://funding-programme.example/" },
+    { "old": "Joint Research Call 2022-2023", "new": "Joint Research Call" },
+    { "old": "Joint Research Call 2022–2023", "new": "Joint Research Call" },
     { "_section": "author identity" },
     { "old": "Iñaki Josep Fernández de V", "new": "Anonymous Author" },
     { "old": "ijfviana@gmail.com", "new": "anonymous@example.com" },
