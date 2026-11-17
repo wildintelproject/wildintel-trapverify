@@ -93,6 +93,7 @@ def import_session(req: ImportSessionRequest) -> dict:
         shutil.rmtree(dest, ignore_errors=True)
         raise HTTPException(400, "El ZIP contiene una sesión que no se puede abrir (el candidate_manifest.csv no es válido).")
     relink = session_service.auto_relink()
+    workflow_service.mark_outputs_stale()       # an imported session brings decisions, not the outputs derived from them
     return {"ok": True, "session_dir": str(dest), "config": session_service.get_config(), "relink": relink}
 
 
@@ -114,6 +115,7 @@ def relink_session(req: RelinkRequest) -> dict:
     if expected and actual != expected:
         raise HTTPException(400, "Esa carpeta contiene un dataset distinto al de la sesión (las deployments no coinciden).")
     session_service.update_paths(str(camtrap_dir), req.image_base_dir, req.flat_search)
+    workflow_service.mark_outputs_stale()       # the histories and reports are rebuilt when Results is opened
     return {"ok": True, "relink": session_service.relink_status()}
 
 
