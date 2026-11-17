@@ -820,7 +820,9 @@ export default function GalleryPage() {
       )}
     </div>
   ) : null
-  const lbPanelWidth = otherSpecies.length > 0 ? 240 : 168
+  // Two columns beside the photo when there are other target species (192 + 160 + gap): the species on
+  // the left and, on their right, the decision of the event, so the mouse hardly moves between them.
+  const lbPanelWidth = otherSpecies.length > 0 ? 372 : 168
   const lbDecisionButtons = (wrapClass: string, btnClass: string) => (
     <div className={wrapClass}>
       <button
@@ -1188,7 +1190,8 @@ export default function GalleryPage() {
       .yarl__slide_title {
         white-space: normal !important;
         overflow: visible !important;
-      }`}</style>
+      }
+      ${lbNarrow ? '' : `.yarl__slide_captions_container { left: ${lbPanelWidth + 40}px !important; }`}`}</style>
 
       <datalist id="actual-species-list">
         {taxa.map((n) => <option key={n} value={n} />)}
@@ -1223,21 +1226,23 @@ export default function GalleryPage() {
                   data-testid="lb-panel"
                 >
                   {lbProgress}
-                  {lbCrossPanel}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[11px] leading-tight text-white/70">{t('gallery.lb_decision_title')}</span>
-                    {lbDecisionButtons('flex flex-col gap-2', 'w-full py-3')}
+                  <div className="flex gap-3 items-start">
+                    {lbCrossPanel && <div className="w-48 shrink-0">{lbCrossPanel}</div>}
+                    <div className="flex flex-col gap-2 w-40 shrink-0">
+                      <span className="text-[11px] leading-tight text-white/70">{t('gallery.lb_decision_title')}</span>
+                      {lbDecisionButtons('flex flex-col gap-2', 'w-full py-3')}
+                      <button
+                        type="button"
+                        onClick={lbGoBack}
+                        disabled={!lbCanGoBack}
+                        title={t('gallery.prev_card_tooltip')}
+                        className="mt-2 w-full py-1.5 text-xs rounded border border-white/40 bg-black/50 text-white/90 hover:bg-white/15 disabled:opacity-30 disabled:hover:bg-black/50"
+                      >
+                        ↶ {t('gallery.prev_card')} <span className="opacity-60">(⌫)</span>
+                      </button>
+                    </div>
                   </div>
                   {lbCorrectionInput}
-                  <button
-                    type="button"
-                    onClick={lbGoBack}
-                    disabled={!lbCanGoBack}
-                    title={t('gallery.prev_card_tooltip')}
-                    className="w-full py-1.5 text-xs rounded border border-white/40 bg-black/50 text-white/90 hover:bg-white/15 disabled:opacity-30 disabled:hover:bg-black/50"
-                  >
-                    ↶ {t('gallery.prev_card')} <span className="opacity-60">(⌫)</span>
-                  </button>
                   <p className="text-[10px] leading-snug text-white/50">{t('gallery.lb_keys_tip')}</p>
                 </div>
               )}

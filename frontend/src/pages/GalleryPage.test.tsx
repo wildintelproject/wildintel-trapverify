@@ -367,6 +367,17 @@ describe('GalleryPage', () => {
       return await screen.findByTestId('lb-cross')
     }
 
+    it('puts the other species and the decision buttons in two columns, and the title beside them', async () => {
+      const cross = await setup()
+      const panel = screen.getByTestId('lb-panel')
+      expect(panel).toHaveStyle({ width: '372px' })
+      const row = cross.parentElement!.parentElement!                                    // species column | decision column
+      expect(row).toHaveClass('flex')
+      expect(within(row).getByRole('button', { name: /Confirmed/ })).toBeInTheDocument()
+      // the title wraps inside its own area, to the right of the panel (it used to be drawn over it)
+      expect(document.querySelector('style')?.textContent ?? '').toMatch(/yarl__slide_captions_container \{ left: 412px/)
+    })
+
     it('lists the other target species in the large view, not the one being reviewed', async () => {
       const panel = await setup()
       expect(within(panel).getByRole('button', { name: /Sus scrofa/ })).toBeInTheDocument()
