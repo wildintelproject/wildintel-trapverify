@@ -311,7 +311,7 @@
     "cross_other_review": "confirmed while reviewing",
     "cross_other_review_tooltip": "{{species}} was already confirmed at this location and occasion from a photo, while {{source}} was being reviewed. It already counts; it can only be undone from the review of {{source}}.",
     "lb_reviewing": "Reviewing",
-    "cross_outside": "no candidates here: recorded apart",
+    "cross_outside": "not flagged here by the classifier: kept apart",
     "cross_outside_tooltip": "The classifier did not flag {{species}} at this location and occasion. A confirmation here is recorded apart and does not count in its verified history, because only other species being reviewed can bring such cases to light.",
     "cross_added_outside": "{{species}} recorded at {{site}}, occasion {{occasion}}, as an addition: the classifier had not flagged it here, so it is kept out of its verified history (see Results).",
     "pending_pos": "unsure event {{i}} of {{n}}",

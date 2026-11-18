@@ -311,7 +311,7 @@
     "cross_other_review": "bestätigt bei der Prüfung von",
     "cross_other_review_tooltip": "{{species}} wurde an diesem Standort und in dieser Periode bereits auf einem Foto bestätigt, während {{source}} geprüft wurde. Das zählt bereits; rückgängig machen geht nur in der Prüfung von {{source}}.",
     "lb_reviewing": "Geprüfte Art",
-    "cross_outside": "hier keine Kandidaten: wird separat erfasst",
+    "cross_outside": "hier nicht vom Klassifikator markiert: wird separat geführt",
     "cross_outside_tooltip": "Der Klassifikator hat {{species}} an diesem Standort und Erfassungszeitraum nicht erkannt. Eine Bestätigung hier wird separat erfasst und zählt nicht in ihrer verifizierten Nachweishistorie, da solche Fälle nur bei der Prüfung anderer Arten auffallen.",
     "cross_added_outside": "{{species}} an {{site}}, Erfassungszeitraum {{occasion}}, als Ergänzung erfasst: Der Klassifikator hatte sie hier nicht erkannt, daher bleibt sie außerhalb ihrer verifizierten Nachweishistorie (siehe Ergebnisse).",
     "pending_pos": "unsicheres Ereignis {{i}} von {{n}}",

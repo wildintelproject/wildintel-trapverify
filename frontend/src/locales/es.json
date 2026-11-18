@@ -311,7 +311,7 @@
     "cross_other_review": "confirmada al revisar",
     "cross_other_review_tooltip": "{{species}} ya se confirmó en esta localización y ocasión desde una foto, mientras se revisaba {{source}}. Ya cuenta; solo se puede deshacer desde la revisión de {{source}}.",
     "lb_reviewing": "Revisando",
-    "cross_outside": "sin candidatas aquí: se anota aparte",
+    "cross_outside": "el clasificador no la marcó aquí: va aparte",
     "cross_outside_tooltip": "El clasificador no asignó {{species}} en esta localización y ocasión. Una confirmación aquí se anota aparte y no cuenta en su historial verificado, porque estos casos solo salen a la luz cuando se revisan otras especies.",
     "cross_added_outside": "{{species}} anotada en {{site}}, ocasión {{occasion}}, como adición: el clasificador no la había asignado aquí, así que queda fuera de su historial verificado (ver Resultados).",
     "pending_pos": "evento dudoso {{i}} de {{n}}",
