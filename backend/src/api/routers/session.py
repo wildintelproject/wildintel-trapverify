@@ -7,7 +7,8 @@ from fastapi.responses import Response
 
 from camtrap_workflow import dataset_fingerprint
 from schemas.requests import (
-    ImportSessionRequest, LoadSessionRequest, RelinkRequest, RenameSessionRequest, SetupRequest,
+    ClassifiedByRequest, ImportSessionRequest, LoadSessionRequest, RelinkRequest,
+    RenameSessionRequest, SetupRequest,
 )
 from services import session_service, session_transfer, workflow_service
 
@@ -37,6 +38,14 @@ def get_state() -> dict:
 def rename_session(req: RenameSessionRequest) -> dict:
     """Name (or rename) a session; an empty name clears it."""
     return session_service.rename_session(req.session_dir, req.name)
+
+
+@router.put("/session/classified-by")
+def set_classified_by(req: ClassifiedByRequest) -> dict:
+    """Change the classifiedBy value of the active session; the verified CamtrapDP is rebuilt."""
+    value = session_service.set_classified_by(req.classified_by)
+    workflow_service.mark_outputs_stale()       # classifiedBy is written into camtrap_dp_verified/
+    return {"classified_by": value}
 
 
 @router.get("/session/recent")

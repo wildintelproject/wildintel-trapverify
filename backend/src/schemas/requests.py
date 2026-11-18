@@ -102,6 +102,10 @@ class RelinkRequest(BaseModel):
     flat_search: bool = False
 
 
+class ClassifiedByRequest(BaseModel):
+    classified_by: str = Field("", max_length=200)   # empty: back to the default label
+
+
 class RenameSessionRequest(BaseModel):
     session_dir: str = ""          # empty: the active session
     name: str = Field("", max_length=120)

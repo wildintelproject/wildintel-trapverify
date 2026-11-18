@@ -440,7 +440,15 @@
     "website": "WildINTEL website",
     "github": "GitHub repository"
   },
+  "classified_by": {
+    "label": "Classified by",
+    "edit": "Change who is credited as classifiedBy",
+    "placeholder": "e.g. Jennifer R.; Santiago G.",
+    "hint": "Written to classifiedBy of every observation confirmed in the verified CamtrapDP. One value per session: if several people reviewed it, list them all."
+  },
   "relink": {
+    "change": "Data folders…",
+    "change_hint": "Change where the CamtrapDP and the photos of this session are on this computer",
     "title": "Where are the data on this computer?",
     "desc": "This session was made on another computer or the folders have moved. Point it at the data and photos here; your decisions are kept.",
     "data_dir": "CamtrapDP folder",
