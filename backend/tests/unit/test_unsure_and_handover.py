@@ -550,3 +550,34 @@ def test_pending_review_confirming_a_later_unsure_event(client, session):
     assert r["confirmed"] == 1
     assert A1 not in _pending(client)
     assert p[A1]["repObsId"] == a1_second
+
+
+def test_relink_notices_missing_photos_when_filepaths_are_urls(client, camtrap_dir, tmp_path):
+    """TRAPPER exports have URL filePaths; the photos are looked up by fileName in the images folder.
+
+    A wrong images folder (another season, or the photos only in subfolders without
+    "search subfolders") must be reported, not pass the check because the paths are remote.
+    """
+    med = pd.read_csv(camtrap_dir / "media.csv", dtype=str)
+    med["fileName"] = [f"frame{i}.jpg" for i in range(len(med))]
+    med["filePath"] = [f"https://trapper.example.org/storage/resource/media/{m}/file/" for m in med["mediaID"]]
+    med.to_csv(camtrap_dir / "media.csv", index=False)
+    photos = tmp_path / "pictures" / "spring" / "2024"
+    (photos / "DEP1").mkdir(parents=True)
+    for name in med["fileName"]:
+        (photos / "DEP1" / name).write_bytes(b"\xff\xd8\xff\xe0")
+    _setup(client, camtrap_dir, tmp_path / "out", image_base_dir=str(photos), flat_search=True)
+    assert client.get("/api/state").json()["relink"]["needs_relink"] is False
+
+    wrong = tmp_path / "pictures" / "summer" / "2024"
+    wrong.mkdir(parents=True)
+    resp = client.post("/api/session/relink", json={
+        "camtrap_dir": str(camtrap_dir), "image_base_dir": str(wrong), "flat_search": True,
+    })
+    assert resp.status_code == 200, resp.text
+    relink = resp.json()["relink"]
+    assert relink["needs_relink"] is True and relink["camtrap_dir_ok"] is True and relink["images_ok"] is False
+
+    # Without an images folder the URLs are fetched on demand: nothing to check locally.
+    resp = client.post("/api/session/relink", json={"camtrap_dir": str(camtrap_dir), "image_base_dir": ""})
+    assert resp.json()["relink"]["needs_relink"] is False
