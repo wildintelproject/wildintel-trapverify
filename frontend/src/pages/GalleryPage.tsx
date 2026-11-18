@@ -9,7 +9,7 @@ import 'yet-another-react-lightbox/plugins/captions.css'
 import { api } from '../api'
 import EventCard, { type Decision } from '../components/EventCard'
 import { frameSrc } from '../utils/frameImage'
-import { crossButtonState } from '../crossState'
+import { crossButtonState, crossConfirmedHere } from '../crossState'
 import { effectiveMinScore } from '../utils/minScore'
 import { clearDraft, draftKey, loadDraft, saveDraft } from '../utils/draft'
 import type { CrossSpecies, DetectionEvent, SpeciesStats } from '../types'
@@ -441,9 +441,10 @@ export default function GalleryPage() {
     const frame = ev?.frames[lbIndex]
     if (!sp || !ev || !frame || crossBusy || crossReadOnly) return
     const cur = crossByCell[`${ev.siteId}|${ev.occasion}`]?.find((c) => c.scientificName === sp)
-    // Already confirmed in this occasion (in its own review, or from a photo of another detection
-    // event): nothing to do here, and it cannot be undone by mistake from a photo that may not show it.
-    const state = crossButtonState(cur, ev.frames)
+    // Already confirmed in this occasion (in its own review, from a photo of another detection
+    // event, or while reviewing another species): nothing to do here, and it cannot be undone by
+    // mistake from a photo that may not show it.
+    const state = crossButtonState(cur, ev.frames, spStats?.species_name)
     if (state === 'confirmed' || state === 'elsewhere') return
     setCrossBusy(true)
     try {
@@ -479,9 +480,7 @@ export default function GalleryPage() {
     // Confirmed or unsure here while another species was confirmed from a photo of this event: right
     // only with animals of both species. The decision is recorded but the large view stays on the
     // card; pressing the same decision again moves on.
-    const crossHere = (crossByCell[`${ev.siteId}|${ev.occasion}`] ?? [])
-      .filter((c) => c.status === 'cross' && ev.frames.some((f) => f.mediaId === c.mediaID))
-      .map((c) => c.scientificName)
+    const crossHere = crossConfirmedHere(crossByCell[`${ev.siteId}|${ev.occasion}`], ev.frames, spStats?.species_name)
     const conflict = !completed && d !== 'rejected' && crossHere.length > 0
     const repeated = decisionsRef.current[ev.key] === d
     setDecisions((prev) => ({ ...prev, [ev.key]: d }))
@@ -764,17 +763,19 @@ export default function GalleryPage() {
   )
   const crossCellKey = lbCurrentEv ? `${lbCurrentEv.siteId}|${lbCurrentEv.occasion}` : ''
   const crossHere = lbCurrentEv
-    ? (crossByCell[crossCellKey] ?? [])
-        .filter((c) => c.status === 'cross' && lbCurrentEv.frames.some((f) => f.mediaId === c.mediaID))
-        .map((c) => c.scientificName)
+    ? crossConfirmedHere(crossByCell[crossCellKey], lbCurrentEv.frames, spStats?.species_name)
     : []
   const lbCrossPanel = otherSpecies.length > 0 && lbCurrentEv ? (
     <div className="flex flex-col gap-1.5" data-testid="lb-cross">
       <span className="text-[11px] leading-tight text-white/70 mb-0.5">{t('gallery.cross_title')}</span>
       {otherSpecies.map((sp, i) => {
         const st = crossByCell[crossCellKey]?.find((c) => c.scientificName === sp)
-        const status = crossButtonState(st, lbCurrentEv.frames)
+        const status = crossButtonState(st, lbCurrentEv.frames, spStats?.species_name)
         const already = status === 'confirmed' || status === 'elsewhere'
+        // Confirmed while another species was being reviewed: say which, so it is not taken for
+        // a choice made in this review.
+        const fromOther = status === 'elsewhere' && !!st?.source && st.source !== spStats?.species_name
+          ? st.source : null
         // The classifier did not flag this species here: a confirmation is recorded apart
         // (not in the verified history).
         const outside = st?.has_candidates === false
@@ -792,6 +793,8 @@ export default function GalleryPage() {
             disabled={crossReadOnly || already}
             title={status === 'confirmed'
               ? t('gallery.cross_already', { species: sp })
+              : fromOther
+              ? t('gallery.cross_other_review_tooltip', { species: sp, source: fromOther })
               : status === 'elsewhere'
               ? t('gallery.cross_elsewhere_tooltip', { species: sp })
               : status === 'cross'
@@ -803,7 +806,13 @@ export default function GalleryPage() {
             {i < 9 && <span className="text-[10px] opacity-60 font-mono w-3">{i + 1}</span>}
             <span className="flex-1 leading-tight break-words">
               <span className="italic">{sp}</span>
-              {already && <span className="block text-[10px] not-italic">{t('gallery.cross_elsewhere')}</span>}
+              {already && (
+                <span className="block text-[10px] not-italic" data-testid={fromOther ? 'cross-other-review' : undefined}>
+                  {fromOther
+                    ? <>{t('gallery.cross_other_review')} <span className="italic">{fromOther}</span></>
+                    : t('gallery.cross_elsewhere')}
+                </span>
+              )}
               {!already && outside && (
                 <span className="block text-[10px] not-italic opacity-70" data-testid="cross-outside">{t('gallery.cross_outside')}</span>
               )}
