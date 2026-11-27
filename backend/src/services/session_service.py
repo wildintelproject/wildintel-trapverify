@@ -224,12 +224,17 @@ def relink_status() -> dict:
     image_dir_ok = (not image_base_dir) or Path(image_base_dir).is_dir()
 
     # A few candidate photos: catches absolute filePaths from another computer even when no
-    # images folder is configured. Remote addresses are skipped (they are fetched on demand).
+    # images folder is configured. Remote addresses (e.g. TRAPPER URLs) are looked up in the
+    # images folder when there is one, as the gallery does; without one they are fetched on
+    # demand and skipped here. Otherwise a wrong images folder (another season, or without
+    # "search subfolders") passes this check and every photo shows as not found.
     sample_ok: Optional[bool] = None
     candidates = _state.get("candidates")
     if candidates is not None and not candidates.empty and camtrap_ok and image_dir_ok:
         sample = candidates.drop_duplicates("mediaID")
-        sample = sample[~sample["filePath"].astype(str).map(is_remote_path)].head(10)
+        if not image_base_dir:
+            sample = sample[~sample["filePath"].astype(str).map(is_remote_path)]
+        sample = sample.head(10)
         if len(sample):
             fallback = Path(image_base_dir) if image_base_dir else Path(camtrap_dir)
             resolver = MediaResolver(
