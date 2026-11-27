@@ -229,6 +229,30 @@ def test_download_excludes_stale_marker(client, session):
     assert any(n.startswith("camtrap_dp_verified/") for n in names)
 
 
+def test_classified_by_can_be_changed_and_reaches_the_verified_camtrapdp(client, session):
+    """Someone continuing a colleague's session credits the review to both (Santiago, 18 Nov 2026)."""
+    sd = Path(session["session_dir"])
+    ev = _events(client, 1)
+    resp = client.post("/api/decisions", json={
+        "species": SP, "iteration": 1, "confirmed": [ev[A2]["repObsId"]], "unsure": [],
+    })
+    assert resp.status_code == 200, resp.text
+    client.get("/api/results")
+    resp = client.put("/api/session/classified-by", json={"classified_by": "  Jennifer R.;  Santiago G. "})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["classified_by"] == "Jennifer R.; Santiago G."
+    assert json.loads((sd / "config.json").read_text())["classified_by"] == "Jennifer R.; Santiago G."
+    assert client.get("/api/state").json()["config"]["classified_by"] == "Jennifer R.; Santiago G."
+    assert (sd / ".outputs_stale").exists()
+    client.get("/api/results")
+    obs = pd.read_csv(sd / "camtrap_dp_verified" / "observations.csv", dtype=str)
+    human = obs[obs["classificationMethod"] == "human"]
+    assert len(human) and set(human["classifiedBy"]) == {"Jennifer R.; Santiago G."}
+
+    # empty: back to the default label
+    assert client.put("/api/session/classified-by", json={"classified_by": " "}).json()["classified_by"] == "expert_review"
+
+
 # ─── Moving a session to another computer ─────────────────────────────────────
 
 def _export(client, tmp_path) -> Path:

@@ -1,3 +1,4 @@
+import ClassifiedByEditor from '../components/ClassifiedByEditor'
 import SessionNameEditor from '../components/SessionNameEditor'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -22,6 +23,7 @@ export default function IndexPage() {
     occasion_days: number; occasion_hours: number; gap_seconds: number; min_score: number
   } | null>(null)
   const [sessionName, setSessionName] = useState('')
+  const [classifiedBy, setClassifiedBy] = useState('')
   const [relink, setRelink] = useState<RelinkStatus | null>(null)
   const [relinkOpen, setRelinkOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -36,6 +38,7 @@ export default function IndexPage() {
         setRelink(state.relink ?? null)
         if (state.config) {
           setSessionName(state.config.session_name ?? '')
+          setClassifiedBy(state.config.classified_by || 'expert_review')
           setSessionInfo({
             start: state.config.study_start,
             end: state.config.study_end,
@@ -91,6 +94,20 @@ export default function IndexPage() {
         >
           {t('transfer.export')}
         </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1 text-sm">
+        <span className="text-zinc-500 dark:text-zinc-400 flex-shrink-0">{t('classified_by.label')}:</span>
+        <ClassifiedByEditor value={classifiedBy} onChanged={setClassifiedBy}
+          className="text-zinc-800 dark:text-zinc-200" />
+        {relink && (
+          <button
+            className="ml-auto px-3 py-1 text-xs border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700"
+            title={t('relink.change_hint')}
+            onClick={() => setRelinkOpen(true)}
+          >
+            {t('relink.change')}
+          </button>
+        )}
       </div>
       {exportError && (
         <div className="mb-2 px-3 py-2 rounded bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{exportError}</div>

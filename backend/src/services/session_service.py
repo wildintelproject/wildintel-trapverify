@@ -278,6 +278,27 @@ def auto_relink() -> dict:
     return status
 
 
+DEFAULT_CLASSIFIED_BY = "expert_review"
+
+
+def set_classified_by(value: str) -> str:
+    """Change who is credited in ``classifiedBy`` of the verified CamtrapDP (active session).
+
+    Useful when a session is continued by someone else (e.g. opened from a colleague's
+    folder or imported): the value is one per session, so with several reviewers the
+    names can be listed together. An empty value goes back to the default label.
+    """
+    config = get_config()
+    sd = session_dir()
+    if config is None or sd is None:
+        raise HTTPException(400, "No hay sesión activa.")
+    clean = " ".join((value or "").split()) or DEFAULT_CLASSIFIED_BY
+    config["classified_by"] = clean
+    write_config_file(sd / "config.json", config)
+    logger.info("Session %s: classified_by set to %r", sd, clean)
+    return clean
+
+
 def rename_session(session_dir: str, name: str) -> dict:
     """Set (or clear, with an empty name) the name of a session.
 

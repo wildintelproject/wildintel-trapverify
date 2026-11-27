@@ -152,6 +152,9 @@ export const api = {
       camtrap_dir: camtrapDir, image_base_dir: imageBaseDir, flat_search: flatSearch,
     }),
 
+  setClassifiedBy: (classified_by: string) =>
+    put<{ classified_by: string }>('/api/session/classified-by', { classified_by }),
+
   renameSession: (session_dir: string, name: string) =>
     put<{ session_dir: string; session_name: string }>('/api/session/name', { session_dir, name }),
 

@@ -444,7 +444,15 @@
     "website": "Strona WildINTEL",
     "github": "Repozytorium na GitHub"
   },
+  "classified_by": {
+    "label": "Sklasyfikowane przez",
+    "edit": "Zmień, kto figuruje w classifiedBy",
+    "placeholder": "np. Jennifer R.; Santiago G.",
+    "hint": "Zapisywane w classifiedBy każdej potwierdzonej obserwacji w zweryfikowanym CamtrapDP. Jedna wartość na sesję: jeśli przeglądało kilka osób, wpisz wszystkie."
+  },
   "relink": {
+    "change": "Foldery danych…",
+    "change_hint": "Zmień, gdzie na tym komputerze są CamtrapDP i zdjęcia tej sesji",
     "title": "Gdzie są dane na tym komputerze?",
     "desc": "Ta sesja powstała na innym komputerze lub foldery zostały przeniesione. Wskaż tutaj dane i zdjęcia; Twoje decyzje zostaną zachowane.",
     "data_dir": "Folder CamtrapDP",
